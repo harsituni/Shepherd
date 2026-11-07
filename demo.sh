@@ -186,6 +186,9 @@ if [[ ! -f "$VENV_ACTIVATE" ]]; then
 fi
 # shellcheck disable=SC1090
 source "$VENV_ACTIVATE"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/ensure_backend_deps.sh"
+ensure_backend_deps
 
 [[ -d dashboard/node_modules ]] || (cd dashboard && npm install)
 [[ -d phone/node_modules ]] || (cd phone && npm install)

@@ -77,6 +77,9 @@ if [[ ! -f "$VENV_ACTIVATE" ]]; then
 fi
 # shellcheck disable=SC1090
 source "$VENV_ACTIVATE"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/ensure_backend_deps.sh"
+ensure_backend_deps
 
 if [[ ! -d dashboard/node_modules ]]; then
   echo "Installing dashboard deps…"
