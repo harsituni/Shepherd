@@ -13,7 +13,7 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
    - Below the map: a map key, then the shelter name and one line "**ETA** · distance · % full", next turn, "Start navigation".
 2. **Government notifications.** Updates sent from the dashboard pop up as a banner at the top of the screen (slide down, tap to expand, dismissable). Colour by severity: Advisory (blue), Alert (dark blue), Evacuation order (orange). The persistent alert banner shows the most severe active one. Past updates live in the **Alerts** tab.
 3. **Report hazards/events.** "Report hazard" opens a sheet: type (fire, flooded road, blocked road, other; `other` requires a note and is not in contract v1 yet, so ask Harsit to add it), uses your current location, optional note, submit → `POST /reports`. Also "I'm safe" and "Need help" buttons, which send the same endpoint and show up on the dashboard. Confirm with a short toast.
-4. **Predicted path of the disaster.** On the map: the hazard now (solid orange) and its predicted spread as dashed rings labelled T+30 / T+60, plus "Fire is X km west of you, moving east" in the alert.
+4. **Predicted path of the disaster.** On the map: the hazard now (solid orange) and its predicted spread as red dotted rings (no fill) labelled T+30 / T+60, from `GET /forecast`, plus "Fire is X km west of you, moving east" in the alert.
 
 ## Layout (matches the approved mockup)
 - Mockup: `design/phone-mockup.html` (screenshot `design/phone.png`). Visual reference only; rebuild as React components with MapLibre in place of the sketched SVG map.
@@ -27,9 +27,9 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
 ## Design
 - **Visual system: see `/DESIGN.md`** (shared with `dashboard/`; tokens, components, rules). If it and this section disagree, flag it rather than picking one.
 - Minimalist, inspired by Alberta.ca's wildfire pages: plain blue and white, calm, big tap targets.
-- Colours: header `#005072`, navy `#0B3D6E` (outline buttons, selected states, toast), blue `#0070C4` (primary, route, predicted path), tint `#EAF3FB` (alert banner only), borders `#D3E3F2`, text `#0B2545`, muted `#3B5A7A`.
+- Colours: header `#005072`, navy `#0B3D6E` (outline buttons, selected states, toast), blue `#0070C4` (primary, route), tint `#EAF3FB` (alert banner only), borders `#D3E3F2`, text `#0B2545`, muted `#3B5A7A`.
 - Gold `#FEBA35` only for the 3px keyboard focus ring (as on Alberta.ca).
-- Orange `#D9480F` only for the hazard and evacuation-order alerts, red `#C62828` only for closed roads and the "Need help" button.
+- Orange `#D9480F` only for the hazard and evacuation-order alerts, red `#C62828` only for closed roads (solid), the predicted path (dotted) and the "Need help" button.
 - Font: **Public Sans** (Google Fonts, weights 400/500/600/700), fallback `system-ui, sans-serif`. Use `font-variant-numeric: tabular-nums` for ETA and distances. Type scale 14/16/18/20px (16 default, nothing under 14); no uppercase eyebrow labels.
 - Corners: 6px (8px for cards and the pop-up). No pills; use a segmented control for small option sets. Flat surfaces separated by 1px borders; one soft shadow only on the pop-up notification.
 - One solid button per area; others are navy outlines. Disabled controls get a flat style, never `opacity`. "Need help" is never disabled.
@@ -55,13 +55,13 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
 - `GET /route?lat=&lon=` → `{ shelter_id, shelter_name, distance_km, eta_min, rerouted, reroute_reason, steps: [{ instruction, distance_km }], geometry: LineString }`. Show the reroute notice only when `rerouted` is true; `steps` may be `[]` (hide next turn). 404 `{ error: "no_route" }` → show "No safe shelter reachable, call 911".
 - `GET /hazards`: draw `zone: core` solid orange, `buffer` lighter.
 - `GET /shelters`: `occupancy / capacity` for "% full".
+- `GET /forecast` (contract v2): `outlines` at `t_min` 15, 30 … 120 minutes from now; the 30 and 60 min ones are drawn as the predicted path (merged into the hazards as `predicted_min` features in `src/api.js`). Empty when idle.
 - `POST /reports` `{ kind, lat, lon, note? }`, `kind` = `fire`|`flooded_road`|`blocked_road` (Report hazard sheet), `safe` (I'm safe), `sos` (Need help). 201 → `{ id, received }` → toast.
 - Live updates: poll `/route` every 2 s; later WebSocket `ws://localhost:8000/ws` → re-fetch on `changed`.
 - Errors come back as `{ error, message }`.
 
 **Not in the contract yet: ask Harsit to add these, build on your own fixture meanwhile:**
 - Government notifications feed (`GET /notifications`: id, title, message, severity `advisory`|`alert`|`evacuation`, time) for pop-ups and the Alerts tab. Built against `shared/fixtures/notifications.json`; a 404 is treated as "no notifications".
-- Predicted path (hazard features at T+30 / T+60).
 - Distance/direction to the hazard for the alert banner (or compute it client-side from `/hazards`).
 
 ## Rules

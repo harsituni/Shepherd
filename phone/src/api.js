@@ -190,8 +190,19 @@ export async function getSimState() {
   }
 }
 
-// Fixture stand-in for the predicted spread the backend adds to /hazards
-// (`predicted_min` features): the current shape, larger and drifted east.
+// The predicted path comes from GET /forecast (contract v2): outlines at t_min =
+// 15, 30 … 120 minutes from now. The map draws the 30 and 60 min ones as
+// `predicted_min` features, like the dashboard; all eight would crowd a phone map.
+const FORECAST_MIN_SHOWN = [30, 60]
+async function getForecastFeatures() {
+  const { outlines = [] } = await request('/forecast')
+  return outlines
+    .filter((o) => FORECAST_MIN_SHOWN.includes(o.t_min) && o.geometry)
+    .map((o) => ({ type: 'Feature', id: o.id, properties: { ...o.properties, predicted_min: o.t_min }, geometry: o.geometry }))
+}
+
+// Fixture stand-in for the predicted spread (`predicted_min` features): the
+// current shape, larger and drifted east.
 const PREDICTED_STEPS = [
   { minutes: 30, scale: 1.5, eastKm: 1.2 },
   { minutes: 60, scale: 2.1, eastKm: 2.6 },
@@ -211,8 +222,13 @@ function predictedFeatures(grown, center) {
   })
 }
 
+// The hazard now (/hazards) plus the predicted path (/forecast). If the forecast
+// fails, the hazard still draws, just without predicted rings.
 export async function getHazards() {
-  if (!USE_FIXTURES) return request('/hazards')
+  if (!USE_FIXTURES) {
+    const [hazards, predicted] = await Promise.all([request('/hazards'), getForecastFeatures().catch(() => [])])
+    return { ...hazards, features: [...predicted, ...(hazards.features ?? [])] }
+  }
   fakeSimTime += 1
   fakeHazards.forEach((h) => (h.ticks += 1))
   const features = fakeHazards.flatMap((h) => {

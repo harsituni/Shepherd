@@ -19,6 +19,7 @@ const MAP_BG = cssVar('--map-bg', '#F3F7FB')
 const ROUTE = cssVar('--blue', '#0070C4')
 const ALT = cssVar('--muted-2', '#5B7590')
 const CLOSED = cssVar('--closed', '#C62828')
+const PREDICTED_COLOR = cssVar('--predicted', '#C62828')
 
 // Predicted features carry `predicted_min`; everything else is the hazard now.
 const PREDICTED = ['has', 'predicted_min']
@@ -194,19 +195,14 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
       map.addSource('hazards', { type: 'geojson', data: EMPTY })
       map.addSource('route', { type: 'geojson', data: EMPTY })
       // Predicted spread first, so the current hazard draws on top of it.
-      map.addLayer({
-        id: 'hazard-predicted',
-        type: 'fill',
-        source: 'hazards',
-        filter: PREDICTED,
-        paint: { 'fill-color': ROUTE, 'fill-opacity': 0.06 },
-      })
+      // No fill: a dotted red outline around each predicted ring (as on the dashboard).
       map.addLayer({
         id: 'hazard-predicted-outline',
         type: 'line',
         source: 'hazards',
         filter: PREDICTED,
-        paint: { 'line-color': ROUTE, 'line-opacity': 0.7, 'line-width': 1.5, 'line-dasharray': [3, 3] },
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': PREDICTED_COLOR, 'line-opacity': 0.9, 'line-width': 2, 'line-dasharray': [0, 2] },
       })
       map.addLayer({
         id: 'hazard-buffer',
