@@ -135,6 +135,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .segmented button[aria-pressed='true'] { background: var(--tint); color: var(--navy); font-weight: 600; }
 .segmented button.severity-evac[aria-pressed='true'] { background: #fff3ec; color: #8a2f06; }
 
+.conditions { margin: 0; padding: 0; border: 0; min-width: 0; }
+.conditions:disabled { opacity: 0.6; }
+.choice:disabled, .icon-btn:disabled, .segmented button:disabled { opacity: 0.5; cursor: default; }
+.icon-btn.primary:disabled:hover { background: var(--blue); }
+.elapsed { font-size: 13px; color: var(--muted); }
+
 .toggle-row {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-control);
@@ -192,6 +198,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   pointer-events: none;
 }
 .now-label { font: 600 12px var(--font); color: #fff; pointer-events: none; }
+.predicted-label {
+  font: 600 12px var(--font); color: var(--navy); pointer-events: none;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff;
+}
+.start-marker {
+  width: 16px; height: 16px; border-radius: 50%; pointer-events: none;
+  background: #fff; border: 3px solid var(--hazard);
+}
 .maplibregl-ctrl-attrib { font-family: var(--font); font-size: 11px; }
 
 .history {

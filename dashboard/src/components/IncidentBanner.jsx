@@ -2,7 +2,8 @@ const KIND_LABEL = { wildfire: 'Wildfire', flood: 'Flood' }
 
 // Built only from /hazards data: hazard kinds, zone count and sim_time.
 export default function IncidentBanner({ hazards, mode }) {
-  const features = hazards?.features ?? []
+  // Predicted-spread features (`predicted_min`) aren't active zones.
+  const features = (hazards?.features ?? []).filter((f) => f.properties?.predicted_min == null)
   const modeLabel = mode === 'drill' ? 'drill' : 'live'
 
   if (features.length === 0) {
