@@ -283,11 +283,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .history-label { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
 .history-track { flex: 1 1 320px; display: flex; flex-direction: column; gap: 4px; }
 .history-track input { width: 100%; accent-color: var(--blue); }
-/* Ticks sit at their real position (T+0, Now, end of forecast), not evenly spaced. */
+/* Ticks sit at their real position (Now, end of forecast), not evenly spaced.
+   HistoryBar sets each one's horizontal shift so it stays inside the bar. */
 .history-ticks { position: relative; height: 20px; font-size: var(--fs-sm); color: var(--muted-2); }
-.history-tick { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
-.history-tick:first-child { transform: none; }
-.history-tick:last-child:not(:first-child) { transform: translateX(-100%); }
+.history-tick { position: absolute; top: 0; white-space: nowrap; }
 .history-tick.is-now { color: var(--text); font-weight: 600; }
 .history-viewing { font-size: var(--fs-sm); }
 .history-viewing strong { font-weight: 600; }
