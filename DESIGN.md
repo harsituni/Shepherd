@@ -177,7 +177,7 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 ### Neutral
 - **Ink** (#0B2545): body text and values.
 - **Slate Muted** (#3B5A7A): secondary text, field labels, unselected tabs, section titles.
-- **Slate Faint** (#5B7590): timestamps, hints, slider ticks, idle states. Dashboard only so far; meant for metadata on white.
+- **Slate Faint** (#5B7590): timestamps, hints, slider ticks, idle states. Meant for metadata on white.
 - **Frost Border** (#D3E3F2): control and card borders.
 - **Frost Divider** (#E3ECF5): panel separators and list rules, lighter than a border.
 - **Sky Tint** (#EAF3FB): selected fills, hover rows, the incident banner, the reroute notice.
@@ -277,7 +277,7 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 14px 600 titl
 - **Toast:** a solid navy bar with 8px corners and white 500 14px text, floating just above the action bar.
 
 ### Map layers (signature)
-- **Hazard core:** Hazard Orange fill at 0.82–0.85 opacity with a 1.5px orange outline. **Buffer:** orange at 0.3 opacity.
+- **Hazard core:** Hazard Orange fill at 0.85 opacity with a 1.5px orange outline. **Buffer:** orange at 0.3 opacity.
 - **Predicted spread:** Service Blue fill at 0.06 with a 1.5px dashed line (`[3, 3]`, 0.6 opacity), labelled T+30 / T+60 in navy 600 12px with a halo.
 - **Route (phone):** a 5px Service Blue line with round caps and joins.
 - **Closed road:** Closure Red, solid when closed and dashed when slowed.
