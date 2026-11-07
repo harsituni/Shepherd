@@ -36,6 +36,63 @@ once the packages are installed.
 
 ## Real Edmonton demo (run separately)
 
+### Prepare the larger graph manually
+
+From the repository root, explicitly allow the preparation script to download:
+
+```powershell
+backend/routing/.venv/Scripts/python.exe -B -m backend.routing.prepare_graph --download
+```
+
+This uses the fixed demo box `(-113.70, 53.42, -113.43, 53.58)` and saves
+`backend/routing/data/edmonton_demo_drive.graphml`. Existing files are checked
+and reused, never replaced, even with `--download`. The downtown graph is kept.
+An invalid existing file fails the check instead of triggering a download.
+
+OSMnx splits the request area into pieces of at most 25 square kilometres,
+keeps server rate limiting enabled, and caches responses in `data/http_cache`.
+It assembles the roads before simplifying them, avoiding manual tile joins.
+Requests use a 120-second timeout, but server waits and retries can make the
+whole run much longer. This is not a total runtime or memory limit. Expect
+multiple requests and more memory use than downtown; Ctrl+C stops the process.
+Rerunning reuses completed cached responses. After downloading, the graph is
+saved before validation. Failed checks report the error and keep the saved
+file for offline inspection; rerunning checks that file without downloading.
+The existing `data/` Git ignore rule excludes the output and response cache.
+
+Check the expanded file again without allowing any download:
+
+```powershell
+backend/routing/.venv/Scripts/python.exe -B -m backend.routing.prepare_graph
+```
+
+Check another file offline with `--path`, for example:
+
+```powershell
+backend/routing/.venv/Scripts/python.exe -B -m backend.routing.prepare_graph --path backend/routing/data/downtown_drive.graphml
+```
+
+Checks print node/edge counts, distance to the nearest road node for each of
+the four locations, and road distances for all 12 directed location pairs.
+Every location must lie inside the node bounds and within 1,000 metres of a
+road node; every pair must have a positive-length route. Failures exit nonzero.
+This is a baseline connectivity check without hazards, not proof of complete
+map coverage, building access, or safe evacuation. The 1,000-metre tolerance
+is a demo sanity check, not a real access-distance guarantee. Routes that need
+roads outside the demo box may be missing. Test wildfire detours separately.
+
+Select the expanded graph before starting the backend:
+
+```powershell
+$env:SHEPHERD_GRAPH_PATH = "backend/routing/data/edmonton_demo_drive.graphml"
+```
+
+The saved downtown graph has 501 nodes and 842 edges, and does not cover all
+four locations. The local `downtown.osm` also covers only a small downtown area.
+No larger graph was downloaded as part of adding this script.
+
+### Run the route demo
+
 ```powershell
 backend/routing/.venv/Scripts/python.exe -B backend/routing/demo.py
 ```
