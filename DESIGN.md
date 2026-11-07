@@ -227,7 +227,7 @@ One scale for both surfaces, exposed as tokens in each `index.css`: `--fs-sm` 14
 
 - **Headline** (700, 26px, line-height 1.1, tabular): dashboard stat tile values only. Numbers, not sentences. The phone has no big stat number; its ETA reads inline (see Route summary).
 - **Heading** (700, 20px): phone shelter name, report sheet heading.
-- **Title** (700, 18px): brand name, dashboard panel titles such as "Simulate & predict" (sentence case, no uppercase tracking).
+- **Title** (700, 18px): dashboard panel titles such as "Simulate" (sentence case, no uppercase tracking). **Brand name (dashboard header):** "Shepherd" alone, no subtitle, 700 26px beside the 32px logo mark, its capital band centred on the mark (measured: within 0.25px); the p's descender hangs below as descenders do.
 - **Body** (400–600, 16px): the default size. Alert titles, banner text, phone tabs, inline notices, list item titles, the next-turn instruction, primary button labels, inputs and selects.
 - **Body Small** (400–500, 14px): supporting copy, field labels, hints, report notes, timestamps, header sub-lines, legend entries, dashboard tabs, choice and segment labels, action-bar labels.
 - **Label** (600, 14px): map labels (with a white halo), field values, the history label.

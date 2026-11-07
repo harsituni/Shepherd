@@ -19,13 +19,6 @@ const HAZARDS = [
   ['tornado', 'Tornado'],
 ]
 
-function startHint({ canSimulate, idle, startPoint }) {
-  if (!canSimulate) return 'Live mode shows real data feeds. Switch to Simulation to run one.'
-  if (!idle) return 'Reset to pick a new hazard or start point.'
-  if (!startPoint) return 'Click the map to place the start point.'
-  return `Start point ${startPoint.lat.toFixed(3)}, ${startPoint.lng.toFixed(3)}. Press play to start.`
-}
-
 // The simulation itself runs on the backend (/sim/*). This panel picks the scenario
 // and conditions, sends them on play, and drives pause / resume / reset / speed.
 // Wind speed and direction apply to both hazards (a tornado travels with the wind);
@@ -77,7 +70,7 @@ export default function ControlsPanel({
   return (
     <aside className="controls" aria-labelledby="controls-title">
       <h2 className="section-title" id="controls-title">
-        Simulate &amp; predict
+        Simulate
       </h2>
 
       <div className="stack-8">
@@ -95,9 +88,7 @@ export default function ControlsPanel({
               {label}
             </button>
           ))}
-        </div>
-        <span className="hint num">{startHint({ canSimulate, idle, startPoint })}</span>
-      </div>
+        </div>      </div>
 
       <fieldset className="stack-14 conditions" disabled={!canSimulate}>
         <legend className="sr-only">Conditions</legend>

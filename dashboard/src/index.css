@@ -81,9 +81,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   width: 32px; height: 32px; border-radius: var(--radius-control); background: #fff;
   display: flex; align-items: center; justify-content: center;
 }
-.brand-text { display: flex; flex-direction: column; }
-.brand-name { font-size: var(--fs-brand); font-weight: 700; }
-.brand-sub { font-size: var(--fs-sm); color: var(--on-navy-muted); }
+/* 26px (the top of the type scale): a name beside the 32px mark, not a banner.
+   Centred on the mark by measurement (see DESIGN.md). */
+.brand-name { font-size: 26px; line-height: 1; font-weight: 700; position: relative; top: 0; }
 .header-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 /* Squared two-part switch, not a pill. */
 .mode-switch {
@@ -324,16 +324,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .maplibregl-ctrl-attrib { font-family: var(--font); font-size: 11px; }
 
+/* The row centres on the slider itself: the tick labels hang below the track
+   (absolutely positioned, outside the row's height), so "History" and
+   "Viewing …" line up with the slider line, not with slider + ticks. The extra
+   bottom padding is the room the hanging ticks need. */
 .history {
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-  padding: 14px 20px; background: #fff; border-top: 1px solid var(--divider);
+  padding: 14px 20px 38px; background: #fff; border-top: 1px solid var(--divider);
 }
 .history-label { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
-.history-track { flex: 1 1 320px; display: flex; flex-direction: column; gap: 4px; }
-.history-track input { width: 100%; accent-color: var(--blue); }
+.history-track { position: relative; flex: 1 1 320px; display: flex; flex-direction: column; }
+.history-track input { width: 100%; margin: 0; accent-color: var(--blue); }
 /* Ticks sit at their real position (Now, end of forecast), not evenly spaced.
    HistoryBar sets each one's horizontal shift so it stays inside the bar. */
-.history-ticks { position: relative; height: 20px; font-size: var(--fs-sm); color: var(--muted-2); }
+.history-ticks {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); height: 20px;
+  font-size: var(--fs-sm); color: var(--muted-2);
+}
 .history-tick { position: absolute; top: 0; white-space: nowrap; }
 .history-tick.is-now { color: var(--text); font-weight: 600; }
 .history-viewing { font-size: var(--fs-sm); }
