@@ -9,8 +9,10 @@ setWorkerUrl(maplibreWorkerUrl)
 import { MAP_CENTER, MAP_ZOOM } from '../config.js'
 import MapLegend from './MapLegend.jsx'
 import { MinusIcon, PlusIcon } from './icons.jsx'
+import { evacZones, UNSAFE_SHELTER_TEXT } from '../evacuation.js'
 
 const EMPTY = { type: 'FeatureCollection', features: [] }
+const NO_IDS = new Set()
 // Map layer colours come from the CSS tokens in index.css (see /DESIGN.md);
 // the hex fallbacks only apply if the stylesheet hasn't loaded.
 const cssVar = (name, fallback) =>
@@ -20,6 +22,28 @@ const HAZARD_HIGH = cssVar('--hazard-high', '#7A1F0A')
 const PREDICTED_COLOR = cssVar('--predicted', '#C62828')
 const MAP_BG = cssVar('--map-bg', '#F3F7FB')
 const SURFACE = cssVar('--surface', '#FFFFFF')
+const EVAC_STRIPE = cssVar('--evac-stripe', '#FFD400')
+const EVAC_EDGE = cssVar('--evac-edge', '#9A6B00')
+
+// Diagonal yellow stripes on a transparent tile, used as the evacuation zone's fill
+// pattern. Drawn at 2× for sharp lines on high-DPI screens. Solid colour only.
+function hatchImage(color) {
+  const size = 8 // device px; 4 CSS px per tile (dense stripes)
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const g = canvas.getContext('2d')
+  g.strokeStyle = color
+  g.lineWidth = 2
+  g.lineCap = 'square'
+  g.beginPath()
+  // One diagonal plus the two corner pieces, so stripes join up across tiles.
+  for (const o of [-size, 0, size]) {
+    g.moveTo(o, size)
+    g.lineTo(o + size, 0)
+  }
+  g.stroke()
+  return g.getImageData(0, 0, size, size)
+}
 
 // OSM raster tiles, muted so our orange/blue layers stand out (as in the mockup).
 const BASE_STYLE = {
@@ -93,11 +117,15 @@ function shelterElement(name) {
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('en-CA')
 
-function updateShelter(el, { name, capacity, occupancy, open }) {
+// unsafe = the fire is (or is forecast to be) within the evacuation buffer of it:
+// the square turns red and the pop-up says so, in red.
+function updateShelter(el, { name, capacity, occupancy, open }, unsafe) {
   const pct = capacity ? Math.round(((occupancy ?? 0) / capacity) * 100) : 0
   // e.g. "312/2,000 (16%)"
   const lines = [['shelter-popup-title', `${fmt(occupancy)}/${fmt(capacity)} (${pct}%)`]]
   if (open === false) lines.push(['shelter-popup-detail', 'Closed'])
+  if (unsafe) lines.push(['shelter-popup-warning', UNSAFE_SHELTER_TEXT])
+  el.classList.toggle('is-unsafe', unsafe)
   const popup = el.querySelector('.shelter-popup')
   popup.replaceChildren(...lines.map(([cls, text]) => textElement(cls, text)))
   el.setAttribute('aria-label', `${name}. ${lines.map(([, t]) => t).join('. ')}`)
@@ -169,6 +197,7 @@ export default function MapView({
   hazards,
   nowLabel = 'Now', // "T+42" while the history slider is off live
   shelters,
+  unsafeShelters = NO_IDS, // Set of shelter ids the fire is forecast to reach (evacuation.js)
   reports,
   focus,
   startPoint,
@@ -202,6 +231,22 @@ export default function MapView({
     map.getCanvas().style.cursor = 'crosshair'
 
     map.on('load', () => {
+      // Evacuation zone first (bottom): yellow diagonal stripes with a darker yellow edge.
+      map.addImage('evac-hatch', hatchImage(EVAC_STRIPE), { pixelRatio: 2 })
+      map.addSource('evac', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'evac-fill',
+        type: 'fill',
+        source: 'evac',
+        paint: { 'fill-pattern': 'evac-hatch', 'fill-opacity': 1 },
+      })
+      map.addLayer({
+        id: 'evac-edge',
+        type: 'line',
+        source: 'evac',
+        layout: { 'line-join': 'round' },
+        paint: { 'line-color': EVAC_EDGE, 'line-width': 2 },
+      })
       map.addSource('hazards', { type: 'geojson', data: EMPTY })
       // Predicted spread first, so the current hazard draws on top of it.
       // No fill: just a dotted outline around each predicted ring.
@@ -293,6 +338,7 @@ export default function MapView({
     if (!loaded || !map) return
     map.getSource('hazards')?.setData(hazards ?? EMPTY)
     map.getSource('hazard-intensity')?.setData(intensityBands(hazards))
+    map.getSource('evac')?.setData(evacZones(hazards)) // follows the slider, like the fire
     const features = hazards?.features ?? []
     const current = features.filter((f) => !isPredicted(f) && f.properties?.zone === 'core')
     const items = current
@@ -345,10 +391,10 @@ export default function MapView({
       id: f.id,
       lngLat: f.geometry.coordinates,
       build: () => shelterElement(f.properties.name),
-      update: (el) => updateShelter(el, f.properties),
+      update: (el) => updateShelter(el, f.properties, unsafeShelters.has(f.id)),
     }))
     syncMarkers(map, shelterMarkers.current, items)
-  }, [shelters, loaded])
+  }, [shelters, unsafeShelters, loaded])
 
   // Reports: pins redrawn on every poll.
   useEffect(() => {

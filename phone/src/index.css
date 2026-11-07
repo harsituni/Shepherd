@@ -15,7 +15,9 @@
   --surface: #ffffff;
   --hazard: #d9480f;
   --closed: #c62828;
-  --predicted: #c62828; /* dotted predicted-path outline (same red as closed roads, which are solid) */
+  --predicted: #c62828;
+  --evac-stripe: #ffd400; /* evacuation zone: diagonal stripes */
+  --evac-edge: #9a6b00; /* evacuation zone: solid border */ /* dotted predicted-path outline (same red as closed roads, which are solid) */
   --danger-bg: #fff3ec;
   --danger-border: #f6d2be;
   --danger-title: #8a2f06;
@@ -196,6 +198,10 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .shelter-marker.popup-start .shelter-popup { left: -2px; transform: none; }
 .shelter-marker.popup-end .shelter-popup { left: auto; right: -2px; transform: none; }
 .shelter-popup-title { font-weight: 600; }
+/* Unsafe shelter: red square, and the whole pop-up in red. */
+.shelter-marker.is-unsafe { background: var(--closed); }
+.shelter-marker.is-unsafe .shelter-popup { color: var(--closed); border-color: var(--closed); }
+.shelter-popup-warning { width: 200px; margin-top: 4px; white-space: normal; font-weight: 600; }
 
 /* One-row key under the map, listing only what is drawn. */
 .map-key {
@@ -210,6 +216,12 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .swatch-route { width: 16px; height: 4px; border-radius: 2px; background: var(--blue); }
 .swatch-alt { width: 16px; height: 0; border-top: 3px dashed var(--muted-2); }
 .swatch-shelter { width: 12px; height: 12px; border-radius: 3px; background: var(--navy); }
+.swatch-shelter-unsafe { width: 12px; height: 12px; border-radius: 3px; background: var(--closed); }
+/* Evacuation zone: diagonal stripes (inline SVG, not a gradient) inside a deep-yellow edge. */
+.swatch-evac {
+  width: 12px; height: 12px; border-radius: 3px; border: 2px solid var(--evac-edge);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Cpath d='M-1 5L5 -1M-3 3L3 -3M1 7L7 1' stroke='%23ffd400' stroke-width='1.5'/%3E%3C/svg%3E");
+}
 .swatch-you { width: 12px; height: 12px; border-radius: 50%; background: var(--blue); }
 
 .route-details { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }

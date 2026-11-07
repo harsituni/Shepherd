@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { MAP_CENTER, MAP_ZOOM } from '../config.js'
 import { isCurrentCore, isPredicted, ringCentroid } from '../geo.js'
+import { dangerRings, evacZones, unsafeShelterIds, UNSAFE_SHELTER_TEXT } from '../evacuation.js'
 
 // MapLibre 6 looks for its worker next to its own module URL, which breaks once
 // Vite pre-bundles or bundles it. Point it at the worker file explicitly.
@@ -20,6 +21,27 @@ const ROUTE = cssVar('--blue', '#0070C4')
 const ALT = cssVar('--muted-2', '#5B7590')
 const CLOSED = cssVar('--closed', '#C62828')
 const PREDICTED_COLOR = cssVar('--predicted', '#C62828')
+const EVAC_STRIPE = cssVar('--evac-stripe', '#FFD400')
+const EVAC_EDGE = cssVar('--evac-edge', '#9A6B00')
+
+// Diagonal yellow stripes on a transparent tile, used as the evacuation zone's fill
+// pattern (same as the dashboard). Drawn at 2× for sharp lines. Solid colour only.
+function hatchImage(color) {
+  const size = 8 // device px; 4 CSS px per tile (dense stripes)
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const g = canvas.getContext('2d')
+  g.strokeStyle = color
+  g.lineWidth = 2
+  g.lineCap = 'square'
+  g.beginPath()
+  for (const o of [-size, 0, size]) {
+    g.moveTo(o, size)
+    g.lineTo(o + size, 0)
+  }
+  g.stroke()
+  return g.getImageData(0, 0, size, size)
+}
 
 // Predicted features carry `predicted_min`; everything else is the hazard now.
 const PREDICTED = ['has', 'predicted_min']
@@ -95,11 +117,14 @@ function shelterElement(id, name, onToggle) {
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('en-CA')
 
-// e.g. "312/2,000 (16%)", plus "Closed" if the shelter is shut.
-function updateShelter(el, { name, capacity, occupancy, open }) {
+// e.g. "312/2,000 (16%)", plus "Closed" if the shelter is shut. Unsafe (the fire is
+// or is forecast to be near it): red square, red pop-up, and a one-line warning.
+function updateShelter(el, { name, capacity, occupancy, open }, unsafe) {
   const pct = capacity ? Math.round(((occupancy ?? 0) / capacity) * 100) : 0
   const lines = [['shelter-popup-title', `${fmt(occupancy)}/${fmt(capacity)} (${pct}%)`]]
   if (open === false) lines.push(['shelter-popup-detail', 'Closed'])
+  if (unsafe) lines.push(['shelter-popup-warning', UNSAFE_SHELTER_TEXT])
+  el.classList.toggle('is-unsafe', unsafe)
   el.querySelector('.shelter-popup').replaceChildren(
     ...lines.map(([cls, text]) => {
       const line = document.createElement('div')
@@ -192,6 +217,22 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
     mapRef.current = map
 
     map.on('load', () => {
+      // Evacuation zone first (bottom): yellow diagonal stripes with a darker yellow edge.
+      map.addImage('evac-hatch', hatchImage(EVAC_STRIPE), { pixelRatio: 2 })
+      map.addSource('evac', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'evac-fill',
+        type: 'fill',
+        source: 'evac',
+        paint: { 'fill-pattern': 'evac-hatch', 'fill-opacity': 1 },
+      })
+      map.addLayer({
+        id: 'evac-edge',
+        type: 'line',
+        source: 'evac',
+        layout: { 'line-join': 'round' },
+        paint: { 'line-color': EVAC_EDGE, 'line-width': 2 },
+      })
       map.addSource('hazards', { type: 'geojson', data: EMPTY })
       map.addSource('route', { type: 'geojson', data: EMPTY })
       // Predicted spread first, so the current hazard draws on top of it.
@@ -286,6 +327,7 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
     const map = mapRef.current
     if (!loaded || !map) return
     map.getSource('hazards')?.setData(hazards ?? EMPTY)
+    map.getSource('evac')?.setData(evacZones(hazards))
 
     const features = hazards?.features ?? []
     const core = features.find(isCurrentCore)
@@ -325,6 +367,9 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
     if (!loaded || !map) return
     const store = shelterMarkers.current
     const seen = new Set()
+    // The fire now + every forecast outline (fixtures only have the 30 / 60 min ones).
+    const outlines = hazards?.forecast ?? (hazards?.features ?? []).filter(isPredicted)
+    const unsafe = unsafeShelterIds(shelters, dangerRings(hazards, outlines))
     for (const f of shelters?.features ?? []) {
       seen.add(f.id)
       if (store.has(f.id)) store.get(f.id).setLngLat(f.geometry.coordinates)
@@ -337,7 +382,7 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
         )
       const el = store.get(f.id).getElement()
       el.classList.toggle('is-target', f.id === route?.shelter_id)
-      updateShelter(el, f.properties) // refreshes occupancy on every poll, even while open
+      updateShelter(el, f.properties, unsafe.has(f.id)) // refreshes on every poll, even while open
     }
     for (const [id, m] of store) {
       if (!seen.has(id)) {
@@ -347,7 +392,7 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
       }
     }
     placeShelterLabels(map, store)
-  }, [shelters, route, loaded])
+  }, [shelters, hazards, route, loaded])
 
   // "You" marker.
   useEffect(() => {

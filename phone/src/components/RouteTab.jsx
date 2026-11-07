@@ -1,4 +1,5 @@
 import { isCurrentCore, isPredicted } from '../geo.js'
+import { dangerRings, evacZones, unsafeShelterIds } from '../evacuation.js'
 import { PinIcon, RerouteIcon, TurnIcon } from './icons.jsx'
 import EvacuateControls from './EvacuateControls.jsx'
 import RouteOptions from './RouteOptions.jsx'
@@ -10,14 +11,19 @@ function percentFull(shelters, shelterId) {
 }
 
 // One-row key for what's actually drawn on the map right now.
-function MapKey({ hazards, route, location }) {
+function MapKey({ hazards, shelters, route, location }) {
   const features = hazards?.features ?? []
+  const evac = evacZones(hazards).features.length > 0
+  const outlines = hazards?.forecast ?? features.filter(isPredicted)
+  const anyUnsafe = unsafeShelterIds(shelters, dangerRings(hazards, outlines)).size > 0
   const items = [
     features.some(isCurrentCore) && ['swatch-hazard', 'Hazard now'],
+    evac && ['swatch-evac', 'Evacuation zone'],
     features.some(isPredicted) && ['swatch-predicted', 'Predicted spread'],
     route?.geometry && ['swatch-route', 'Your route'],
     route?.options?.length > 1 && ['swatch-alt', 'Other routes'],
     ['swatch-shelter', 'Shelter'],
+    anyUnsafe && ['swatch-shelter-unsafe', 'Unsafe shelter'],
     location && ['swatch-you', 'You'],
   ].filter(Boolean)
   return (
@@ -155,7 +161,7 @@ export default function RouteTab({
   return (
     <>
       {map}
-      <MapKey hazards={hazards} route={route} location={location} />
+      <MapKey hazards={hazards} shelters={shelters} route={route} location={location} />
       <div className="route-details">{details}</div>
     </>
   )

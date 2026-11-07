@@ -15,7 +15,9 @@
   --map-bg: #f3f7fb;
   --hazard: #d9480f;
   --predicted: #c62828; /* dotted predicted-path outline (same red as closed roads, which are solid) */
-  --hazard-high: #7a1f0a; /* wildfire's most intense area; darker than --closed so roads stay distinct */
+  --hazard-high: #7a1f0a;
+  --evac-stripe: #ffd400; /* evacuation zone: diagonal stripes */
+  --evac-edge: #9a6b00; /* evacuation zone: solid border (same deep yellow as Alert) */ /* wildfire's most intense area; darker than --closed so roads stay distinct */
   --closed: #c62828;
   --surface: #ffffff;
   --danger-bg: #fff3ec;
@@ -214,6 +216,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .swatch-closed { width: 14px; height: 3px; background: var(--closed); }
 .swatch-route { width: 14px; height: 3px; background: var(--blue); }
 .swatch-shelter { width: 12px; height: 12px; border-radius: 3px; background: var(--navy); }
+.swatch-shelter-unsafe { width: 12px; height: 12px; border-radius: 3px; background: var(--closed); }
+/* Evacuation zone: diagonal stripes (inline SVG, not a gradient) inside a deep-yellow edge. */
+.swatch-evac {
+  width: 12px; height: 12px; border-radius: 3px; border: 2px solid var(--evac-edge);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Cpath d='M-1 5L5 -1M-3 3L3 -3M1 7L7 1' stroke='%23ffd400' stroke-width='1.5'/%3E%3C/svg%3E");
+}
 .swatch-priority {
   width: 9px; height: 9px; margin: 0 1.5px; border: 2px solid var(--navy); transform: rotate(45deg);
 }
@@ -252,6 +260,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .shelter-marker:hover .shelter-popup, .shelter-marker:focus-visible .shelter-popup { display: block; }
 .shelter-popup-title { font-weight: 600; }
+/* Unsafe shelter: red square, and the whole pop-up in red. */
+.shelter-marker.is-unsafe { background: var(--closed); }
+.shelter-marker.is-unsafe .shelter-popup { color: var(--closed); border-color: var(--closed); }
+.shelter-popup-warning { max-width: 220px; margin-top: 4px; white-space: normal; font-weight: 600; }
 .now-label { font: 600 var(--fs-sm) var(--font); color: #fff; pointer-events: none; }
 .predicted-label {
   font: 600 var(--fs-sm) var(--font); color: var(--navy); pointer-events: none;
