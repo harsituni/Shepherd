@@ -6,7 +6,10 @@ import { WarningIcon } from './icons.jsx'
 // leave-by countdown as the largest text. Leave-by comes from GET /route (contract
 // v2 `leave_by_sim_min`), counted down on the sim clock, so it follows the
 // dashboard's 1× / 4× / 16× speed and stops when the sim is paused.
-export default function EvacCard({ location, route, routeError, near, clock }) {
+// Already evacuating: "Leave now" no longer applies, so don't repeat it.
+const onTheWay = (near) => (near?.inside ? "You're in the fire zone. Keep going." : hazardSentence(near))
+
+export default function EvacCard({ location, route, routeError, near, clock, trip }) {
   const simNow = useSimNow(clock)
   const leaveBy = route?.leave_by_sim_min
   const paused = clock?.state === 'paused'
@@ -21,6 +24,22 @@ export default function EvacCard({ location, route, routeError, near, clock }) {
     big = 'Tap the map where you are'
     lines = ["We'll tell you when you need to leave."]
     spoken = `Wildfire. Evacuate. ${big}.`
+  } else if (trip?.arrived) {
+    big = 'Arrived'
+    lines = [`You're at ${trip.route.shelter_name}.`, "Tap “I'm safe” so responders know."]
+    spoken = `You have arrived at ${trip.route.shelter_name}.`
+  } else if (trip?.mode === 'sim') {
+    // Simulated drive (issue #56): count down to arrival instead of to leave-by.
+    const left = trip.route.eta_min * (1 - (trip.fraction ?? 0))
+    label = 'Arriving in'
+    big = formatMinSec(left)
+    lines = [`Driving to ${trip.route.shelter_name} (simulated)`, onTheWay(near)]
+    const mins = Math.max(1, Math.ceil(left))
+    spoken = `Evacuating. Arriving at ${trip.route.shelter_name} in about ${mins} ${mins === 1 ? 'minute' : 'minutes'}.`
+  } else if (trip?.mode === 'gps') {
+    big = 'On your way'
+    lines = [`Heading to ${trip.route.shelter_name}`, 'Following your real GPS.', onTheWay(near)]
+    spoken = `Evacuating to ${trip.route.shelter_name}.`
   } else if (routeError === 'no_route') {
     big = 'No safe route'
     lines = ['Stay where you are if it is safe and call 911.']
