@@ -147,15 +147,23 @@ function fakeRoute(lat, lon) {
 // /route comes back as contract v2 (`options` + `leave_by_*`) or, until the backend
 // migrates, the Step 0 flat shape. Flatten v2's best option onto the top level so the
 // map and route details read one shape; `leave_by_sim_min` is undefined for v1.
+const roundKm = (km) => (km == null || Number.isNaN(Number(km)) ? km : Math.round(Number(km) * 10) / 10)
+
 export function normalizeRoute(body) {
-  if (!Array.isArray(body?.options)) return body
-  const best = body.options.find((o) => o.id === body.best_route_id) ?? body.options.find((o) => o.status !== 'blocked')
+  if (!Array.isArray(body?.options)) {
+    if (body?.distance_km == null) return body
+    return { ...body, distance_km: roundKm(body.distance_km) }
+  }
+  const options = body.options.map((o) => ({ ...o, distance_km: roundKm(o.distance_km) }))
+  const best = options.find((o) => o.id === body.best_route_id) ?? options.find((o) => o.status !== 'blocked')
   return {
     rerouted: false,
     reroute_reason: null,
     steps: [],
     ...body,
+    options,
     ...(best ?? {}),
+    distance_km: best ? roundKm(best.distance_km) : undefined,
     id: undefined,
     route_id: best?.id ?? null,
   }

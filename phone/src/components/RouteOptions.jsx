@@ -27,9 +27,17 @@ function ordered(options, bestId) {
 
 function clearLine(o) {
   if (o.status === 'blocked') return o.reason ?? 'The fire is forecast to cut this route.'
-  if (o.clear_until_label) return o.clear_until_label
-  if (o.margin_min === NO_THREAT) return 'No fire forecast on this route (next 2 h)'
+  // Older backends put a scary "Fire timing unknown…" label when idle; treat like no threat.
+  if (o.margin_min == null || o.margin_min === NO_THREAT) return 'No fire forecast on this route (next 2 h)'
+  if (o.clear_until_label && !/unknown|no safety guarantee/i.test(o.clear_until_label)) {
+    return o.clear_until_label
+  }
   return STATUS[o.status]?.hint ?? null
+}
+
+function formatKm(km) {
+  if (km == null || Number.isNaN(Number(km))) return '—'
+  return (Math.round(Number(km) * 10) / 10).toFixed(1)
 }
 
 export default function RouteOptions({ options, bestId, chosenId, shelters, onChoose }) {
@@ -59,7 +67,8 @@ export default function RouteOptions({ options, bestId, chosenId, shelters, onCh
             </span>
             {!blocked && (
               <span className="route-card-trip num">
-                <strong>{o.eta_min} min</strong> · {o.distance_km} km{full != null && ` · ${full}% full`}
+                <strong>{o.eta_min} min</strong> · {formatKm(o.distance_km)} km
+                {full != null && ` · ${full}% full`}
                 {o.id === bestId && ' · Recommended'}
               </span>
             )}
