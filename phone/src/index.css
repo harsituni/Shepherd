@@ -78,7 +78,11 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--radius); background: #fff; color: var(--navy);
   display: flex; align-items: center; justify-content: center;
 }
-.city { font-size: var(--fs-sm); color: var(--on-navy-muted); }
+.city {
+  font-size: var(--fs-sm); color: var(--on-navy-muted);
+  min-width: 0; max-width: 55%; margin-left: 12px; text-align: right;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ---------- alert banner (the only tinted surface) ---------- */
 

@@ -106,7 +106,7 @@ function leadingEdge(feature, from) {
   return best
 }
 
-export default function MapView({ hazards, shelters, route, location, onTap, focusKey, tall = false }) {
+export default function MapView({ hazards, shelters, route, location, onTap, onViewChange, focusKey, tall = false }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const youMarker = useRef(null)
@@ -117,9 +117,12 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
   const lastFocus = useRef(null)
   const [loaded, setLoaded] = useState(false)
 
+  const viewRef = useRef(onViewChange)
+
   useEffect(() => {
     tapRef.current = onTap
-  }, [onTap])
+    viewRef.current = onViewChange
+  }, [onTap, onViewChange])
 
   // Create the map once.
   useEffect(() => {
@@ -187,6 +190,12 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
 
     map.on('click', (e) => tapRef.current?.([e.lngLat.lng, e.lngLat.lat]))
     map.on('move', () => placeShelterLabels(map, shelterMarkers.current))
+    const reportView = () => {
+      const c = map.getCenter()
+      viewRef.current?.([c.lng, c.lat], map.getZoom())
+    }
+    map.on('moveend', reportView)
+    map.once('load', reportView)
 
     const stores = [shelterMarkers.current, predictedMarkers.current]
     return () => {
