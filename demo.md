@@ -55,6 +55,8 @@ Use this when phones are on cellular or a locked-down venue Wi‑Fi.
    ```
 5. Judges scan → phone UI over HTTPS, API over the second HTTPS tunnel.
 
+If the phone shows **“Blocked request. This host is not allowed”**, restart `./dev.sh` after pulling — `phone/vite.config.js` must have `server.allowedHosts: true`.
+
 ### ngrok (alternative)
 
 ```bash
