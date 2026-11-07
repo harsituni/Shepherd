@@ -1,6 +1,7 @@
 """Prepare demo roads only when --download is supplied."""
 
 import argparse
+import os
 from pathlib import Path
 
 import networkx as nx
@@ -72,6 +73,10 @@ def prepare_graph(path, download=False):
         return
     if not download:
         raise FileNotFoundError(f"Saved graph missing: {path}. Use --download to prepare it.")
+
+    overpass_url = os.environ.get("SHEPHERD_OVERPASS_URL")
+    if overpass_url is not None:
+        ox.settings.overpass_url = overpass_url
 
     # Let OSMnx split the area and reuse cached responses.
     ox.settings.cache_folder = str(ROUTING_DIR / "data" / "http_cache")

@@ -25,6 +25,15 @@ def demo_graph():
 
 class PrepareGraphTests(unittest.TestCase):
     def setUp(self):
+        env_patch = patch.dict(os.environ)
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        os.environ.pop("SHEPHERD_OVERPASS_URL", None)
+        url_patch = patch.object(
+            prepare_graph.ox.settings, "overpass_url", prepare_graph.ox.settings.overpass_url
+        )
+        url_patch.start()
+        self.addCleanup(url_patch.stop)
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         self.path = Path(folder.name) / "roads.graphml"
@@ -49,6 +58,25 @@ class PrepareGraphTests(unittest.TestCase):
             prepare_graph.prepare_graph(self.path)
         self.download.assert_not_called()
         self.assertFalse(self.path.exists())
+
+    def test_environment_sets_overpass_url_before_download(self):
+        url = "https://overpass.example.test/api"
+        os.environ["SHEPHERD_OVERPASS_URL"] = url
+
+        def download(*args, **kwargs):
+            self.assertEqual(prepare_graph.ox.settings.overpass_url, url)
+            return self.graph
+
+        self.download.side_effect = download
+        prepare_graph.prepare_graph(self.path, download=True)
+        self.download.assert_called_once()
+
+    def test_unset_environment_keeps_overpass_url(self):
+        original_url = prepare_graph.ox.settings.overpass_url
+        self.download.side_effect = None
+        self.download.return_value = self.graph
+        prepare_graph.prepare_graph(self.path, download=True)
+        self.assertEqual(prepare_graph.ox.settings.overpass_url, original_url)
 
     def test_saved_file_is_reused_even_with_download_flag(self):
         prepare_graph.ox.save_graphml(self.graph, self.path)

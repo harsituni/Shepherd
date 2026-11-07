@@ -49,6 +49,11 @@ This uses the fixed demo box `(-113.70, 53.42, -113.43, 53.58)` and saves
 and reused, never replaced, even with `--download`. The downtown graph is kept.
 An invalid existing file fails the check instead of triggering a download.
 
+To use a different Overpass server, set `SHEPHERD_OVERPASS_URL` before running
+the download command. Use the server's API base URL, not its `/interpreter`
+endpoint. If the variable is unset, the current OSMnx default is kept.
+This setting only applies when downloading; saved-file checks stay offline.
+
 OSMnx splits the request area into pieces of at most 25 square kilometres,
 keeps server rate limiting enabled, and caches responses in `data/http_cache`.
 It assembles the roads before simplifying them, avoiding manual tile joins.
