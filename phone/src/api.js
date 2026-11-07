@@ -1,5 +1,5 @@
 import { API_URL, USE_FIXTURES } from './config.js'
-import { distanceKm, ringCentroid } from './geo.js'
+import { distanceKm, pointInRing, ringCentroid } from './geo.js'
 import hazardsFixture from '../../shared/fixtures/hazards.json'
 import sheltersFixture from '../../shared/fixtures/shelters.json'
 import notificationsFixture from '../../shared/fixtures/notifications.json'
@@ -22,8 +22,8 @@ async function request(path, options = {}) {
 }
 
 // ---------- fixture mode: a tiny in-memory stand-in for the backend ----------
-// Mimics the contract's Step 0 behaviour: hazards grow a little on each poll and
-// /route is a straight line to the nearest open shelter.
+// Hazards grow a little on each poll; /route returns contract v2 options as
+// straight lines to the nearest open shelters.
 
 const GROWTH_PER_TICK = 0.04
 const MAX_SCALE = 3.5
@@ -44,62 +44,103 @@ function grownFeature(h) {
   return { ...h.feature, geometry: { type: 'Polygon', coordinates: [ring] } }
 }
 
-// Minutes the fake fire needs per km to reach you, for the fixture leave-by time.
-const FAKE_FIRE_MIN_PER_KM = 6
-const FAKE_BUFFER_MIN = 5
-let fakeLeaveBy = { key: null, value: null }
+// Fixture fire forecast: minutes for the fire to spread one km, the contract's
+// 30-minute road-closing buffer and 120-minute forecast horizon, and the backend's
+// "no threat" margin sentinel (backend/routing/router.py).
+const FAKE_FIRE_MIN_PER_KM = 12
+const BUFFER_MIN = 30
+const HORIZON_MIN = 120
+const NO_THREAT = 999
+const SAMPLES = 8
+let fakeForecast = { key: null, arrivals: null }
 
-// Fixture /route in the contract v2 shape: one option to the nearest open shelter,
-// with a leave-by time from how far the (growing) fake fire is from you.
+// Sim minute the fake fire reaches a point, or null beyond the forecast horizon.
+function fakeArrival(point, at) {
+  let best = Infinity
+  for (const h of fakeHazards) {
+    const ring = grownFeature(h).geometry.coordinates[0]
+    const km = pointInRing(point, ring) ? 0 : Math.min(...ring.map((p) => distanceKm(point, p)))
+    best = Math.min(best, at + km * FAKE_FIRE_MIN_PER_KM)
+  }
+  return best - at > HORIZON_MIN ? null : Math.round(best)
+}
+
+// One v2 option, scored like the backend: a sample is blocked if you'd reach it
+// later than BUFFER_MIN before the fire does.
+function fakeOption(id, here, shelter, arrivals) {
+  const km = distanceKm(here, shelter.geometry.coordinates)
+  const eta = Math.max(1, Math.round((km / FAKE_SPEED_KMH) * 60))
+  let margin = NO_THREAT
+  let clearUntil = null
+  let reason = null
+  arrivals.forEach((arrival, i) => {
+    if (arrival == null) return
+    const reach = fakeSimTime + (eta * i) / (SAMPLES - 1)
+    const spare = Math.floor(arrival - BUFFER_MIN - reach)
+    clearUntil = clearUntil == null ? arrival - BUFFER_MIN : Math.min(clearUntil, arrival - BUFFER_MIN)
+    if (spare < margin) margin = spare
+    if (spare < 0 && !reason) {
+      reason = `Roads on this route close at T+${arrival - BUFFER_MIN}, ${BUFFER_MIN} min before the fire arrives. You'd reach them at T+${Math.round(reach)}.`
+    }
+  })
+  const status = margin >= 60 ? 'ok' : margin >= 0 ? 'tight' : 'blocked'
+  const usable = status !== 'blocked'
+  return {
+    id,
+    shelter_id: shelter.id,
+    shelter_name: shelter.properties.name,
+    distance_km: Math.round(km * 10) / 10,
+    eta_min: eta,
+    margin_min: margin,
+    status,
+    clear_until_sim_min: usable ? clearUntil : null,
+    clear_until_label: usable && clearUntil != null ? `Clear until T+${clearUntil}` : null,
+    reason: usable ? null : reason,
+    geometry: { type: 'LineString', coordinates: [here, shelter.geometry.coordinates] },
+  }
+}
+
+// Fixture /route in the contract v2 shape: up to 3 nearest open shelters, each
+// ok / tight / blocked against the fake fire. The forecast is snapshotted per
+// location (like a real forecast it only changes when conditions do), so margins
+// shrink as sim time passes and a route can turn tight, then blocked.
 function fakeRoute(lat, lon) {
   const here = [lon, lat]
-  const open = sheltersFixture.features.filter((f) => f.properties.open)
-  if (open.length === 0) {
-    const err = new Error('No reachable shelter from this location')
-    err.code = 'no_route'
-    err.status = 404
-    throw err
-  }
-  const nearest = open
+  const open = sheltersFixture.features
+    .filter((f) => f.properties.open)
     .map((f) => ({ f, km: distanceKm(here, f.geometry.coordinates) }))
-    .sort((a, b) => a.km - b.km)[0]
-  const eta = Math.max(1, Math.round((nearest.km / FAKE_SPEED_KMH) * 60))
-  const fireKm = Math.min(
-    ...fakeHazards.map((h) => Math.min(...grownFeature(h).geometry.coordinates[0].map((p) => distanceKm(here, p)))),
-  )
-  // Fixed per location, like a forecast-based leave-by: it only moves when the
-  // forecast changes, so the countdown runs down instead of drifting.
+    .sort((a, b) => a.km - b.km)
+    .slice(0, 3)
+  const noRoute = (message) => Object.assign(new Error(message), { code: 'no_route', status: 404 })
+  if (open.length === 0) throw noRoute('No reachable shelter from this location')
+
   const key = `${lat.toFixed(4)},${lon.toFixed(4)}`
-  if (fakeLeaveBy.key !== key) {
-    fakeLeaveBy = {
-      key,
-      value: fakeSimTime + Math.max(0, Math.round(fireKm * FAKE_FIRE_MIN_PER_KM) - eta - FAKE_BUFFER_MIN),
-    }
+  if (fakeForecast.key !== key) {
+    const arrivals = open.map(({ f }) => {
+      const [x1, y1] = here
+      const [x2, y2] = f.geometry.coordinates
+      return Array.from({ length: SAMPLES }, (_, i) => {
+        const t = i / (SAMPLES - 1)
+        return fakeArrival([x1 + (x2 - x1) * t, y1 + (y2 - y1) * t], fakeSimTime)
+      })
+    })
+    fakeForecast = { key, arrivals }
   }
-  const leaveBy = fakeLeaveBy.value
+
+  const options = open.map(({ f }, i) => fakeOption(`rt_${i + 1}`, here, f, fakeForecast.arrivals[i]))
+  const usable = options.filter((o) => o.status !== 'blocked')
+  if (usable.length === 0) throw noRoute('No usable evacuation route under the current fire forecast')
+  const best = usable.reduce((a, b) => (b.margin_min > a.margin_min || (b.margin_min === a.margin_min && b.eta_min < a.eta_min) ? b : a))
+  const leaveBy = best.margin_min === NO_THREAT ? null : fakeSimTime + best.margin_min
   return {
     lat,
     lon,
     sim_time: fakeSimTime,
     leave_by_sim_min: leaveBy,
-    leave_by_label: `Leave within ${Math.max(0, leaveBy - fakeSimTime)} min (sim)`,
-    best_route_id: 'rt_1',
-    options: [
-      {
-        id: 'rt_1',
-        shelter_id: nearest.f.id,
-        shelter_name: nearest.f.properties.name,
-        distance_km: Math.round(nearest.km * 10) / 10,
-        eta_min: eta,
-        margin_min: Math.max(0, leaveBy - fakeSimTime),
-        status: leaveBy - fakeSimTime >= 60 ? 'ok' : 'tight',
-        clear_until_sim_min: null,
-        clear_until_label: null,
-        reason: null,
-        geometry: { type: 'LineString', coordinates: [here, nearest.f.geometry.coordinates] },
-      },
-    ],
-    excluded: [],
+    leave_by_label: leaveBy == null ? null : `Leave within ${best.margin_min} min (sim)`,
+    best_route_id: best.id,
+    options,
+    excluded: options.filter((o) => o.status === 'blocked').map((o) => ({ shelter_id: o.shelter_id, reason: o.reason })),
   }
 }
 
@@ -118,6 +159,16 @@ export function normalizeRoute(body) {
     id: undefined,
     route_id: best?.id ?? null,
   }
+}
+
+// The route to show: the option the user picked (by shelter, since option ids can be
+// renumbered between polls) or the backend's best. If their pick has since become
+// blocked, fall back to the best and return it as `lost` so the UI can say why.
+export function withChoice(route, shelterId) {
+  const picked = shelterId ? route?.options?.find((o) => o.shelter_id === shelterId) : null
+  if (!picked) return { shown: route, lost: null }
+  if (picked.status === 'blocked') return { shown: route, lost: picked }
+  return { shown: { ...route, ...picked, id: undefined, route_id: picked.id }, lost: null }
 }
 
 // ---------- public API ----------

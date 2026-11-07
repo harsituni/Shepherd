@@ -1,5 +1,6 @@
 import { isCurrentCore, isPredicted } from '../geo.js'
 import { PinIcon, RerouteIcon, TurnIcon } from './icons.jsx'
+import RouteOptions from './RouteOptions.jsx'
 
 function percentFull(shelters, shelterId) {
   const s = shelters?.features?.find((f) => f.id === shelterId)
@@ -14,6 +15,7 @@ function MapKey({ hazards, route, location }) {
     features.some(isCurrentCore) && ['swatch-hazard', 'Hazard now'],
     features.some(isPredicted) && ['swatch-predicted', 'Predicted spread'],
     route?.geometry && ['swatch-route', 'Your route'],
+    route?.options?.length > 1 && ['swatch-alt', 'Other routes'],
     ['swatch-shelter', 'Shelter'],
     location && ['swatch-you', 'You'],
   ].filter(Boolean)
@@ -29,7 +31,17 @@ function MapKey({ hazards, route, location }) {
   )
 }
 
-export default function RouteTab({ map, hazards, location, route, routeError, shelters, onStartNavigation }) {
+export default function RouteTab({
+  map,
+  hazards,
+  location,
+  route,
+  lost,
+  routeError,
+  shelters,
+  onChoose,
+  onStartNavigation,
+}) {
   let details
   if (!location) {
     details = (
@@ -59,6 +71,39 @@ export default function RouteTab({ map, hazards, location, route, routeError, sh
     )
   } else if (!route) {
     details = <p className="muted">Finding your route…</p>
+  } else if (route.options?.length) {
+    const next = route.steps?.[0]
+    details = (
+      <>
+        {lost && (
+          <div className="notice notice-strong" role="status">
+            <RerouteIcon />
+            <span>
+              Your route to {lost.shelter_name} is now blocked. Showing {route.shelter_name} instead.
+            </span>
+          </div>
+        )}
+        <RouteOptions
+          options={route.options}
+          bestId={route.best_route_id}
+          chosenId={route.route_id}
+          shelters={shelters}
+          onChoose={onChoose}
+        />
+        {next && (
+          <div className="next-turn">
+            <TurnIcon />
+            <div className="next-turn-text">
+              <span className="next-turn-title">{next.instruction}</span>
+              <span className="muted num">in {next.distance_km} km</span>
+            </div>
+          </div>
+        )}
+        <button type="button" className="btn-primary" onClick={onStartNavigation}>
+          Start navigation
+        </button>
+      </>
+    )
   } else {
     const full = percentFull(shelters, route.shelter_id)
     const next = route.steps?.[0]
