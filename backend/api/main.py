@@ -235,6 +235,12 @@ def get_reports() -> dict:
     return {"type": "FeatureCollection", "features": reports}
 
 
+@app.get("/forecast")
+def get_forecast() -> dict:
+    """Predicted fire outlines at +15…+120 min (contract v2)."""
+    return controller.forecast()
+
+
 @app.get("/sim/state")
 def get_sim_state() -> dict:
     return controller.status()

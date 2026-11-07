@@ -7,6 +7,7 @@ from typing import Any, Optional
 from backend.sim.wildfire import WildfireSim
 
 ALLOWED_SPEEDS = (1, 4, 16)
+FORECAST_HORIZON_MIN = 120
 
 
 class SimController:
@@ -108,3 +109,17 @@ class SimController:
         if self.sim is None:
             return []
         return self.sim.features()
+
+    def forecast(self) -> dict[str, Any]:
+        """GET /forecast body. Empty outlines while idle (no active sim)."""
+        body: dict[str, Any] = {
+            "sim_time": self.sim_time,
+            "horizon_min": FORECAST_HORIZON_MIN,
+            "wind_kmh": self.wind_kmh,
+            "wind_from_deg": self.wind_from_deg,
+            "outlines": [],
+        }
+        if self.sim is None or self.state == "idle":
+            return body
+        body["outlines"] = self.sim.forecast(FORECAST_HORIZON_MIN)
+        return body
