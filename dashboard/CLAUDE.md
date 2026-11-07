@@ -33,6 +33,7 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 - Fluid page layout; panels stack on narrow screens.
 
 ## Design
+- **Visual system: see `/DESIGN.md`** (shared with `phone/`; tokens, components, rules). If it and this section disagree, flag it rather than picking one.
 - Minimalist, inspired by Alberta.ca's wildfire pages: plain blue and white, lots of whitespace, no decorative charts.
 - Colours: navy `#0B3D6E` (header, shelters), blue `#0070C4` (primary, routes, predicted path), tint `#EAF3FB`, borders `#D3E3F2`, text `#0B2545`, muted text `#3B5A7A`.
 - Orange `#D9480F` only for the active hazard, red `#C62828` only for closed roads.
