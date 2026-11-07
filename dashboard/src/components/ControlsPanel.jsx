@@ -2,15 +2,16 @@ import { useState } from 'react'
 import { PauseIcon, PlayIcon, ResetIcon } from './icons.jsx'
 
 // Compass degrees the wind blows FROM (matches wind_from_deg in the contract).
+// Labels read start → finish: where the wind comes from, then where it heads.
 const WIND_DIRECTIONS = [
-  { deg: 270, label: 'From west (→ east)' },
-  { deg: 315, label: 'From northwest (→ southeast)' },
-  { deg: 0, label: 'From north (→ south)' },
-  { deg: 45, label: 'From northeast (→ southwest)' },
-  { deg: 90, label: 'From east (→ west)' },
-  { deg: 135, label: 'From southeast (→ northwest)' },
-  { deg: 180, label: 'From south (→ north)' },
-  { deg: 225, label: 'From southwest (→ northeast)' },
+  { deg: 270, label: 'West → East' },
+  { deg: 315, label: 'Northwest → Southeast' },
+  { deg: 0, label: 'North → South' },
+  { deg: 45, label: 'Northeast → Southwest' },
+  { deg: 90, label: 'East → West' },
+  { deg: 135, label: 'Southeast → Northwest' },
+  { deg: 180, label: 'South → North' },
+  { deg: 225, label: 'Southwest → Northeast' },
 ]
 
 function dryness(pct) {
