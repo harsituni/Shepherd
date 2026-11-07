@@ -29,37 +29,35 @@ typography:
     fontWeight: 700
     lineHeight: 1.1
     fontFeature: "tnum"
+  heading:
+    fontFamily: "Public Sans, system-ui, sans-serif"
+    fontSize: "20px"
+    fontWeight: 700
   title:
     fontFamily: "Public Sans, system-ui, sans-serif"
     fontSize: "18px"
     fontWeight: 700
-  title-small:
-    fontFamily: "Public Sans, system-ui, sans-serif"
-    fontSize: "15px"
-    fontWeight: 600
   body:
+    fontFamily: "Public Sans, system-ui, sans-serif"
+    fontSize: "16px"
+    fontWeight: 400
+  body-strong:
+    fontFamily: "Public Sans, system-ui, sans-serif"
+    fontSize: "16px"
+    fontWeight: 600
+  body-small:
     fontFamily: "Public Sans, system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 400
-  body-small:
-    fontFamily: "Public Sans, system-ui, sans-serif"
-    fontSize: "13px"
-    fontWeight: 400
   label:
     fontFamily: "Public Sans, system-ui, sans-serif"
-    fontSize: "13px"
+    fontSize: "14px"
     fontWeight: 600
-    letterSpacing: "0.06em"
-  caption:
-    fontFamily: "Public Sans, system-ui, sans-serif"
-    fontSize: "12px"
-    fontWeight: 400
 rounded:
+  swatch: "3px"
   marker: "4px"
   control: "6px"
   card: "8px"
-  touch: "10px"
-  pill: "999px"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -74,23 +72,26 @@ components:
     textColor: "{colors.surface}"
     rounded: "{rounded.control}"
     height: "48px"
-    typography: "{typography.title-small}"
+    typography: "{typography.body-strong}"
   button-primary-hover:
     backgroundColor: "{colors.blue-hover}"
   button-primary-disabled:
-    backgroundColor: "{colors.border}"
-    textColor: "{colors.muted}"
+    backgroundColor: "{colors.divider}"
+    textColor: "{colors.muted-2}"
   button-primary-phone:
     backgroundColor: "{colors.blue}"
     textColor: "{colors.surface}"
-    rounded: "{rounded.touch}"
+    rounded: "{rounded.control}"
     height: "52px"
   button-outline:
     backgroundColor: "{colors.surface}"
-    textColor: "{colors.blue}"
+    textColor: "{colors.navy}"
     rounded: "{rounded.control}"
     height: "40px"
     padding: "0 14px"
+  control-disabled:
+    backgroundColor: "{colors.map-bg}"
+    textColor: "{colors.muted-2}"
   icon-button:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.navy}"
@@ -102,8 +103,14 @@ components:
     rounded: "{rounded.control}"
     height: "44px"
   choice-selected:
-    backgroundColor: "{colors.tint}"
-    textColor: "{colors.navy}"
+    backgroundColor: "{colors.navy}"
+    textColor: "{colors.surface}"
+  choice-selected-locked:
+    backgroundColor: "{colors.muted-2}"
+    textColor: "{colors.surface}"
+  segment-evacuation-selected:
+    backgroundColor: "{colors.danger-title}"
+    textColor: "{colors.surface}"
   input:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
@@ -130,15 +137,20 @@ components:
   alert-evacuation:
     backgroundColor: "{colors.danger-bg}"
     textColor: "{colors.danger-title}"
+  action-secondary:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.navy}"
+    rounded: "{rounded.control}"
+    height: "48px"
   action-help:
     backgroundColor: "{colors.navy}"
     textColor: "{colors.surface}"
-    rounded: "{rounded.touch}"
+    rounded: "{rounded.control}"
     height: "48px"
   toast:
     backgroundColor: "{colors.navy}"
     textColor: "{colors.surface}"
-    rounded: "{rounded.card}"
+    rounded: "{rounded.control}"
     padding: "12px 14px"
 ---
 
@@ -150,14 +162,15 @@ components:
 
 Shepherd looks like a civic service, not a product launch. The map is the subject; everything around it is plain white paper with navy and blue ink, organised like a good government information page: a solid navy masthead, a thin tinted status strip, then content in calm, bordered panels. Nothing competes with the hazard, which is the only warm colour on screen.
 
-The two surfaces share one system at two densities. The **dashboard** (emergency managers, desktop) is a three-column command layout: controls, map, stats and feeds. It is dense but quiet, with small uppercase section labels and tabular numbers. The **phone** (residents, ~390px) is the same vocabulary scaled for thumbs and stress: larger targets, softer 10px corners on the controls you press, one primary action per view, and an always-visible action bar.
+The two surfaces share one system at two densities. The **dashboard** (emergency managers, desktop) is a three-column command layout: controls, map, stats and feeds. It is dense but quiet, with plain sentence-case section headings and tabular numbers. The **phone** (residents, ~390px) is the same vocabulary scaled for thumbs and stress: larger targets, one primary action per view, and an always-visible action bar. Both surfaces use the same square-ish 6px corners and the same type scale, in the manner of Alberta.ca: plain, text-led and squared off rather than rounded and app-like.
 
-The visual rejections are explicit and binding (see Do's and Don'ts): no gradients, no glass, no glows, no emoji icons, no default "AI website" fonts, no decorative charts. Depth comes from 1px borders and tint, never from shadows.
+The visual rejections are explicit and binding (see Do's and Don'ts): no gradients, no glass, no glows, no emoji icons, no default "AI website" fonts, no decorative charts, no pill shapes. Depth comes from 1px borders, never from shadows. The Sky Tint is reserved for the alert surface.
 
 **Key Characteristics:**
 - White surfaces, navy chrome, blue as the single interactive and route colour.
 - Orange means hazard and red means closed road. Neither colour ever appears for any other purpose.
-- Flat. 1px borders and the tint fill separate surfaces.
+- Flat. 1px borders separate surfaces; the tint belongs to the alert banner alone.
+- One solid button per area; everything else is a plain outline.
 - Public Sans throughout, with tabular numerals for every time, ETA, distance and stat.
 - Touch targets of at least 44px everywhere and at least 48px for primary phone actions.
 
@@ -166,28 +179,30 @@ The visual rejections are explicit and binding (see Do's and Don'ts): no gradien
 A cool, low-saturation blue-and-white civic palette, with one warm signal colour kept for danger.
 
 ### Primary
-- **Service Blue** (#0070C4): the one interactive colour. Primary buttons, selected-state borders, focus rings, range accents, the tab underline, evacuation routes, and the dashed predicted-spread rings. On the phone it is also the ETA figure and the "you" dot. Hover deepens to **Pressed Blue** (#005A9E).
-- **Masthead Navy** (#0B3D6E): headers, shelter markers, selected-state text, icon-button glyphs, the toast and the "Need help" action. **Deep Navy** (#0A3360) is only the track behind the dashboard's Live/Drill switch.
+- **Service Blue** (#0070C4): the one primary-action and route colour. Primary buttons, focus rings, range accents, the tab underline, evacuation routes, and the dashed predicted-spread rings. On the phone it is also the ETA figure and the "you" dot. Hover deepens to **Pressed Blue** (#005A9E).
+- **Masthead Navy** (#0B3D6E): headers, shelter markers, selected-state fills (choice tiles and segmented controls), outline-button borders and labels, icon-button glyphs, the toast and the "Need help" action. **Deep Navy** (#0A3360) is a reserved token and currently unused.
 
 ### Signal
 - **Hazard Orange** (#D9480F): the active hazard only, used as fills, outlines, the incident-banner dot, the start marker and report-pin strokes.
 - **Closure Red** (#C62828): closed roads, the "Roads closed" stat and SOS reports only.
-- **Evacuation Tint family**, shared by both surfaces for evacuation-order alerts and "no safe route" states: background **Ember Wash** (#FFF3EC), border **Ember Edge** (#F6D2BE), title **Ember Ink** (#8A2F06), body **Ember Text** (#6B3A1F) and icon **Ember Mark** (#B4400B).
+- **Evacuation Tint family**, shared by both surfaces for evacuation-order alerts and "no safe route" states: background **Ember Wash** (#FFF3EC), border **Ember Edge** (#F6D2BE), title **Ember Ink** (#8A2F06), body **Ember Text** (#6B3A1F) and icon **Ember Mark** (#B4400B). Ember Ink is also the fill of the selected "Evacuation" severity segment (white text, which passes 4.5:1 where Hazard Orange would not).
 
 ### Neutral
 - **Ink** (#0B2545): body text and values.
 - **Slate Muted** (#3B5A7A): secondary text, field labels, unselected tabs, section titles.
-- **Slate Faint** (#5B7590): timestamps, hints, slider ticks, idle states. Meant for metadata on white.
+- **Slate Faint** (#5B7590): timestamps, hints, slider ticks, idle states and disabled labels. Also the fill of a selected choice that is locked while a drill runs.
 - **Frost Border** (#D3E3F2): control and card borders.
-- **Frost Divider** (#E3ECF5): panel separators and list rules, lighter than a border.
-- **Sky Tint** (#EAF3FB): selected fills, hover rows, the incident banner, the reroute notice.
-- **Map Paper** (#F3F7FB): the map background under the desaturated basemap, and the page behind the phone column on desktop.
+- **Frost Divider** (#E3ECF5): panel separators and list rules, lighter than a border. Also the fill of a disabled primary button.
+- **Sky Tint** (#EAF3FB): the alert surface only, i.e. the dashboard incident banner and the phone alert banner. Not for selection, hover, notices or buttons.
+- **Map Paper** (#F3F7FB): the map background under the desaturated basemap, the page behind the phone column on desktop, hover rows, and the fill of disabled controls.
 - **On-Navy Muted** (#BFD7EE): secondary text on the navy header.
 
 ### Named Rules
 **The Two Warnings Rule.** Orange is the hazard; red is a closed road. Neither may be used for decoration, emphasis, branding, or generic errors.
 
-**The One Ink Rule.** Blue is the only interactive colour. Anything blue is either clickable, selected, or a route/prediction on the map.
+**The One Ink Rule.** Blue marks the primary action and the route. Anything blue is either the main thing to press or a route/prediction on the map. Selection is navy, not blue.
+
+**The One Tint Rule.** Sky Tint means "this is the alert". If the banner and a hint look the same, the banner has lost its authority, so inline hints and notices are plain text with an icon.
 
 **The Quiet Basemap Rule.** The OpenStreetMap raster is desaturated (saturation −0.85, contrast −0.15, opacity 0.6) over Map Paper, so Shepherd's own layers are always the loudest thing on the map.
 
@@ -198,15 +213,18 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 **Character:** a US-government-designed sans, neutral and legible, chosen because it reads as public service rather than startup.
 
 ### Hierarchy
+One scale for both surfaces, exposed as tokens in each `index.css`: `--fs-sm` 14px, `--fs-body` 16px, `--fs-brand` 18px, `--fs-h` 20px. Nothing on screen is smaller than 14px except MapLibre's attribution.
+
 - **Headline** (700, 26–28px, line-height 1.1, tabular): stat tile values (26px) and the phone ETA (28px). Numbers, not sentences.
-- **Title** (700, 17–18px): brand name, phone shelter name, sheet headings.
-- **Title Small** (600, 15px): alert titles, list item titles, the next-turn instruction, primary button labels.
-- **Body** (400–500, 14px): banner text, controls, toggle rows. The phone uses 13–16px depending on the control.
-- **Body Small** (400, 13px): supporting copy, report notes, field labels.
-- **Label** (600, 12–13px, uppercase, 0.06em tracking): dashboard section titles such as "Simulate & predict". Dashboard only.
-- **Caption** (400, 11–12px): timestamps, header sub-lines, legend entries, map labels (600 11px with a white halo).
+- **Heading** (700, 20px): phone shelter name, report sheet heading.
+- **Title** (700, 18px): brand name, dashboard panel titles such as "Simulate & predict" (sentence case, no uppercase tracking).
+- **Body** (400–600, 16px): the default size. Alert titles, banner text, phone tabs, inline notices, list item titles, the next-turn instruction, primary button labels, inputs and selects.
+- **Body Small** (400–500, 14px): supporting copy, field labels, hints, report notes, timestamps, header sub-lines, legend entries, dashboard tabs, choice and segment labels, action-bar labels.
+- **Label** (600, 14px): map labels (with a white halo), field values, the history label.
 
 ### Named Rules
+**The No Eyebrow Rule.** No small uppercase tracked labels above headings. A section has a plain bold heading or nothing.
+
 **The Tabular Rule.** Every number that updates (T+min, ETA, km, counts, percentages) uses `font-variant-numeric: tabular-nums` (the `.num` class), so live values don't jitter as they tick.
 
 **The 16px Input Rule.** Phone text inputs are 16px so iOS doesn't zoom on focus.
@@ -220,7 +238,7 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 
 ## Elevation & Depth
 
-Shepherd is flat. Surfaces are white and separated by 1px Frost Border or Frost Divider lines; selection and hover use Sky Tint. There are no drop shadows on cards, panels, buttons or tiles.
+Shepherd is flat. Surfaces are white and separated by 1px Frost Border or Frost Divider lines; selection is a navy fill and hover is Map Paper. There are no drop shadows on cards, panels, buttons or tiles.
 
 ### Shadow Vocabulary
 - **Tab underline** (`box-shadow: inset 0 -3px 0 #0070C4`): the selected-tab indicator. It's an inset rule, not elevation.
@@ -232,56 +250,60 @@ Shepherd is flat. Surfaces are white and separated by 1px Frost Border or Frost 
 
 ## Shapes
 
-- **Control** (6px): dashboard buttons, inputs, selects, segmented controls, icon buttons, zoom buttons and the legend. Phone text areas and icon buttons.
-- **Card** (8px): dashboard stat tiles, phone notices, the no-route card, the toast and phone choice tiles.
-- **Touch** (10px, phone only): the controls a resident presses with a thumb, i.e. the primary button, action-bar buttons and the report sheet's top corners.
-- **Pill** (999px): the dashboard Live/Drill switch and the phone hazard-type filter pills.
-- **Marker** (4px): shelter squares on the map. Hazard/priority swatches use 3px.
+- **Control** (6px): every button, input, select, segmented control, choice tile, icon button, zoom button, the legend, the toast and the phone no-route card, on both surfaces.
+- **Card** (8px): dashboard stat tiles and the top corners of the phone report sheet.
+- **Marker** (4px): shelter squares on the map. **Swatch** (3px): hazard/priority legend swatches.
 
-**The Per-Surface Corner Rule.** 6/8px is the shared language. 10px and pills are phone-only affordances for large touch controls; don't carry 10px onto the dashboard.
+**The Square Corner Rule.** Corners stay at 6px, with 8px for cards. No 10px "bubble" controls and no pills (999px). A two-way or three-way choice is a segmented control (one bordered strip with joined buttons), not a row of pills.
 
 ## Components
 
 ### Buttons
 Plain and confident, with solid fills and no ornament.
-- **Primary:** Service Blue fill, white 600 label. Dashboard: 48px tall, 6px corners, 15px label. Phone: 52px tall, 10px corners, 16px label. Hover goes to Pressed Blue; disabled goes to Frost Border fill with Slate Muted text.
-- **Outline:** white with a 1px Service Blue border and blue 600 13px label, 40px tall (e.g. "Back to live"). Disabled turns the border and text grey.
-- **Icon button:** 44×44px square with a 1px border and navy glyph (dashboard). The play/pause button inverts to a Service Blue fill. Phone close buttons are borderless and muted.
+- **Primary:** Service Blue fill, white 600 16px label, 6px corners. Dashboard: 48px tall. Phone: 52px tall. Hover goes to Pressed Blue; disabled goes to Frost Divider fill with Slate Faint text.
+- **Outline (secondary):** white with a 1px navy border and a navy 600 14px label, 40px tall on the dashboard (e.g. "Back to live") and 48px in the phone action bar.
+- **Icon button:** 44×44px square with a 1px navy border and navy glyph (dashboard). The play/pause button is the panel's one solid Service Blue button. Phone close buttons are borderless and muted.
+- **Disabled:** a distinct flat style, never an opacity fade. Frost Border outline, Map Paper fill, Slate Faint label. A disabled fieldset turns its labels and slider accents Slate Faint.
 - **Focus:** a 2px Service Blue outline with a 2px offset on every focusable control.
 
-### Choices, segmented controls and pills
-- **Choice tile:** a 44–48px white tile with a 1px border. Selected gets a 1.5px Service Blue border, Sky Tint fill and navy 600 text. Uses `aria-pressed` on the dashboard and `aria-checked` on the phone.
-- **Segmented control:** buttons joined inside one 6px bordered container. Selected gets Sky Tint and navy text. The "Evacuation order" severity uses the Ember Wash/Ember Ink pair when selected.
-- **Pill (phone):** 44px tall, fully rounded, with the same selected treatment as a choice tile.
+**The One Solid Rule.** Each area has at most one solid-filled button: play/pause in the controls panel, "Send update" in Notify, "Start navigation" in the phone route view, and "Need help" in the phone action bar. Everything beside it is an outline. Never give three side-by-side buttons three different treatments.
+
+**The Never Disabled Rule.** "Need help" is never disabled. Without a pinned location it asks the device for one, and if that fails it tells the resident to tap the map or call 911.
+
+### Choices and segmented controls
+- **Choice tile:** a 44–48px white tile with a 1px border and 6px corners. Selected is a navy fill with white 600 text. Uses `aria-pressed` on the dashboard and `aria-checked` on the phone. A selected tile that is locked (disabled during a drill) becomes a Slate Faint fill with white text, so the choice stays visible.
+- **Segmented control:** buttons joined inside one 6px bordered container, separated by 1px Frost Border rules. Selected is a navy fill with white 600 text. The "Evacuation" severity uses an Ember Ink fill when selected. Used for speed, severity and the phone Survival tips hazard filter.
+- **Live/Drill switch (dashboard header):** the same segmented form on navy, with an On-Navy Muted 1px border. The selected half is white with navy text.
 
 ### Inputs
-- **Style:** a 1px Frost Border on white with 6px corners. 40px minimum height and 14px text on the dashboard; 16px text on phone textareas.
+- **Style:** a 1px Frost Border on white with 6px corners, 16px text. 40px minimum height on the dashboard.
 - **Range sliders and checkboxes:** native controls with `accent-color: #0070C4`.
 
 ### Navigation
-- **Header:** a solid navy masthead with the Shepherd name (700) and a sub-line in On-Navy Muted. The dashboard adds the Live/Drill pill switch (the selected half is white with navy text) and a last-updated caption.
-- **Tabs:** full-width, equal-flex, 44px (dashboard) or 48px (phone) tall, Slate Muted 500 text. The selected tab is navy 600 with the 3px blue inset underline, and the row sits on a Frost Divider.
+- **Header:** a solid navy masthead with the Shepherd name (700) and a sub-line in On-Navy Muted. The dashboard adds the Live/Drill segmented switch and a 14px last-updated line.
+- **Tabs:** full-width, equal-flex, Slate Muted 500 text. Dashboard: 44px tall, 14px (four tabs share a narrow column). Phone: 48px tall, 16px. The selected tab is navy 600 with the 3px blue inset underline, and the row sits on a Frost Divider.
 
 ### Stat tiles (dashboard)
-A 2×2 grid of four tiles only: People at risk, Roads closed, Active reroutes and Shelter capacity used. Each has 14px padding, an 8px corner and a 1px border, with a 12px muted label over a 26px 700 tabular value. Roads closed takes Closure Red; Active reroutes takes Service Blue.
+A 2×2 grid of four tiles only: People at risk, Roads closed, Active reroutes and Shelter capacity used. Each has 14px padding, an 8px corner and a 1px border, with a 14px muted label over a 26px 700 tabular value. Roads closed takes Closure Red; Active reroutes takes Service Blue.
 
 ### Incident banner and alerts
-- **Incident banner (dashboard):** a Sky Tint strip with a bottom border, an 8px hazard-orange status dot (grey when idle), a bold hazard name and a muted status line.
-- **Alert banner (phone):** an icon plus a 15px 700 navy title and a 13px muted line on Sky Tint. An evacuation order switches the whole banner to the Evacuation Tint family.
+- **Incident banner (dashboard):** a 16px Sky Tint strip with a bottom border, an 8px hazard-orange status dot (grey when idle), a bold hazard name and a muted status line.
+- **Alert banner (phone):** an icon plus a 16px 700 navy title and a 14px muted line on Sky Tint. An evacuation order switches the whole banner to the Evacuation Tint family.
+- **Inline notice (phone):** plain 16px text with a leading stroke icon, with no box, fill or border. Hints ("Tap the map…") are Slate Muted; the reroute notice is navy 600 so it reads as news.
 
 ### Feed and report lists
-Rows divided by Frost Divider lines, with no cards. Each row has a 14px 600 title (SOS in Closure Red), a 12px Slate Faint time and location, and a 13px muted note. Hovering a row fills it with Sky Tint, and every row is at least 44px tall.
+Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 title (SOS in Closure Red), a 14px Slate Faint time and location, and a 14px muted note. Hovering a row fills it with Map Paper, and every row is at least 44px tall.
 
 ### Phone action bar and toast
-- **Action bar:** a three-column grid of 48px buttons with 10px corners. "Report hazard" is white with a border, "I'm safe" is Sky Tint with a blue border, and "Need help" is solid navy.
-- **Toast:** a solid navy bar with 8px corners and white 500 14px text, floating just above the action bar.
+- **Action bar:** a three-column grid of 48px buttons with 6px corners and 14px labels. "Report hazard" and "I'm safe" share the navy outline style; "Need help" is the one solid navy button.
+- **Toast:** a solid navy bar with 6px corners and white 500 14px text, floating just above the action bar.
 
 ### Map layers (signature)
 - **Hazard core:** Hazard Orange fill at 0.85 opacity with a 1.5px orange outline. **Buffer:** orange at 0.3 opacity.
-- **Predicted spread:** Service Blue fill at 0.06 with a 1.5px dashed line (`[3, 3]`, 0.6 opacity), labelled T+30 / T+60 in navy 600 12px with a halo.
-- **Route (phone):** a 5px Service Blue line with round caps and joins.
+- **Predicted spread:** Service Blue fill at 0.06 with a 1.5px dashed line (`[3, 3]`, 0.6 opacity), labelled T+30 / T+60 in navy 600 14px with a halo.
+- **Route (phone):** a 5px Service Blue line over a 9px white casing, with round caps and joins, so it stays legible over grey tiles and orange hazards. Never cyan or any off-palette colour.
 - **Closed road:** Closure Red, solid when closed and dashed when slowed.
-- **Shelter:** a 20px navy square (4px corners, 2px white border) with a 600 11px label.
+- **Shelter:** a 20px navy square (4px corners, 2px white border) with a 600 14px label.
 - **Report pin:** a white circle with a 2.5px hazard-orange stroke. **Priority resident:** a navy-outlined diamond. **You:** an 18px blue dot with a 3px white ring.
 
 ## Do's and Don'ts
@@ -289,7 +311,10 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 14px 600 titl
 ### Do:
 - **Do** use Public Sans only, at weights 400/500/600/700.
 - **Do** keep surfaces flat and white, separated by 1px Frost Border (#D3E3F2) or Frost Divider (#E3ECF5).
-- **Do** use Sky Tint (#EAF3FB) plus a 1.5px Service Blue border for every selected state.
+- **Do** use a navy fill with white text for every selected state, and keep Sky Tint (#EAF3FB) for the alert banner only.
+- **Do** keep corners at 6px (8px for cards), and use a segmented control for small option sets.
+- **Do** give disabled controls a flat Map Paper / Slate Faint style.
+- **Do** use the 14/16/18/20 type scale, with 16px as the default.
 - **Do** keep touch targets at least 44px, primary phone actions at least 48px, and text contrast at least 4.5:1.
 - **Do** use tabular numerals for every live number.
 - **Do** use simple inline stroke SVG icons.
@@ -301,6 +326,10 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 14px 600 titl
 - **Don't** use emoji as icons.
 - **Don't** use glassmorphism or blur, neon glows, coloured left-border accent cards, oversized rounded "bubble" cards or bouncy animations.
 - **Don't** use orange or red for anything except the hazard and closed roads.
+- **Don't** use pill shapes (999px corners) or 10px "bubble" controls.
+- **Don't** fade disabled controls with `opacity`, and never disable "Need help".
+- **Don't** set text smaller than 14px, or use small uppercase tracked eyebrow labels.
+- **Don't** put three different button treatments side by side.
 - **Don't** add drop shadows to cards, tiles or panels. The only one allowed is on a floating pop-up notification.
 - **Don't** add filler stats, decorative charts or lorem ipsum. Every number comes from the backend or a fixture.
 - **Don't** use the Government of Alberta logo or wordmark. Shepherd is its own brand.
