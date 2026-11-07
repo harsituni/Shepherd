@@ -18,8 +18,9 @@ from shapely.geometry import LineString, Point, shape
 
 ROUTING_DIR = Path(__file__).resolve().parent
 GRAPH_PATH = ROUTING_DIR / "data" / "edmonton_demo_drive.graphml"
-# West, south, east, north; includes the contract's example shelters.
-DEMO_BBOX = (-113.70, 53.42, -113.43, 53.58)
+# West, south, east, north. Includes contract shelters; a bit larger than the
+# downloaded graph so east/south pins still get backup routes instead of 404.
+DEMO_BBOX = (-113.75, 53.40, -113.32, 53.62)
 ILLUSTRATIVE_SPEED_KMH = 30.0
 _graph = None
 _backup_mode = False
@@ -100,7 +101,7 @@ def _straight_line_route(lat, lon, hazards, shelters):
     return {
         "shelter_id": nearest["id"],
         "shelter_name": nearest["properties"]["name"],
-        "distance_km": best_distance,
+        "distance_km": round(best_distance, 1),
         "eta_min": ceil(best_distance / ILLUSTRATIVE_SPEED_KMH * 60),
         "rerouted": False,
         "reroute_reason": None,
@@ -294,7 +295,7 @@ def find_route(lat: float, lon: float,
     return {
         "shelter_id": nearest["id"],
         "shelter_name": nearest["properties"]["name"],
-        "distance_km": best_distance,
+        "distance_km": round(best_distance, 1),
         "eta_min": ceil(best_distance / ILLUSTRATIVE_SPEED_KMH * 60),
         "rerouted": rerouted,
         "reroute_reason": reason,

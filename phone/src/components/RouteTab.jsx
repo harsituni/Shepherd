@@ -10,6 +10,11 @@ function percentFull(shelters, shelterId) {
   return Math.round((s.properties.occupancy / s.properties.capacity) * 100)
 }
 
+function formatKm(km) {
+  if (km == null || Number.isNaN(Number(km))) return '—'
+  return (Math.round(Number(km) * 10) / 10).toFixed(1)
+}
+
 // One-row key for what's actually drawn on the map right now.
 function MapKey({ hazards, shelters, route, location }) {
   const features = hazards?.features ?? []
@@ -78,6 +83,16 @@ export default function RouteTab({
         </span>
       </div>
     )
+  } else if (routeError === 'out_of_area') {
+    details = (
+      <div className="notice" role="status">
+        <PinIcon />
+        <span>
+          Can&apos;t route from here. Tap closer to central Edmonton (near the shelters) and try
+          again.
+        </span>
+      </div>
+    )
   } else if (routeError === 'no_route') {
     details = (
       <div className="no-route" role="alert">
@@ -120,7 +135,7 @@ export default function RouteTab({
             <TurnIcon />
             <div className="next-turn-text">
               <span className="next-turn-title">{next.instruction}</span>
-              <span className="muted num">in {next.distance_km} km</span>
+              <span className="muted num">in {formatKm(next.distance_km)} km</span>
             </div>
           </div>
         )}
@@ -141,7 +156,8 @@ export default function RouteTab({
         <div className="shelter">
           <span className="shelter-name">{route.shelter_name}</span>
           <span className="trip num">
-            <strong>{route.eta_min} min</strong> · {route.distance_km} km{full != null && ` · ${full}% full`}
+            <strong>{route.eta_min} min</strong> · {formatKm(route.distance_km)} km
+            {full != null && ` · ${full}% full`}
           </span>
         </div>
         {next && (
@@ -149,7 +165,7 @@ export default function RouteTab({
             <TurnIcon />
             <div className="next-turn-text">
               <span className="next-turn-title">{next.instruction}</span>
-              <span className="muted num">in {next.distance_km} km</span>
+              <span className="muted num">in {formatKm(next.distance_km)} km</span>
             </div>
           </div>
         )}
