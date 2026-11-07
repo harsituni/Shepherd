@@ -194,7 +194,7 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 ### Neutral
 - **Ink** (#0B2545): body text and values.
 - **Slate Muted** (#3B5A7A): secondary text, field labels, unselected tabs, section titles.
-- **Slate Faint** (#5B7590): timestamps, hints, slider ticks, idle states and disabled labels. Also the fill of a selected choice that is locked while a drill runs.
+- **Slate Faint** (#5B7590): timestamps, hints, slider ticks, idle states and disabled labels. Also the fill of a selected choice that is locked while a simulation runs.
 - **Frost Border** (#D3E3F2): control and card borders.
 - **Frost Divider** (#E3ECF5): panel separators and list rules, lighter than a border. Also the fill of a disabled primary button.
 - **Sky Tint** (#EAF3FB): the alert surface only, i.e. the dashboard incident banner and the phone alert banner. Not for selection, hover, notices or buttons.
@@ -268,23 +268,23 @@ Plain and confident, with solid fills and no ornament.
 - **Outline (secondary):** white with a 1px navy border and a navy 600 14px label, 40px tall on the dashboard (e.g. "Back to live") and 48px in the phone action bar.
 - **Icon button:** 44×44px square with a 1px navy border and navy glyph (dashboard). The play/pause button is the panel's one solid Service Blue button. Phone close buttons are borderless and muted.
 - **Disabled:** a distinct flat style, never an opacity fade. Frost Border outline, Map Paper fill, Slate Faint label. A disabled fieldset turns its labels and slider accents Slate Faint.
-- **Focus:** a 3px Focus Gold outline with a 2px offset on every focusable control. Tabs, segmented-control buttons and the Live/Drill switch draw it inside (`outline-offset: -3px`) so the edges aren't clipped.
+- **Focus:** a 3px Focus Gold outline with a 2px offset on every focusable control. Tabs, segmented-control buttons and the Live/Simulation switch draw it inside (`outline-offset: -3px`) so the edges aren't clipped.
 
 **The One Solid Rule.** Each area has at most one solid-filled button: play/pause in the controls panel, "Send update" in Notify, "Start navigation" in the phone route view, and "Need help" in the phone action bar. Everything beside it is an outline. Never give three side-by-side buttons three different treatments.
 
 **The Never Disabled Rule.** "Need help" is never disabled. Without a pinned location it asks the device for one, and if that fails it tells the resident to tap the map or call 911.
 
 ### Choices and segmented controls
-- **Choice tile:** a 44–48px white tile with a 1px border and 6px corners. Selected is a navy fill with white 600 text. Uses `aria-pressed` on the dashboard and `aria-checked` on the phone. A selected tile that is locked (disabled during a drill) becomes a Slate Faint fill with white text, so the choice stays visible.
+- **Choice tile:** a 44–48px white tile with a 1px border and 6px corners. Selected is a navy fill with white 600 text. Uses `aria-pressed` on the dashboard and `aria-checked` on the phone. A selected tile that is locked (disabled while a simulation runs) becomes a Slate Faint fill with white text, so the choice stays visible.
 - **Segmented control:** buttons joined inside one 6px bordered container, separated by 1px Frost Border rules. Selected is a navy fill with white 600 text. The "Evacuation" severity uses an Ember Ink fill when selected. Used for the dashboard speed and severity controls.
-- **Live/Drill switch (dashboard header):** the same segmented form on navy, with an On-Navy Muted 1px border. The selected half is white with navy text.
+- **Live/Simulation switch (dashboard header):** the same segmented form on navy, with an On-Navy Muted 1px border. The selected half is white with navy text.
 
 ### Inputs
 - **Style:** a 1px Frost Border on white with 6px corners, 16px text. 40px minimum height on the dashboard.
 - **Range sliders and checkboxes:** native controls with `accent-color: #0070C4`.
 
 ### Navigation
-- **Header:** a solid Alberta Header Blue (#005072) masthead with a 28px white placeholder mark, the Shepherd name (700) and a sub-line in On-Navy Muted. The dashboard adds the Live/Drill segmented switch and a 14px last-updated line.
+- **Header:** a solid Alberta Header Blue (#005072) masthead with a 28px white placeholder mark, the Shepherd name (700) and a sub-line in On-Navy Muted. The dashboard adds the Live/Simulation segmented switch and a 14px last-updated line.
 - **Tabs:** full-width, equal-flex, Slate Muted 500 text. Dashboard: 44px tall, 14px (four tabs share a narrow column). Phone: 48px tall, 16px. The selected tab is navy 600 with the 3px blue inset underline, and the row sits on a Frost Divider.
 
 ### Stat tiles (dashboard)
