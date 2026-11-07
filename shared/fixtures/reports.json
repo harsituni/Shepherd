@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "rp_1",
+      "properties": {
+        "kind": "blocked_road",
+        "note": "Tree down",
+        "sim_time": 30
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -113.6,
+          53.53
+        ]
+      }
+    }
+  ]
+}
