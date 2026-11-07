@@ -117,7 +117,7 @@ def spread_rates(fuel_type, pc, ffmc, bui, ws_kmh) -> SpreadRates:
 def directional_ros(ros_value, bros_value, fros_value, theta):
     """Spread rate (m/min) along a ray at theta radians from the head direction.
 
-    Elliptical fire shape with the ignition at the rear focus: a = (ROS + BROS)/2,
+    Shifted ellipse matching head, back and flank rates (ignition is not generally a focus): a = (ROS + BROS)/2,
     b = FROS, c = (ROS - BROS)/2, and r(theta) is the positive root of
     (r cos(theta) - c)^2 / a^2 + (r sin(theta))^2 / b^2 = 1.
     Returns 0 where every rate is 0 (e.g. BUI = 0).

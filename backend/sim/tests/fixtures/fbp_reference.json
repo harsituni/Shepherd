@@ -1,0 +1,107 @@
+{
+  "provenance": {
+    "equations": "FCFDG 1992 ST-X-3: 26,27,45,46,53a,54,75,76,79; M-2 deciduous factor 0.2",
+    "sources": [
+      "https://raw.githubusercontent.com/cffdrs/cffdrs_r/master/R/initial_spread_index.r",
+      "https://raw.githubusercontent.com/cffdrs/cffdrs_r/master/R/rate_of_spread.r",
+      "https://raw.githubusercontent.com/cffdrs/cffdrs_r/master/R/back_rate_of_spread.r",
+      "https://raw.githubusercontent.com/cffdrs/cffdrs_r/master/R/buildup_effect.r",
+      "https://raw.githubusercontent.com/cffdrs/cffdrs_r/master/R/length_to_breadth.r"
+    ],
+    "method": "Independent 50-digit Decimal scalar evaluation; not engine-generated",
+    "coefficient": "FFMC coefficient 147.27723; positive-BUI cases only",
+    "limitation": "Equation verification only; no empirical calibration"
+  },
+  "cases": [
+    {
+      "input": {
+        "fuel_type": "M-1",
+        "pc": 50,
+        "ffmc": 92,
+        "bui": 90,
+        "ws_kmh": 0
+      },
+      "expected": {
+        "ros": 4.057800852228076,
+        "bros": 4.057800852228076,
+        "fros": 4.057800852228076,
+        "lb": 1.0
+      }
+    },
+    {
+      "input": {
+        "fuel_type": "M-1",
+        "pc": 50,
+        "ffmc": 92,
+        "bui": 90,
+        "ws_kmh": 25
+      },
+      "expected": {
+        "ros": 20.674185939608297,
+        "bros": 0.6552746448075776,
+        "fros": 3.3318421663630833,
+        "lb": 3.2008509886436687
+      }
+    },
+    {
+      "input": {
+        "fuel_type": "M-1",
+        "pc": 50,
+        "ffmc": 92,
+        "bui": 90,
+        "ws_kmh": 60
+      },
+      "expected": {
+        "ros": 57.043014972881224,
+        "bros": 0.046826155448476174,
+        "fros": 4.128710823704415,
+        "lb": 6.913761167354756
+      }
+    },
+    {
+      "input": {
+        "fuel_type": "M-2",
+        "pc": 25,
+        "ffmc": 95,
+        "bui": 50,
+        "ws_kmh": 25
+      },
+      "expected": {
+        "ros": 13.567916503288766,
+        "bros": 0.5196984778664185,
+        "fros": 2.2006046253225744,
+        "lb": 3.2008509886436687
+      }
+    },
+    {
+      "input": {
+        "fuel_type": "M-2",
+        "pc": 0,
+        "ffmc": 85,
+        "bui": 30,
+        "ws_kmh": 15
+      },
+      "expected": {
+        "ros": 0.12733718325864107,
+        "bros": 0.01208883094976621,
+        "fros": 0.035219974734085814,
+        "lb": 1.979359940787679
+      }
+    },
+    {
+      "input": {
+        "fuel_type": "M-1",
+        "pc": 100,
+        "ffmc": 101,
+        "bui": 50,
+        "ws_kmh": 0
+      },
+      "expected": {
+        "ros": 29.588528791020355,
+        "bros": 29.588528791020355,
+        "fros": 29.588528791020355,
+        "lb": 1.0
+      }
+    }
+  ]
+}

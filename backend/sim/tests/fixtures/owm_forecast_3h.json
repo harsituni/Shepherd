@@ -1,0 +1,130 @@
+{
+  "cod": "200",
+  "message": 0,
+  "cnt": 4,
+  "list": [
+    {
+      "dt": 1794171600,
+      "main": {
+        "temp": 24.1,
+        "feels_like": 24.1,
+        "pressure": 1012,
+        "humidity": 18
+      },
+      "weather": [
+        {
+          "id": 800,
+          "main": "Clear",
+          "description": "clear sky",
+          "icon": "01d"
+        }
+      ],
+      "clouds": {
+        "all": 0
+      },
+      "wind": {
+        "speed": 5.0,
+        "deg": 270,
+        "gust": 7.2
+      },
+      "visibility": 10000,
+      "pop": 0,
+      "dt_txt": "2026-11-08 21:00:00"
+    },
+    {
+      "dt": 1794182400,
+      "main": {
+        "temp": 25.3,
+        "feels_like": 25.3,
+        "pressure": 1012,
+        "humidity": 15
+      },
+      "weather": [
+        {
+          "id": 800,
+          "main": "Clear",
+          "description": "clear sky",
+          "icon": "01d"
+        }
+      ],
+      "clouds": {
+        "all": 0
+      },
+      "wind": {
+        "speed": 6.2,
+        "deg": 255
+      },
+      "visibility": 10000,
+      "pop": 0,
+      "dt_txt": "2026-11-09 00:00:00",
+      "rain": {
+        "3h": 1.5
+      }
+    },
+    {
+      "dt": 1794193200,
+      "main": {
+        "temp": 22.0,
+        "feels_like": 22.0,
+        "pressure": 1012,
+        "humidity": 21
+      },
+      "weather": [
+        {
+          "id": 800,
+          "main": "Clear",
+          "description": "clear sky",
+          "icon": "01d"
+        }
+      ],
+      "clouds": {
+        "all": 0
+      },
+      "wind": {
+        "speed": 7.4,
+        "deg": 240,
+        "gust": 9.0
+      },
+      "visibility": 10000,
+      "pop": 0,
+      "dt_txt": "2026-11-09 03:00:00"
+    },
+    {
+      "dt": 1794204000,
+      "main": {
+        "temp": 18.5,
+        "feels_like": 18.5,
+        "pressure": 1012,
+        "humidity": 30
+      },
+      "weather": [
+        {
+          "id": 800,
+          "main": "Clear",
+          "description": "clear sky",
+          "icon": "01d"
+        }
+      ],
+      "clouds": {
+        "all": 0
+      },
+      "wind": {
+        "speed": 6.0,
+        "deg": 230
+      },
+      "visibility": 10000,
+      "pop": 0,
+      "dt_txt": "2026-11-09 06:00:00",
+      "rain": {
+        "3h": 0.6
+      }
+    }
+  ],
+  "city": {
+    "name": "Sample",
+    "coord": {
+      "lat": 56.71,
+      "lon": -111.425
+    }
+  }
+}

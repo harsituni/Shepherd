@@ -1,0 +1,292 @@
+{
+  "$defs": {
+    "FbpParams": {
+      "additionalProperties": false,
+      "properties": {
+        "fuel_type": {
+          "default": "M-1",
+          "enum": [
+            "M-1",
+            "M-2"
+          ],
+          "title": "Fuel Type",
+          "type": "string"
+        },
+        "pc": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Pc",
+          "type": "number"
+        },
+        "ffmc": {
+          "default": 92,
+          "maximum": 101,
+          "minimum": 0,
+          "title": "Ffmc",
+          "type": "number"
+        },
+        "bui": {
+          "default": 90,
+          "minimum": 0,
+          "title": "Bui",
+          "type": "number"
+        }
+      },
+      "title": "FbpParams",
+      "type": "object"
+    },
+    "IgnitionPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "lat": {
+          "maximum": 84,
+          "minimum": 0,
+          "title": "Lat",
+          "type": "number"
+        },
+        "lon": {
+          "maximum": -108,
+          "minimum": -114,
+          "title": "Lon",
+          "type": "number"
+        }
+      },
+      "required": [
+        "lat",
+        "lon"
+      ],
+      "title": "IgnitionPoint",
+      "type": "object"
+    },
+    "PerimeterGeometry": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "Polygon",
+            "MultiPolygon"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "coordinates": {
+          "items": {},
+          "title": "Coordinates",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "coordinates"
+      ],
+      "title": "PerimeterGeometry",
+      "type": "object"
+    },
+    "WeatherEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "t_min": {
+          "minimum": 0,
+          "title": "T Min",
+          "type": "integer"
+        },
+        "wind_speed_ms": {
+          "maximum": 60,
+          "minimum": 0,
+          "title": "Wind Speed Ms",
+          "type": "number"
+        },
+        "wind_dir_deg": {
+          "maximum": 360,
+          "minimum": 0,
+          "title": "Wind Dir Deg",
+          "type": "number"
+        },
+        "temp_c": {
+          "maximum": 60,
+          "minimum": -60,
+          "title": "Temp C",
+          "type": "number"
+        },
+        "rh_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Rh Pct",
+          "type": "number"
+        },
+        "precip_mm": {
+          "minimum": 0,
+          "title": "Precip Mm",
+          "type": "number"
+        }
+      },
+      "required": [
+        "t_min",
+        "wind_speed_ms",
+        "wind_dir_deg",
+        "temp_c",
+        "rh_pct",
+        "precip_mm"
+      ],
+      "title": "WeatherEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "scenario_id": {
+      "minLength": 1,
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "t0": {
+      "format": "date-time",
+      "title": "T0",
+      "type": "string"
+    },
+    "horizon_min": {
+      "exclusiveMinimum": 0,
+      "title": "Horizon Min",
+      "type": "integer"
+    },
+    "step_min": {
+      "exclusiveMinimum": 0,
+      "title": "Step Min",
+      "type": "integer"
+    },
+    "bbox": {
+      "maxItems": 4,
+      "minItems": 4,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Bbox",
+      "type": "array"
+    },
+    "initial_perimeter": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PerimeterGeometry"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "ignition": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/IgnitionPoint"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "weather": {
+      "items": {
+        "$ref": "#/$defs/WeatherEntry"
+      },
+      "minItems": 1,
+      "title": "Weather",
+      "type": "array"
+    },
+    "n_ensemble": {
+      "default": 1,
+      "maximum": 100,
+      "minimum": 1,
+      "title": "N Ensemble",
+      "type": "integer"
+    },
+    "cell_m": {
+      "default": 100,
+      "minimum": 1,
+      "title": "Cell M",
+      "type": "integer"
+    },
+    "integration_step_min": {
+      "default": 0.25,
+      "maximum": 60,
+      "minimum": 0.001,
+      "title": "Integration Step Min",
+      "type": "number"
+    },
+    "ensemble_seed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Ensemble Seed",
+      "type": "integer"
+    },
+    "weather_end_policy": {
+      "default": "error",
+      "enum": [
+        "error",
+        "hold"
+      ],
+      "title": "Weather End Policy",
+      "type": "string"
+    },
+    "weather_source": {
+      "additionalProperties": true,
+      "title": "Weather Source",
+      "type": "object"
+    },
+    "execution_mode": {
+      "const": "recompute",
+      "default": "recompute",
+      "title": "Execution Mode",
+      "type": "string"
+    },
+    "revision_of": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Revision Of"
+    },
+    "fbp": {
+      "$ref": "#/$defs/FbpParams"
+    }
+  },
+  "required": [
+    "schema",
+    "scenario_id",
+    "run_id",
+    "t0",
+    "horizon_min",
+    "step_min",
+    "bbox",
+    "weather"
+  ],
+  "title": "Scenario",
+  "type": "object"
+}
