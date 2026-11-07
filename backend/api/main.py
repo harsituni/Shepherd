@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import math
+import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Any, Optional
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -20,6 +21,10 @@ dropped_hazards: list[dict] = []
 reports: list[dict] = []
 _next_hazard_id: int = 1
 _next_report_id: int = 1
+
+# Phone heartbeats upsert here. Dropped if no POST for STALE_EVACUEE_SEC (wall clock).
+STALE_EVACUEE_SEC = 30
+evacuees: dict[str, dict[str, Any]] = {}
 
 SHELTERS: list[dict] = [
     {
@@ -121,6 +126,15 @@ class SimWind(BaseModel):
     wind_from_deg: float
 
 
+class EvacueeIn(BaseModel):
+    id: str
+    lat: float
+    lon: float
+    route_id: Optional[str] = None
+    route_status: Optional[str] = None
+    shelter_id: Optional[str] = None
+
+
 def circle_polygon(lat: float, lon: float, radius_m: float, n: int = 32) -> list[list[float]]:
     """Return a closed GeoJSON ring [lon, lat] approximating a circle."""
     dlat = radius_m / 111_320
@@ -135,6 +149,37 @@ def circle_polygon(lat: float, lon: float, radius_m: float, n: int = 32) -> list
 
 def all_hazard_features() -> list[dict]:
     return list(controller.features()) + list(dropped_hazards)
+
+
+def prune_evacuees(now: Optional[float] = None) -> None:
+    """Remove evacuees with no heartbeat for STALE_EVACUEE_SEC."""
+    cutoff = (now if now is not None else time.time()) - STALE_EVACUEE_SEC
+    stale = [eid for eid, row in evacuees.items() if row["last_seen"] < cutoff]
+    for eid in stale:
+        del evacuees[eid]
+
+
+def evacuee_features() -> list[dict]:
+    prune_evacuees()
+    features: list[dict] = []
+    for eid, row in evacuees.items():
+        features.append(
+            {
+                "type": "Feature",
+                "id": eid,
+                "properties": {
+                    "route_id": row.get("route_id"),
+                    "route_status": row.get("route_status"),
+                    "shelter_id": row.get("shelter_id"),
+                    "updated_sim_time": row.get("updated_sim_time"),
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [row["lon"], row["lat"]],
+                },
+            }
+        )
+    return features
 
 
 def _unsupported_flood() -> JSONResponse:
@@ -256,6 +301,30 @@ def get_reports() -> dict:
 def get_forecast() -> dict:
     """Predicted fire outlines at +15…+120 min (contract v2)."""
     return controller.forecast()
+
+
+@app.post("/evacuees")
+def post_evacuee(body: EvacueeIn, response: Response) -> dict:
+    """Phone location heartbeat. Upserts by id; 201 on first sight, 200 on update."""
+    prune_evacuees()
+    created = body.id not in evacuees
+    evacuees[body.id] = {
+        "lat": body.lat,
+        "lon": body.lon,
+        "route_id": body.route_id,
+        "route_status": body.route_status,
+        "shelter_id": body.shelter_id,
+        "updated_sim_time": controller.sim_time,
+        "last_seen": time.time(),
+    }
+    response.status_code = 201 if created else 200
+    return {"id": body.id, "received": True}
+
+
+@app.get("/evacuees")
+def get_evacuees() -> dict:
+    """Current phone positions for the dashboard map (stale after 30s)."""
+    return {"type": "FeatureCollection", "features": evacuee_features()}
 
 
 @app.get("/sim/state")
