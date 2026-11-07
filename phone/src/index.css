@@ -80,10 +80,18 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--radius); background: #fff; color: var(--navy);
   display: flex; align-items: center; justify-content: center;
 }
+.header-meta {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  min-width: 0; max-width: 55%; margin-left: 12px;
+}
 .city {
   font-size: var(--fs-sm); color: var(--on-navy-muted);
-  min-width: 0; max-width: 55%; margin-left: 12px; text-align: right;
+  min-width: 0; max-width: 100%; text-align: right;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.build-ver {
+  font-size: 11px; font-weight: 500; color: var(--on-navy-muted);
+  opacity: 0.85; letter-spacing: 0.01em; white-space: nowrap;
 }
 
 /* ---------- evacuation card (replaces the alert banner during a wildfire) ----------
@@ -171,6 +179,22 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .shelter-label { left: 24px; color: var(--text); display: none; }
 .shelter-marker.is-target .shelter-label { display: block; }
 .shelter-marker.label-left .shelter-label { left: auto; right: 24px; }
+/* Invisible padding grows the 20px square to a 44px tap target. */
+.shelter-marker { cursor: pointer; }
+.shelter-marker::before { content: ''; position: absolute; inset: -12px; }
+.shelter-marker.is-open { z-index: 5; }
+/* Shelter pop-up (opened by a tap): white card, blue text, one soft shadow. */
+.shelter-popup {
+  display: none; position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(11, 37, 69, 0.12);
+  white-space: nowrap; font: 400 var(--fs-sm) var(--font); color: var(--blue);
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.shelter-marker.is-open .shelter-popup { display: block; }
+.shelter-marker.popup-start .shelter-popup { left: -2px; transform: none; }
+.shelter-marker.popup-end .shelter-popup { left: auto; right: -2px; transform: none; }
+.shelter-popup-title { font-weight: 600; }
 
 /* One-row key under the map, listing only what is drawn. */
 .map-key {
@@ -183,6 +207,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .swatch-hazard { width: 12px; height: 12px; border-radius: 3px; background: var(--hazard); }
 .swatch-predicted { width: 12px; height: 12px; border-radius: 3px; border: 1.5px dashed var(--blue); }
 .swatch-route { width: 16px; height: 4px; border-radius: 2px; background: var(--blue); }
+.swatch-alt { width: 16px; height: 0; border-top: 3px dashed var(--muted-2); }
 .swatch-shelter { width: 12px; height: 12px; border-radius: 3px; background: var(--navy); }
 .swatch-you { width: 12px; height: 12px; border-radius: 50%; background: var(--blue); }
 
@@ -194,6 +219,72 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 }
 .notice svg { flex: 0 0 auto; margin-top: 2px; }
 .notice-strong { color: var(--navy); font-weight: 600; }
+/* ---------- route choice cards (issue #55) ----------
+   A radio group of bordered cards. Selected = 2px navy border and a filled radio dot
+   (a navy fill would swallow the status colours). Status colours reuse existing
+   roles: Service Blue for clear, the Evacuation (Ember) family for tight, Closure
+   Red for blocked, which is a route the fire is forecast to close. */
+
+.route-options { display: flex; flex-direction: column; gap: 8px; }
+.route-card {
+  position: relative; display: flex; flex-direction: column; gap: 4px; width: 100%;
+  min-height: 48px; padding: 12px 14px 12px 44px; text-align: left;
+  border: 1px solid var(--border); border-radius: var(--radius); background: #fff; color: var(--text);
+  cursor: pointer;
+}
+.route-card:hover:not([aria-disabled='true']) { background: var(--map-bg); }
+/* Radio dot */
+.route-card::before {
+  content: ''; position: absolute; left: 14px; top: 14px; width: 18px; height: 18px;
+  border: 2px solid var(--muted-2); border-radius: 50%; background: #fff; box-sizing: border-box;
+}
+.route-card[aria-checked='true'] { border-color: var(--navy); box-shadow: inset 0 0 0 1px var(--navy); }
+.route-card[aria-checked='true']::before { border-color: var(--navy); background: var(--navy); box-shadow: inset 0 0 0 3px #fff; }
+.route-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.route-card-name { font-size: var(--fs-body); font-weight: 700; line-height: 1.3; }
+.route-card-status {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  font-size: var(--fs-sm); font-weight: 600;
+}
+.status-swatch { width: 10px; height: 10px; border-radius: 2px; background: currentColor; }
+.route-card-trip { font-size: var(--fs-sm); color: var(--muted); }
+.route-card-trip strong { color: var(--text); font-weight: 700; }
+.route-card-clear { font-size: var(--fs-sm); color: var(--muted); }
+
+.status-ok .route-card-status { color: var(--blue); }
+.status-tight .route-card-status { color: var(--danger-title); }
+.status-tight .route-card-clear { color: var(--danger-text); }
+.status-blocked { background: var(--map-bg); color: var(--muted); cursor: not-allowed; }
+.status-blocked::before { border-color: var(--divider); background: var(--map-bg); }
+.status-blocked .route-card-name { color: var(--muted); font-weight: 600; }
+.status-blocked .route-card-status { color: var(--closed); }
+.status-blocked .route-card-clear { color: var(--muted); }
+
+/* ---------- start evacuating (issue #56) ---------- */
+
+.evacuate-controls { display: flex; flex-direction: column; gap: 10px; }
+.evacuate-controls .muted { margin: 0; }
+/* Segmented control: one bordered strip, joined buttons, navy fill when selected. */
+.segmented { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.segmented button {
+  flex: 1; min-height: 44px; padding: 0 8px; border: 0; background: #fff;
+  color: var(--text); font-size: var(--fs-sm); font-weight: 500; cursor: pointer;
+}
+.segmented button + button { border-left: 1px solid var(--border); }
+.segmented button[aria-checked='true'] { background: var(--navy); color: #fff; font-weight: 600; }
+.segmented button:focus-visible { outline-offset: -3px; }
+.btn-outline {
+  min-height: 48px; padding: 0 16px; border: 1px solid var(--navy); border-radius: var(--radius);
+  background: #fff; color: var(--navy); font-size: var(--fs-body); font-weight: 600; cursor: pointer;
+}
+.btn-outline:hover { background: var(--map-bg); }
+.trip-status { display: flex; flex-direction: column; gap: 6px; color: var(--text); }
+.trip-status strong { font-size: var(--fs-h); font-weight: 700; line-height: 1.25; }
+.trip-status .muted { margin: 0; }
+.trip-status .btn-outline { margin-top: 8px; }
+.trip-bar { display: block; height: 6px; background: var(--divider); border-radius: 3px; overflow: hidden; }
+.trip-bar span { display: block; height: 100%; background: var(--blue); }
+
 .shelter { display: flex; flex-direction: column; gap: 4px; }
 .shelter-name { font-size: var(--fs-h); font-weight: 700; line-height: 1.25; }
 .trip { font-size: var(--fs-body); color: var(--muted); }

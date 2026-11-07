@@ -29,7 +29,7 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 - Thin light-blue incident banner under it (current hazard + status).
 - Left panel: Simulate & predict controls.
 - Centre: full map, legend bottom-left, zoom top-right, history slider along the bottom.
-- Right panel: 4 stat tiles, then tabs: **Updates** (rerouting feed) · **Reports** (hazard reports) · **Priority** (high-priority residents) · **Notify** (send update + history).
+- Right panel: 4 stat tiles, then tabs: **Reports** (hazard reports; reports from high-priority residents are specially marked) · **Notify** (send update + history; severity colours: Alert deep yellow `#9A6B00`, Evacuation order deep red `#8A2F06`). No separate Updates or Priority tabs.
 - Fluid page layout; panels stack on narrow screens.
 
 ## Design
@@ -65,7 +65,7 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 - `GET /shelters`: Points with `name`, `capacity`, `occupancy`, `open` (shelter capacity tile = sum occupancy / sum capacity).
 - `GET /reports`: Points with `kind` (`fire`|`flooded_road`|`blocked_road`|`safe`|`sos`), `note`, `sim_time`. Feeds the Reports tab and map pins.
 - `GET /roads/closed` (Step 2, fixture until then): LineStrings with `name`, `status` (`closed` = solid red, `slowed` = dashed red), `reason`. Feeds "Roads closed" and the Updates feed.
-- Sim control (Step 2): `POST /sim/start` `{ scenario, lat, lon, wind_kmh, wind_from_deg, fuel_dryness }` (`fuel_dryness` 0–1, `wind_from_deg` compass degrees); flood: `{ scenario: "flood", river_rise_m_per_hr }`. `POST /sim/pause|resume|reset`, `POST /sim/speed { multiplier }`, `GET /sim/state` → `{ state: idle|running|paused, scenario, sim_time, speed }`.
+- Sim control (Step 2): `POST /sim/start` `{ scenario, lat, lon, wind_kmh, wind_from_deg, fuel_dryness }` (`fuel_dryness` 0–1, `wind_from_deg` compass degrees); flood: `{ scenario: "flood", river_rise_m_per_hr }`. `POST /sim/pause|resume|reset`, `POST /sim/speed { multiplier }`, `GET /sim/state` → `{ state: idle|running|paused, scenario, sim_time, speed }`. `POST /sim/wind { wind_kmh, wind_from_deg }` (contract v2, both required) changes wind mid-run; wind speed is the one condition that stays unlocked after start.
 - Live updates: poll `/hazards` + `/reports` every 2 s; later WebSocket `ws://localhost:8000/ws` sends `{ type: tick|report|reset, changed: [hazards|roads|shelters|reports] }` → re-fetch only what's listed.
 - Errors come back as `{ error, message }`.
 
@@ -78,7 +78,6 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 - Stats: people at risk, active reroutes.
 - Relative humidity as a sim condition (e.g. `humidity_pct` 0–100 on `POST /sim/start`). The UI sends wind and humidity only; fuel dryness is left to the backend default. No temperature control.
 - A `tornado` scenario: `POST /sim/start { scenario: "tornado", lat, lon, wind_kmh, wind_from_deg }`, the storm travelling with the wind, and `kind: "tornado"` hazard features. The dashboard fixture fakes it meanwhile.
-
 ## Rules
 - Build exactly to `shared/contract.md`. Never edit it; ask Harsit (backend/lead) for changes.
 - Features that need endpoints not in the contract yet (history snapshots, priority residents, notifications, report status): ask Harsit to add them, and build against a fixture in `shared/fixtures/` meanwhile.

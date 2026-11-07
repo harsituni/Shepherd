@@ -18,10 +18,52 @@ only illustrative at 30 km/h. `steps` is empty and these are not navigation
 instructions. Lines touching core hazards, including either endpoint, are
 rejected. Closed/full shelters and locations outside the demo area are excluded.
 
-The current API passes these extra fields through and the phone accepts them,
-but the phone does not yet display the warning. Inspect the JSON/backend log;
-do not present the phone's backup line as a verified driving route. This is
-the existing single-route compatibility mode, not full contract v2 timing.
+The API passes these extra fields through, but the phone does not yet display
+the warning or distinguish backup estimates from driving routes. Inspect the
+JSON/backend log; do not present the phone's backup line as a driving route.
+
+## Merged v2 interface
+
+`find_route(lat, lon, hazards, shelters)` still handles core polygons and road
+detours exactly as before. The updated API calls `find_routes()` and
+`check_route()` instead. Both accept the simulation's `arrival_min` callback
+and optional `sim_time`, and return v2 options plus the old flat fields.
+
+Each eligible shelter gets a shortest road path, using the same road geometry
+and lengths as `find_route()`. Up to three options are returned. Forecast
+checks follow that geometry, sampling bends and points at most 50 metres apart.
+Travel time is distributed along the geometry using the illustrative ETA.
+The callback supplies all fire arrival times; routing subtracts the contract's
+30 minute buffer and estimated travel time to calculate leave-by and margin.
+Blocked options are excluded from selection. With no usable options,
+`NoRouteError` is raised; blocked roads never activate straight-line backup.
+
+Route IDs use the shelter ID (`rt_sh_kinsmen`, for example), so closing another
+shelter does not change the meaning of a selected ID. `check_route()` recalculates
+the path to that shelter and updates both the flat fields and selected timing.
+It does not remember an old road path.
+
+Missing fire arrival values do not establish safety. If every sampled value is
+`None`, margin and leave-by are `null`, rather than main's artificial `999` minute
+margin. The option retains `status: "ok"` to mean no sampled forecast conflict,
+with an explicit unknown-timing label and warning. This is a contract limitation:
+v2 has no unknown status and its numeric margin rules do not cover this case.
+The team must agree how to display unknown timing. The phone still assumes a
+null leave-by means no fire for two hours; routing cannot establish that claim.
+
+Remaining integration limits:
+
+- The API supplies no core hazard polygons to the v2 calls. Dashboard-dropped
+  hazards are therefore not checked by `/route`. Exact polygon avoidance is
+  preserved in `find_route()`, but needs API wiring for v2.
+- V2 rejects a forecast-blocked shortest path; it does not yet search for a
+  forecast-based detour to that same shelter. Another shelter may remain usable.
+- Forecast sampling can miss small hazards between samples. Snapped road
+  endpoints do not model travel from the user's position or into a building.
+- Backup v2 options are marked `approximate: true` at both option and response
+  level. Their timing is also only an estimate, not navigation instructions.
+
+The simulation is a prototype. None of these outputs guarantees safety.
 
 Call `load_graph()` once at startup. The selected mode lasts until restart.
 Calling `find_route()` before startup still raises an error. The routing
@@ -247,9 +289,10 @@ it accordingly. `steps` remains empty. Road mode sets `rerouted` and
 Backup mode uses `rerouted: false`, `reroute_reason: null`, and a separate warning.
 
 The finite demo graph can miss routes that leave the downloaded area. Snapping
-does not verify entrance access, and routing does not model turn restrictions,
-live traffic or forecast fire-arrival timing. Current core hazards are avoided;
-buffer zones do not change routing costs. Each request recalculates its route.
+does not verify entrance access, and routing does not model turn restrictions
+or live traffic. `find_route()` avoids supplied core hazards; buffer zones do
+not change routing costs. V2 forecast checks and their limits are described
+above. Each request recalculates its route.
 The API owner must catch `NoRouteError` and return the contract's HTTP 404 JSON.
 
 API references used:

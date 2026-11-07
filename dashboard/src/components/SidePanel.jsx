@@ -64,11 +64,11 @@ function ReportsList({ reports, onSelect }) {
 }
 
 const TABS = [
-  ['updates', 'Updates'],
   ['reports', 'Reports'],
-  ['priority', 'Priority'],
   ['notify', 'Notify'],
 ]
+
+const SEVERITY_CLASS = { alert: 'severity-alert', evacuation: 'severity-evac' }
 
 function NotifyForm() {
   const [title, setTitle] = useState('')
@@ -97,7 +97,7 @@ function NotifyForm() {
             <button
               key={v}
               type="button"
-              className={v === 'evacuation' ? 'severity-evac' : undefined}
+              className={SEVERITY_CLASS[v]}
               aria-pressed={severity === v}
               onClick={() => setSeverity(v)}
             >
@@ -126,7 +126,7 @@ function NotifyForm() {
 }
 
 export default function SidePanel({ shelters, reports, onReportSelect }) {
-  const [tab, setTab] = useState('updates')
+  const [tab, setTab] = useState('reports')
   const capacity = shelterCapacityPct(shelters)
 
   return (
@@ -155,9 +155,7 @@ export default function SidePanel({ shelters, reports, onReportSelect }) {
       </div>
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === 'updates' && <p className="empty">No rerouting updates yet.</p>}
         {tab === 'reports' && <ReportsList reports={reports} onSelect={onReportSelect} />}
-        {tab === 'priority' && <p className="empty">No priority residents loaded yet.</p>}
         {tab === 'notify' && <NotifyForm />}
       </div>
     </aside>

@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getHazards, getNotifications, getRoute, getShelters, getSimState, postReport } from './api.js'
+import {
+  getHazards,
+  getNotifications,
+  getRoute,
+  getShelters,
+  getSimState,
+  postEvacuee,
+  postReport,
+  withChoice,
+} from './api.js'
 import { POLL_MS } from './config.js'
+import { evacueeId, useEvacuation } from './evacuate.js'
 import { isCurrentCore, nearestHazard } from './geo.js'
 import { placeName } from './placeName.js'
 import { nextClock } from './simClock.js'
@@ -11,6 +21,7 @@ import { AlertsTab, mostSevere, NotificationPopup } from './components/Notificat
 import RouteTab from './components/RouteTab.jsx'
 import { CrookIcon } from './components/icons.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
+import { SHEPHERD_VERSION } from './version.js'
 
 // Resolves to [lon, lat], or null if unavailable, denied or slow.
 // Browsers only allow this on https or localhost.
@@ -35,6 +46,7 @@ export default function App() {
   const [location, setLocation] = useState(null) // [lon, lat]
   const [route, setRoute] = useState(null)
   const [routeError, setRouteError] = useState(null)
+  const [chosen, setChosen] = useState(null) // shelter_id of the route card the user picked
   const [hazards, setHazards] = useState(null)
   const [shelters, setShelters] = useState(null)
   const [focusKey, setFocusKey] = useState(null)
@@ -47,6 +59,7 @@ export default function App() {
   const seenNotes = useRef(new Set())
   const toastTimer = useRef(null)
   const locationRef = useRef(location)
+  const evacuatingRef = useRef(false)
   const [areaName, setAreaName] = useState('Edmonton')
   const areaTimer = useRef(null)
   const areaAbort = useRef(null)
@@ -80,10 +93,10 @@ export default function App() {
     [],
   )
 
-  const showToast = useCallback((text) => {
+  const showToast = useCallback((text, ms = 3000) => {
     clearTimeout(toastTimer.current)
     setToast(text)
-    toastTimer.current = setTimeout(() => setToast(null), 3000)
+    toastTimer.current = setTimeout(() => setToast(null), ms)
   }, [])
 
   const refresh = useCallback(async () => {
@@ -104,13 +117,16 @@ export default function App() {
 
     const loc = locationRef.current
     if (!loc) return
+    // While evacuating the dot moves every frame, so a response for where it was
+    // 2 s ago is still the one to show. Otherwise a moved pin makes it stale.
+    const stale = () => !evacuatingRef.current && locationRef.current !== loc
     try {
       const r = await getRoute(loc[1], loc[0])
-      if (locationRef.current !== loc) return // location changed mid-request
+      if (stale()) return
       setRoute(r)
       setRouteError(null)
     } catch (err) {
-      if (locationRef.current !== loc) return
+      if (stale()) return
       setRoute(null)
       setRouteError(err.code === 'no_route' ? 'no_route' : 'network')
     }
@@ -131,6 +147,7 @@ export default function App() {
       setLocation(lngLat)
       setRoute(null)
       setRouteError(null)
+      setChosen(null) // a new location starts from the recommended route
       setFocusKey(Date.now())
       refresh()
     },
@@ -174,6 +191,51 @@ export default function App() {
     [showToast, setLocationAndRoute],
   )
 
+  // The route on screen: the card the user picked, or the backend's best.
+  const { shown, lost } = withChoice(route, chosen)
+  const shownRef = useRef(shown)
+  useEffect(() => {
+    shownRef.current = shown
+  }, [shown])
+
+  // "Start evacuating" (issue #56): a simulated drive along the chosen route, or the
+  // phone's real GPS. Either way the dot moves without resetting the route choice.
+  const [evacMode, setEvacMode] = useState('sim') // 'sim' | 'gps'
+  const moveTo = useCallback((lngLat) => {
+    if (!lngLat) return
+    locationRef.current = lngLat
+    setLocation(lngLat)
+  }, [])
+  const gpsFailed = useCallback((message) => showToast(message, 6000), [showToast])
+  const { trip, start: startTrip, stop: stopTrip } = useEvacuation({ clock, onMove: moveTo, onError: gpsFailed })
+  const evacuating = trip != null
+  useEffect(() => {
+    evacuatingRef.current = evacuating
+  }, [evacuating])
+
+  // Heartbeat to POST /evacuees every ~2 s while evacuating (simulated or GPS), so the
+  // dashboard shows this phone like any other.
+  useEffect(() => {
+    if (!evacuating) return
+    const id = evacueeId()
+    const beat = () => {
+      const loc = locationRef.current
+      const r = shownRef.current
+      if (!loc) return
+      postEvacuee({
+        id,
+        lat: loc[1],
+        lon: loc[0],
+        route_id: r?.route_id ?? null,
+        route_status: r?.status ?? null,
+        shelter_id: r?.shelter_id ?? null,
+      }).catch(() => {}) // a missed beat is fine; the next one follows in 2 s
+    }
+    beat()
+    const timer = setInterval(beat, POLL_MS)
+    return () => clearInterval(timer)
+  }, [evacuating])
+
   // During a wildfire the evacuation card (leave-by countdown) takes the banner's place.
   const wildfire =
     route?.leave_by_sim_min != null ||
@@ -188,8 +250,13 @@ export default function App() {
           </span>
           Shepherd
         </span>
-        <span className="city" aria-live="polite" title={areaName}>
-          {areaName}
+        <span className="header-meta">
+          <span className="city" aria-live="polite" title={areaName}>
+            {areaName}
+          </span>
+          <span className="build-ver num" title="Git revision for this UI build">
+            {SHEPHERD_VERSION}
+          </span>
         </span>
       </header>
 
@@ -198,10 +265,11 @@ export default function App() {
       {wildfire ? (
         <EvacCard
           location={location}
-          route={route}
+          route={shown}
           routeError={routeError}
           near={location ? nearestHazard(location, hazards) : null}
           clock={clock}
+          trip={trip}
         />
       ) : (
         <AlertBanner hazards={hazards} location={location} notifications={notifications} />
@@ -231,9 +299,9 @@ export default function App() {
               <MapView
                 hazards={hazards}
                 shelters={shelters}
-                route={route}
+                route={shown}
                 location={location}
-                onTap={setLocationAndRoute}
+                onTap={evacuating ? undefined : setLocationAndRoute}
                 onViewChange={onViewChange}
                 focusKey={focusKey}
                 tall={!location}
@@ -241,10 +309,22 @@ export default function App() {
             }
             hazards={hazards}
             location={location}
-            route={route}
+            route={shown}
+            lost={lost}
             routeError={routeError}
             shelters={shelters}
-            onStartNavigation={() => setFocusKey(Date.now())}
+            onChoose={(shelterId) => {
+              setChosen(shelterId)
+              setFocusKey(Date.now()) // frame the newly picked route
+            }}
+            trip={trip}
+            evacMode={evacMode}
+            onEvacMode={setEvacMode}
+            onStartEvacuating={() => {
+              setFocusKey(Date.now()) // frame the route the dot will follow
+              startTrip(evacMode, shown)
+            }}
+            onStopEvacuating={stopTrip}
           />
         </div>
         {tab === 'gov' && <AlertsTab notifications={notifications} />}

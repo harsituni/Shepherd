@@ -4,7 +4,7 @@ Routes and distances run between snapped road nodes, not building entrances.
 eta_min is illustrative at 30 km/h, not an actual traffic estimate.
 """
 
-from math import ceil
+from math import ceil, floor
 import logging
 import os
 from pathlib import Path
@@ -299,3 +299,150 @@ def find_route(lat: float, lon: float,
 def closed_roads(hazards: list[dict]) -> list[dict]:
     """Placeholder for Step 2; an empty list does not mean roads are safe."""
     return []
+
+
+def _route_timing(route, arrival_min_fn, sim_time):
+    """Sample the route geometry using the simulation's arrival times."""
+    coordinates = route["geometry"]["coordinates"]
+    lengths = []
+    total = 0.0
+    for index in range(len(coordinates) - 1):
+        lon, lat = coordinates[index]
+        end_lon, end_lat = coordinates[index + 1]
+        length = float(ox.distance.great_circle(lat, lon, end_lat, end_lon))
+        lengths.append(length)
+        total += length
+
+    leave_by = None
+    clear_until = None
+    reason = None
+    travelled = 0.0
+    for index, length in enumerate(lengths):
+        lon, lat = coordinates[index]
+        end_lon, end_lat = coordinates[index + 1]
+        # Check bends and points at most 50 metres apart.
+        count = max(1, ceil(length / 50))
+        for step in range(count + 1):
+            fraction = step / count
+            sample_lat = lat + (end_lat - lat) * fraction
+            sample_lon = lon + (end_lon - lon) * fraction
+            fire_at = arrival_min_fn(sample_lat, sample_lon)
+            if fire_at is None:
+                continue
+            offset = 0.0
+            if total > 0:
+                offset = (travelled + length * fraction) / total * route["eta_min"]
+            deadline = fire_at - 30
+            latest_start = floor(deadline - offset)
+            if leave_by is None or latest_start < leave_by:
+                leave_by = latest_start
+            if clear_until is None or deadline < clear_until:
+                clear_until = deadline
+            if sim_time + offset > deadline and reason is None:
+                reason = (
+                    f"Fire predicted near ({sample_lat:.3f}, {sample_lon:.3f}) "
+                    f"at T+{fire_at}; estimated arrival T+{sim_time + offset:.1f} "
+                    f"misses the 30 minute buffer (T+{deadline})."
+                )
+        travelled += length
+
+    margin = None
+    status = "ok"
+    if leave_by is not None:
+        margin = leave_by - sim_time
+        if margin < 0:
+            status = "blocked"
+        elif margin < 60:
+            status = "tight"
+    return {
+        "margin_min": margin,
+        "status": status,
+        "clear_until_sim_min": clear_until if status != "blocked" else None,
+        "clear_until_label": (
+            f"Sampled forecast buffer until T+{clear_until} (estimate)"
+            if clear_until is not None and status != "blocked" else None
+        ),
+        "reason": reason,
+        "_leave_by": leave_by,
+    }
+
+
+def _select_option(body, option):
+    """Keep the selected option, timing and old response fields together."""
+    body["best_route_id"] = option["id"]
+    leave_by = option["leave_by_sim_min"]
+    body["leave_by_sim_min"] = leave_by
+    body["leave_by_label"] = None
+    if leave_by is not None:
+        body["leave_by_label"] = f"Leave within {max(0, leave_by - body['sim_time'])} min (sim)"
+    for field in ("shelter_id", "shelter_name", "distance_km", "eta_min",
+                  "geometry", "rerouted", "reroute_reason", "steps",
+                  "approximate", "warning"):
+        body[field] = option[field]
+
+
+def find_routes(lat: float, lon: float, arrival_min_fn,
+                shelters: list[dict], sim_time: int = 0) -> dict:
+    """Return up to three road options, checked against the supplied forecast.
+
+    A missing forecast value is unknown, not a promised fire-free interval.
+    The API currently supplies no core polygons to this v2 interface.
+    """
+    options = []
+    excluded = []
+    for shelter in shelters:
+        properties = shelter["properties"]
+        if not properties["open"] or properties["occupancy"] >= properties["capacity"]:
+            continue
+        try:
+            option = find_route(lat, lon, [], [shelter])
+        except NoRouteError as error:
+            excluded.append({"shelter_id": shelter["id"], "reason": str(error)})
+            continue
+        # Shelter-based IDs stay stable when another option disappears.
+        option["id"] = "rt_" + shelter["id"]
+        option.update(_route_timing(option, arrival_min_fn, sim_time))
+        option["leave_by_sim_min"] = option.pop("_leave_by")
+        option["approximate"] = option.get("approximate", False)
+        warning = option.get("warning", "Road geometry with illustrative travel times only.")
+        warning += " Forecast checks sample the route; they are not a safety guarantee."
+        if option["margin_min"] is None:
+            warning += " No fire arrival returned at sampled points; margin and deadline are unknown."
+            option["clear_until_label"] = "Fire timing unknown; no safety guarantee"
+        option["warning"] = warning
+        options.append(option)
+        if option["status"] == "blocked":
+            excluded.append({"shelter_id": shelter["id"], "reason": option["reason"]})
+
+    usable = []
+    for option in options:
+        if option["status"] != "blocked":
+            usable.append(option)
+    if not usable:
+        raise NoRouteError("No usable route under the supplied fire forecast")
+
+    # No returned deadline is not a numeric safety margin.
+    usable.sort(key=lambda option: (
+        option["margin_min"] is None,
+        option["margin_min"] if option["margin_min"] is not None else 0,
+        -option["eta_min"],
+    ), reverse=True)
+    best = usable[0]
+    options.sort(key=lambda option: (option["id"] != best["id"], option["distance_km"]))
+    body = {
+        "lat": lat, "lon": lon, "sim_time": sim_time,
+        "options": options[:3], "excluded": excluded,
+    }
+    _select_option(body, best)
+    return body
+
+
+def check_route(lat: float, lon: float, route_id: str, arrival_min_fn,
+                shelters: list[dict], sim_time: int = 0) -> dict:
+    """Recalculate options and keep the chosen shelter if still usable."""
+    body = find_routes(lat, lon, arrival_min_fn, shelters, sim_time=sim_time)
+    for option in body["options"]:
+        if option["id"] == route_id and option["status"] != "blocked":
+            _select_option(body, option)
+            break
+    return body

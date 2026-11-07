@@ -1,9 +1,13 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { shepherdVersion } from '../shared/gitVersion.mjs'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __SHEPHERD_VERSION__: JSON.stringify(shepherdVersion()),
+  },
   // Relative asset paths so dist/index.html also works under VS Code Live Server.
   base: './',
   build: {
@@ -21,6 +25,8 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     host: true, // reachable from real phones on the same Wi-Fi
+    // Cloudflare Tunnel / ngrok hostnames (otherwise: "This host is not allowed")
+    allowedHosts: true,
     // Allow importing ../shared/fixtures from outside the phone root.
     fs: { allow: ['..'] },
   },

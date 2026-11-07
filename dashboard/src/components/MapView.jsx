@@ -16,6 +16,7 @@ const EMPTY = { type: 'FeatureCollection', features: [] }
 const cssVar = (name, fallback) =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 const HAZARD = cssVar('--hazard', '#D9480F')
+const HAZARD_HIGH = cssVar('--hazard-high', '#7A1F0A')
 const PREDICTED_COLOR = cssVar('--blue', '#0070C4')
 const MAP_BG = cssVar('--map-bg', '#F3F7FB')
 const SURFACE = cssVar('--surface', '#FFFFFF')
@@ -53,14 +54,19 @@ function ringCentroid(feature) {
   ]
 }
 
-// Keep a set of HTML markers in sync with a list of { id, lngLat, build }.
+// Keep a set of HTML markers in sync with a list of { id, lngLat, build, update? }.
+// `update(el)` runs on every sync, for markers whose content changes between polls.
 function syncMarkers(map, store, items) {
   const seen = new Set()
-  for (const { id, lngLat, build } of items) {
+  for (const { id, lngLat, build, update } of items) {
     seen.add(id)
-    const existing = store.get(id)
-    if (existing) existing.setLngLat(lngLat)
-    else store.set(id, new Marker({ element: build(), anchor: 'center' }).setLngLat(lngLat).addTo(map))
+    let marker = store.get(id)
+    if (marker) marker.setLngLat(lngLat)
+    else {
+      marker = new Marker({ element: build(), anchor: 'center' }).setLngLat(lngLat).addTo(map)
+      store.set(id, marker)
+    }
+    update?.(marker.getElement())
   }
   for (const [id, marker] of store) {
     if (!seen.has(id)) {
@@ -70,14 +76,31 @@ function syncMarkers(map, store, items) {
   }
 }
 
+// Shelter: navy square + name label, with a capacity pop-up on hover or keyboard focus.
 function shelterElement(name) {
   const el = document.createElement('div')
   el.className = 'shelter-marker'
+  el.tabIndex = 0
   const label = document.createElement('span')
   label.className = 'shelter-label'
   label.textContent = name
-  el.appendChild(label)
+  const popup = document.createElement('div')
+  popup.className = 'shelter-popup'
+  popup.setAttribute('role', 'tooltip')
+  el.append(label, popup)
   return el
+}
+
+const fmt = (n) => Number(n ?? 0).toLocaleString('en-CA')
+
+function updateShelter(el, { name, capacity, occupancy, open }) {
+  const pct = capacity ? Math.round(((occupancy ?? 0) / capacity) * 100) : 0
+  // e.g. "312/2,000 (16%)"
+  const lines = [['shelter-popup-title', `${fmt(occupancy)}/${fmt(capacity)} (${pct}%)`]]
+  if (open === false) lines.push(['shelter-popup-detail', 'Closed'])
+  const popup = el.querySelector('.shelter-popup')
+  popup.replaceChildren(...lines.map(([cls, text]) => textElement(cls, text)))
+  el.setAttribute('aria-label', `${name}. ${lines.map(([, t]) => t).join('. ')}`)
 }
 
 function textElement(className, text) {
@@ -100,6 +123,32 @@ function startElement() {
 const isPredicted = (f) => f.properties?.predicted_min != null
 const PREDICTED = ['has', 'predicted_min']
 const CURRENT = ['!', PREDICTED]
+
+// Wildfire intensity: nested copies of each burning (core) polygon, shrunk toward
+// its centre, so the fire reads orange at the edge and dark red where it's
+// hottest. The backend sends one outline per zone, so this is drawn client-side.
+const INTENSITY_SCALES = [0.75, 0.5, 0.25] // band levels 1..3
+function intensityBands(hazards) {
+  const bands = []
+  for (const f of hazards?.features ?? []) {
+    const p = f.properties ?? {}
+    if (isPredicted(f) || p.zone !== 'core' || p.kind !== 'wildfire') continue
+    const c = ringCentroid(f)
+    const ring = f.geometry?.coordinates?.[0]
+    if (!c || !ring) continue
+    INTENSITY_SCALES.forEach((s, i) =>
+      bands.push({
+        type: 'Feature',
+        properties: { level: i + 1 },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [ring.map(([x, y]) => [c[0] + (x - c[0]) * s, c[1] + (y - c[1]) * s])],
+        },
+      }),
+    )
+  }
+  return { type: 'FeatureCollection', features: bands }
+}
 
 // Where to put a "T+30" label: the ring vertex farthest from the current hazard,
 // i.e. the leading edge of the predicted spread.
@@ -146,19 +195,14 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
     map.on('load', () => {
       map.addSource('hazards', { type: 'geojson', data: EMPTY })
       // Predicted spread first, so the current hazard draws on top of it.
-      map.addLayer({
-        id: 'hazard-predicted',
-        type: 'fill',
-        source: 'hazards',
-        filter: PREDICTED,
-        paint: { 'fill-color': PREDICTED_COLOR, 'fill-opacity': 0.06 },
-      })
+      // No fill: just a dotted outline around each predicted ring.
       map.addLayer({
         id: 'hazard-predicted-outline',
         type: 'line',
         source: 'hazards',
         filter: PREDICTED,
-        paint: { 'line-color': PREDICTED_COLOR, 'line-opacity': 0.6, 'line-width': 1.5, 'line-dasharray': [3, 3] },
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': PREDICTED_COLOR, 'line-opacity': 0.9, 'line-width': 2, 'line-dasharray': [0, 2] },
       })
       map.addLayer({
         id: 'hazard-buffer',
@@ -173,6 +217,16 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
         source: 'hazards',
         filter: ['all', CURRENT, ['==', ['get', 'zone'], 'core']],
         paint: { 'fill-color': HAZARD, 'fill-opacity': 0.85 },
+      })
+      map.addSource('hazard-intensity', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'hazard-intensity',
+        type: 'fill',
+        source: 'hazard-intensity',
+        paint: {
+          'fill-color': ['interpolate', ['linear'], ['get', 'level'], 0, HAZARD, 3, HAZARD_HIGH],
+          'fill-opacity': 0.9,
+        },
       })
       map.addLayer({
         id: 'hazard-outline',
@@ -229,6 +283,7 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
     const map = mapRef.current
     if (!loaded || !map) return
     map.getSource('hazards')?.setData(hazards ?? EMPTY)
+    map.getSource('hazard-intensity')?.setData(intensityBands(hazards))
     const features = hazards?.features ?? []
     const current = features.filter((f) => !isPredicted(f) && f.properties?.zone === 'core')
     const items = current
@@ -255,7 +310,7 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
     const map = mapRef.current
     if (!loaded || !map) return
     const visibility = showPredicted ? 'visible' : 'none'
-    for (const id of ['hazard-predicted', 'hazard-predicted-outline']) map.setLayoutProperty(id, 'visibility', visibility)
+    map.setLayoutProperty('hazard-predicted-outline', 'visibility', visibility)
   }, [showPredicted, loaded])
 
   // Start point picked on the map, before the simulation is started.
@@ -274,6 +329,7 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
       id: f.id,
       lngLat: f.geometry.coordinates,
       build: () => shelterElement(f.properties.name),
+      update: (el) => updateShelter(el, f.properties),
     }))
     syncMarkers(map, shelterMarkers.current, items)
   }, [shelters, loaded])
