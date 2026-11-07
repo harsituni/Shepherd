@@ -11,6 +11,7 @@ import { AlertsTab, mostSevere, NotificationPopup } from './components/Notificat
 import RouteTab from './components/RouteTab.jsx'
 import { CrookIcon } from './components/icons.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
+import { SHEPHERD_VERSION } from './version.js'
 
 // Resolves to [lon, lat], or null if unavailable, denied or slow.
 // Browsers only allow this on https or localhost.
@@ -193,8 +194,13 @@ export default function App() {
           </span>
           Shepherd
         </span>
-        <span className="city" aria-live="polite" title={areaName}>
-          {areaName}
+        <span className="header-meta">
+          <span className="city" aria-live="polite" title={areaName}>
+            {areaName}
+          </span>
+          <span className="build-ver num" title="Git revision for this UI build">
+            {SHEPHERD_VERSION}
+          </span>
         </span>
       </header>
 
