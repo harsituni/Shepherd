@@ -14,6 +14,7 @@ The Shepherd command dashboard for the Government of Alberta. Officials use it t
 2. **Rerouting map with predicted path.**
    - Current hazard (solid orange, shading to dark red `#7A1F0A` at the centre for wildfire) plus predicted spread as red dotted rings (no fill) labelled T+30 / T+60 min; toggle "Show predicted path".
    - Closed roads in red, evacuation routes in blue, shelters as navy squares, all redrawn when the hazard changes.
+   - **Evacuees**: every phone that has set a location (tapped the map, a preset, Need help, or is evacuating) shows as a blue dot from `GET /evacuees` (contract v2), polled every 2 s. The backend drops a phone after 30 s without a heartbeat.
    - **Evacuation zone** around every wildfire: a perfect circle centred on the fire, reaching 1 km past its farthest edge (current fire only, never the predicted path), yellow diagonal stripes with a solid darker-yellow border (`src/evacuation.js`). Built from the drawn fire, so it grows and shrinks with the history slider.
    - **Unsafe shelters**: a shelter inside the evacuation circle of the fire now, or of any `/forecast` outline's circle, turns red, and its hover pop-up turns red, showing capacity then "Unsafe: Find another shelter". Judged from the live fire + forecast, not the slider.
    - **Rerouting updates feed** in the right panel: timestamped events, e.g. "T+24 · Stony Plain Rd closed · 142 evacuees rerouted to Kinsmen Sports Centre".

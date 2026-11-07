@@ -7,6 +7,7 @@ const ITEMS = [
   ['Shelter', 'swatch-shelter'],
   ['Unsafe shelter', 'swatch-shelter-unsafe'],
   ['Priority resident', 'swatch-priority'],
+  ['Evacuee (phone)', 'swatch-evacuee'],
   ['Public report', 'swatch-report'],
 ]
 

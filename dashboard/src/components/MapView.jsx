@@ -22,6 +22,7 @@ const HAZARD_HIGH = cssVar('--hazard-high', '#7A1F0A')
 const PREDICTED_COLOR = cssVar('--predicted', '#C62828')
 const MAP_BG = cssVar('--map-bg', '#F3F7FB')
 const SURFACE = cssVar('--surface', '#FFFFFF')
+const BLUE = cssVar('--blue', '#0070C4')
 const EVAC_STRIPE = cssVar('--evac-stripe', '#FFD400')
 const EVAC_EDGE = cssVar('--evac-edge', '#9A6B00')
 
@@ -198,6 +199,7 @@ export default function MapView({
   nowLabel = 'Now', // "T+42" while the history slider is off live
   shelters,
   unsafeShelters = NO_IDS, // Set of shelter ids the fire is forecast to reach (evacuation.js)
+  evacuees, // GET /evacuees FeatureCollection
   reports,
   focus,
   startPoint,
@@ -302,6 +304,20 @@ export default function MapView({
           'circle-stroke-width': 2.5,
         },
       })
+      // Phones that have set a location (GET /evacuees): the same blue dot with a
+      // white ring the phone shows for "You", a little smaller. On top of everything.
+      map.addSource('evacuees', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'evacuee-dots',
+        type: 'circle',
+        source: 'evacuees',
+        paint: {
+          'circle-radius': 6,
+          'circle-color': BLUE,
+          'circle-stroke-color': SURFACE,
+          'circle-stroke-width': 2.5,
+        },
+      })
       setLoaded(true)
     })
 
@@ -395,6 +411,13 @@ export default function MapView({
     }))
     syncMarkers(map, shelterMarkers.current, items)
   }, [shelters, unsafeShelters, loaded])
+
+  // Evacuees: one dot per phone, redrawn on every poll.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map) return
+    map.getSource('evacuees')?.setData(evacuees ?? EMPTY)
+  }, [evacuees, loaded])
 
   // Reports: pins redrawn on every poll.
   useEffect(() => {

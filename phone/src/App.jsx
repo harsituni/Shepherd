@@ -213,8 +213,10 @@ export default function App() {
     evacuatingRef.current = evacuating
   }, [evacuating])
 
-  // Heartbeat to POST /evacuees every ~2 s while evacuating (simulated or GPS), so the
-  // dashboard shows this phone like any other.
+  // Heartbeat to POST /evacuees every ~2 s once the user has set a location (by tapping
+  // the map, a preset, or Need help) and while evacuating (simulated or GPS), so the
+  // dashboard marks where they are. The backend drops a phone after 30 s without a
+  // beat, so it keeps beating while a location is set.
   const readHeartbeat = useCallback(() => {
     const loc = locationRef.current
     if (!loc) return null
@@ -227,7 +229,7 @@ export default function App() {
       shelter_id: r?.shelter_id ?? null,
     }
   }, [])
-  useHeartbeat({ active: evacuating, everyMs: POLL_MS, read: readHeartbeat, send: postEvacuee })
+  useHeartbeat({ active: evacuating || location != null, everyMs: POLL_MS, read: readHeartbeat, send: postEvacuee })
 
   // During a wildfire the evacuation card (leave-by countdown) takes the banner's place.
   const wildfire =

@@ -325,7 +325,7 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 titl
 - **Closed road:** Closure Red, solid when closed and dashed when slowed.
 - **Shelter:** a 20px navy square (4px corners, 2px white border) with a 600 14px label. On the phone only the route's destination is labelled, on whichever side of the square has more room.
 - **Map key (phone):** a one-row, wrapping key under the map listing only what is drawn (Hazard now, Predicted spread, Your route, Shelter, You), 14px Slate Muted with small swatches. The dashboard keeps its floating legend.
-- **Report pin:** a white circle with a 2.5px hazard-orange stroke. **Priority resident:** a navy-outlined diamond. **You:** an 18px blue dot with a 3px white ring.
+- **Report pin:** a white circle with a 2.5px hazard-orange stroke. **Priority resident:** a navy-outlined diamond. **You:** an 18px blue dot with a 3px white ring. **Evacuee (dashboard):** each phone from `GET /evacuees` as a 12px Service Blue dot with a 2.5px white ring, drawn above every other layer.
 
 ## Do's and Don'ts
 

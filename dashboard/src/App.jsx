@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   deleteHazards,
+  getEvacuees,
   getForecast,
   getHazards,
   getReports,
@@ -43,6 +44,7 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [connectionError, setConnectionError] = useState(false)
   const [forecast, setForecast] = useState(null) // GET /forecast
+  const [evacuees, setEvacuees] = useState(null) // GET /evacuees: phones that set a location
   const [viewing, setViewing] = useState(null) // history slider: null = live, else a sim minute
   const snapshots = useRef(new Map()) // sim_time → hazard features, for the slider
   const inFlight = useRef(false)
@@ -58,6 +60,9 @@ export default function App() {
       const [h, s, r, st] = results
       // A failed forecast only hides the predicted path; it isn't a lost connection.
       const fc = await getForecast().catch(() => null)
+      // Same for evacuees: a failure only hides the phone dots until the next poll.
+      const ev = await getEvacuees().catch(() => null)
+      if (ev) setEvacuees(ev)
       if (h.status === 'fulfilled') setHazards(h.value)
       if (s.status === 'fulfilled') setShelters(s.value)
       if (r.status === 'fulfilled') setReports(r.value)
@@ -212,6 +217,7 @@ export default function App() {
             nowLabel={viewing == null ? 'Now' : `T+${viewing}`}
             shelters={shelters}
             unsafeShelters={unsafeShelters}
+            evacuees={evacuees}
             reports={reports}
             focus={focus}
             startPoint={startPoint}

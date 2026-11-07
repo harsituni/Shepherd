@@ -216,6 +216,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .swatch-closed { width: 14px; height: 3px; background: var(--closed); }
 .swatch-route { width: 14px; height: 3px; background: var(--blue); }
 .swatch-shelter { width: 12px; height: 12px; border-radius: 3px; background: var(--navy); }
+.swatch-evacuee { width: 12px; height: 12px; border-radius: 50%; background: var(--blue); border: 2px solid #fff; outline: 1px solid var(--border); }
 .swatch-shelter-unsafe { width: 12px; height: 12px; border-radius: 3px; background: var(--closed); }
 /* Evacuation zone: diagonal stripes (inline SVG, not a gradient) inside a deep-yellow edge. */
 .swatch-evac {

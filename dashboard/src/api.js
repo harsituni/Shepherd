@@ -2,6 +2,7 @@ import { API_URL, USE_FIXTURES } from './config.js'
 import hazardsFixture from '../../shared/fixtures/hazards.json'
 import sheltersFixture from '../../shared/fixtures/shelters.json'
 import reportsFixture from '../../shared/fixtures/reports.json'
+import evacueesFixture from '../../shared/fixtures/evacuees.json'
 
 // The disaster simulation runs on the backend (shared/contract.md "Simulation
 // control"). The dashboard only sends the scenario + conditions and draws what
@@ -149,6 +150,14 @@ export async function getHazards() {
 export async function getForecast() {
   if (!USE_FIXTURES) return request('/forecast')
   return fakeForecast()
+}
+
+// GET /evacuees (contract v2): Points, one per phone that has set a location,
+// with route_id / route_status / shelter_id / updated_sim_time. Dropped by the
+// backend after 30 s without a heartbeat.
+export async function getEvacuees() {
+  if (!USE_FIXTURES) return request('/evacuees')
+  return structuredClone(evacueesFixture)
 }
 
 export async function getShelters() {
