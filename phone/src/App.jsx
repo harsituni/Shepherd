@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getHazards, getRoute, getShelters, postReport } from './api.js'
+import { getHazards, getNotifications, getRoute, getShelters, postReport } from './api.js'
 import { POLL_MS } from './config.js'
 import AlertBanner from './components/AlertBanner.jsx'
 import MapView from './components/MapView.jsx'
+import { AlertsTab, mostSevere, NotificationPopup } from './components/Notifications.jsx'
 import RouteTab from './components/RouteTab.jsx'
 import TipsTab from './components/TipsTab.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
@@ -22,8 +23,8 @@ function deviceLocation() {
 
 const TABS = [
   ['route', 'Route'],
-  ['tips', 'Survival tips'],
-  ['gov', 'Gov updates'],
+  ['tips', 'Safety tips'],
+  ['gov', 'Alerts'],
 ]
 
 export default function App() {
@@ -37,6 +38,9 @@ export default function App() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [toast, setToast] = useState(null)
+  const [notifications, setNotifications] = useState([])
+  const [popup, setPopup] = useState(null)
+  const seenNotes = useRef(new Set())
   const toastTimer = useRef(null)
   const locationRef = useRef(location)
 
@@ -51,9 +55,17 @@ export default function App() {
   }, [])
 
   const refresh = useCallback(async () => {
-    const [h, s] = await Promise.allSettled([getHazards(), getShelters()])
+    const [h, s, n] = await Promise.allSettled([getHazards(), getShelters(), getNotifications()])
     if (h.status === 'fulfilled') setHazards(h.value)
     if (s.status === 'fulfilled') setShelters(s.value)
+    if (n.status === 'fulfilled') {
+      const fresh = n.value.filter((x) => !seenNotes.current.has(x.id))
+      if (fresh.length) {
+        fresh.forEach((x) => seenNotes.current.add(x.id))
+        setNotifications(n.value)
+        setPopup(mostSevere(fresh)) // pop up the most important new one
+      }
+    }
 
     const loc = locationRef.current
     if (!loc) return
@@ -134,7 +146,9 @@ export default function App() {
         <span className="city">Edmonton</span>
       </header>
 
-      <AlertBanner hazards={hazards} location={location} />
+      {popup && <NotificationPopup key={popup.id} notification={popup} onDismiss={() => setPopup(null)} />}
+
+      <AlertBanner hazards={hazards} location={location} notifications={notifications} />
 
       <nav className="tabs" role="tablist" aria-label="Sections">
         {TABS.map(([id, label]) => (
@@ -164,8 +178,10 @@ export default function App() {
                 location={location}
                 onTap={setLocationAndRoute}
                 focusKey={focusKey}
+                tall={!location}
               />
             }
+            hazards={hazards}
             location={location}
             route={route}
             routeError={routeError}
@@ -174,11 +190,7 @@ export default function App() {
           />
         </div>
         {tab === 'tips' && <TipsTab />}
-        {tab === 'gov' && (
-          <div className="gov">
-            <p className="muted">No government updates yet. Updates sent by emergency officials will appear here.</p>
-          </div>
-        )}
+        {tab === 'gov' && <AlertsTab notifications={notifications} />}
       </main>
 
       <div className="action-bar">
@@ -192,7 +204,7 @@ export default function App() {
         </button>
         <button
           type="button"
-          className="action action-safe"
+          className="action"
           disabled={!location || sending}
           onClick={() => sendReport('safe')}
         >

@@ -1,8 +1,9 @@
 // Simple inline stroke icons (no emoji, no icon library).
 
-function Svg({ size = 18, strokeWidth = 2, children, style }) {
+function Svg({ size = 18, strokeWidth = 2, children, style, className }) {
   return (
     <svg
+      className={className}
       width={size}
       height={size}
       viewBox="0 0 24 24"

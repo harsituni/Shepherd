@@ -37,17 +37,39 @@ export function ringCentroid(ring) {
   return [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length]
 }
 
-// Nearest core hazard to the user: how far its edge is and which way it lies.
+// Predicted-spread features carry `predicted_min` (30, 60); they are not the hazard now.
+export const isPredicted = (f) => f.properties?.predicted_min != null
+export const isCurrentCore = (f) =>
+  !isPredicted(f) && f.properties?.zone === 'core' && f.geometry?.type === 'Polygon'
+
+// Which way a hazard is heading: from its current centroid toward the centroid of the
+// nearest-in-time predicted feature of the same kind. Null when there's no prediction
+// or it isn't moving meaningfully (< 100 m).
+function movement(core, features) {
+  const next = features
+    .filter((f) => isPredicted(f) && f.properties.kind === core.properties.kind && f.geometry?.type === 'Polygon')
+    .sort((a, b) => a.properties.predicted_min - b.properties.predicted_min)[0]
+  if (!next) return null
+  const from = ringCentroid(core.geometry.coordinates[0])
+  const to = ringCentroid(next.geometry.coordinates[0])
+  if (distanceKm(from, to) < 0.1) return null
+  return compassWord(bearingDeg(from, to))
+}
+
+// Nearest current core hazard to the user: how far its edge is, which way it lies,
+// and which way it is moving.
 export function nearestHazard(user, hazards) {
+  const features = hazards?.features ?? []
   let best = null
-  for (const f of hazards?.features ?? []) {
-    if (f.properties?.zone !== 'core' || f.geometry?.type !== 'Polygon') continue
+  for (const f of features) {
+    if (!isCurrentCore(f)) continue
     const ring = f.geometry.coordinates[0]
     const inside = pointInRing(user, ring)
     const km = inside ? 0 : Math.min(...ring.map((p) => distanceKm(user, p)))
     if (!best || km < best.km) {
-      best = { kind: f.properties.kind, km, inside, direction: compassWord(bearingDeg(user, ringCentroid(ring))) }
+      best = { feature: f, kind: f.properties.kind, km, inside, direction: compassWord(bearingDeg(user, ringCentroid(ring))) }
     }
   }
+  if (best) best.moving = movement(best.feature, features)
   return best
 }
