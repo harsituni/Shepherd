@@ -5,7 +5,8 @@ import reportsFixture from '../../shared/fixtures/reports.json'
 
 // The disaster simulation runs on the backend (shared/contract.md "Simulation
 // control"). The dashboard only sends the scenario + conditions and draws what
-// /hazards returns, including predicted-spread features (`predicted_min`).
+// /hazards and /forecast return. History for the timeline slider is recorded
+// client-side (src/history.js); the backend keeps none.
 
 // ---------- real backend ----------
 
@@ -108,16 +109,31 @@ function fakeHazards() {
     properties: { kind, source: 'sim', ...props },
     geometry: fakeShape(minutes),
   })
-  return [
-    feature('hz_sim_p60', { zone: 'core', predicted_min: 60 }, t + 60),
-    feature('hz_sim_p30', { zone: 'core', predicted_min: 30 }, t + 30),
-    feature('hz_sim_buffer', { zone: 'buffer' }, t + 10),
-    feature('hz_sim_core', { zone: 'core' }, t),
-  ]
+  return [feature('hz_sim_buffer', { zone: 'buffer' }, t + 10), feature('hz_sim_core', { zone: 'core' }, t)]
+}
+
+// Same shape as GET /forecast: outlines at 15, 30 … 120 minutes from now.
+function fakeForecast() {
+  const { sim_time } = fakeState()
+  const outlines =
+    fake.state === 'idle' || fake.scenario !== 'wildfire'
+      ? []
+      : Array.from({ length: 8 }, (_, i) => {
+          const t_min = (i + 1) * 15
+          return {
+            t_min,
+            type: 'Feature',
+            id: `fc_${t_min}`,
+            properties: { kind: 'wildfire', t_min, zone: 'predicted' },
+            geometry: fakeShape(fake.minutes + t_min),
+          }
+        })
+  return { sim_time: sim_time ?? 0, horizon_min: 120, outlines }
 }
 
 // ---------- public API ----------
 
+// The hazard as it is now. The predicted path comes from getForecast().
 export async function getHazards() {
   if (!USE_FIXTURES) return request('/hazards')
   const { sim_time } = fakeState()
@@ -126,6 +142,13 @@ export async function getHazards() {
     sim_time: sim_time ?? hazardsFixture.sim_time,
     features: fakeHazards(),
   }
+}
+
+// GET /forecast (contract v2): { sim_time, horizon_min, outlines: [Feature with t_min] },
+// t_min = 15, 30 … 120 minutes from now; outlines is [] when idle.
+export async function getForecast() {
+  if (!USE_FIXTURES) return request('/forecast')
+  return fakeForecast()
 }
 
 export async function getShelters() {

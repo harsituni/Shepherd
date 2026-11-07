@@ -12,10 +12,10 @@ The Shepherd command dashboard for the Government of Alberta. Officials use it t
    - Play / pause / reset, speed 1× / 4× / 16×, elapsed time (T+min).
    - Live / Simulation mode switch: Live = real data feeds, Simulation = run a scenario. (Internally the mode value is still `drill`.)
 2. **Rerouting map with predicted path.**
-   - Current hazard (solid orange) plus predicted spread as dashed rings labelled T+30 / T+60 min; toggle "Show predicted path".
+   - Current hazard (solid orange, shading to dark red `#7A1F0A` at the centre for wildfire) plus predicted spread as red dotted rings (no fill) labelled T+30 / T+60 min; toggle "Show predicted path".
    - Closed roads in red, evacuation routes in blue, shelters as navy squares, all redrawn when the hazard changes.
    - **Rerouting updates feed** in the right panel: timestamped events, e.g. "T+24 · Stony Plain Rd closed · 142 evacuees rerouted to Kinsmen Sports Centre".
-3. **Historical progression slider.** A timeline slider under the map that scrubs from T+0 to now, redrawing the hazard, closed roads and routes as they were at that step. Dragging it pauses the sim; a "Back to live" button returns to the current step.
+3. **Historical progression slider.** A timeline slider under the map that scrubs from T+0 to now, redrawing the hazard, closed roads and routes as they were at that step, and on past now into the forecast (up to the `/forecast` horizon, +120 min), drawing the fire as predicted for that minute. Dragging it pauses the sim; a "Back to live" button returns to the current step.
 4. **High-priority residents.** Map layer + list of residents who need extra help evacuating (e.g. disabled, no vehicle). Show only what responders need: location pin, needs category, evacuation status (not started / en route / safe / needs pickup). Toggleable layer. Demo uses fake, generated residents only; never real personal data.
 5. **Notify all residents.** A "Send update" panel: title, message, severity (Advisory / Alert / Evacuation order), target area (whole region or inside the hazard zone). Sends to the backend, which pushes it to every phone as a top-of-screen notification. Show a sent-history list.
 6. **Reported hazards.** A list/tab of everything phones have reported (fire, flooded road, blocked road, SOS, I'm safe), newest first, with type, time, location and status (New / Verified / Dismissed). Each report also appears as a pin on the map; clicking a list item centres the map on it.
@@ -35,9 +35,9 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 ## Design
 - **Visual system: see `/DESIGN.md`** (shared with `phone/`; tokens, components, rules). If it and this section disagree, flag it rather than picking one.
 - Minimalist, inspired by Alberta.ca's wildfire pages: plain blue and white, lots of whitespace, no decorative charts.
-- Colours: header `#005072` (Alberta's brand dark blue, same as phone), navy `#0B3D6E` (shelters, selected states, outline buttons), blue `#0070C4` (primary, routes, predicted path), tint `#EAF3FB` (incident banner only), borders `#D3E3F2`, text `#0B2545`, muted text `#3B5A7A`.
+- Colours: header `#005072` (Alberta's brand dark blue, same as phone), navy `#0B3D6E` (shelters, selected states, outline buttons), blue `#0070C4` (primary, routes), tint `#EAF3FB` (incident banner only), borders `#D3E3F2`, text `#0B2545`, muted text `#3B5A7A`.
 - Gold `#FEBA35` only for the 3px keyboard focus ring (as on Alberta.ca).
-- Orange `#D9480F` only for the active hazard, red `#C62828` only for closed roads and SOS reports.
+- Orange `#D9480F` only for the active hazard (dark red `#7A1F0A` for a wildfire's centre), red `#C62828` only for closed roads (solid), the predicted path (dotted) and SOS reports.
 - Font: **Public Sans** (Google Fonts, weights 400/500/600/700), fallback `system-ui, sans-serif`. Use `font-variant-numeric: tabular-nums` for stats and times. Type scale 14/16/18/20px (plus 26px stat values; nothing under 14); section titles are plain sentence-case headings, not uppercase labels.
 - Corners: 6px on controls, 8px on cards. No pills (the Live/Simulation switch is a segmented control). Flat surfaces separated by 1px borders, not shadows (one soft shadow only on floating pop-ups).
 - One solid button per area; others are navy outlines. Disabled controls get a flat style, never `opacity`; a locked selection stays visible.
@@ -66,12 +66,12 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 - `GET /reports`: Points with `kind` (`fire`|`flooded_road`|`blocked_road`|`safe`|`sos`), `note`, `sim_time`. Feeds the Reports tab and map pins.
 - `GET /roads/closed` (Step 2, fixture until then): LineStrings with `name`, `status` (`closed` = solid red, `slowed` = dashed red), `reason`. Feeds "Roads closed" and the Updates feed.
 - Sim control (Step 2): `POST /sim/start` `{ scenario, lat, lon, wind_kmh, wind_from_deg, fuel_dryness }` (`fuel_dryness` 0–1, `wind_from_deg` compass degrees); flood: `{ scenario: "flood", river_rise_m_per_hr }`. `POST /sim/pause|resume|reset`, `POST /sim/speed { multiplier }`, `GET /sim/state` → `{ state: idle|running|paused, scenario, sim_time, speed }`. `POST /sim/wind { wind_kmh, wind_from_deg }` (contract v2, both required) changes wind mid-run; wind speed is the one condition that stays unlocked after start.
+- `GET /forecast` (contract v2): `{ sim_time, horizon_min, wind_kmh, wind_from_deg, outlines }`, each outline a Polygon Feature with `t_min` (15, 30 … 120 minutes from now); `outlines: []` when idle. Polled with `/hazards`; the dashboard draws the 30 and 60 min outlines as the predicted path (`FORECAST_MIN_SHOWN` in `src/history.js`), and all of them when the history slider is dragged past now.
 - Live updates: poll `/hazards` + `/reports` every 2 s; later WebSocket `ws://localhost:8000/ws` sends `{ type: tick|report|reset, changed: [hazards|roads|shelters|reports] }` → re-fetch only what's listed.
 - Errors come back as `{ error, message }`.
 
 **Not in the contract yet: ask Harsit to add these, build on your own fixture meanwhile:**
-- Predicted path (hazard features at T+30 / T+60), e.g. a `predicted_min` property on hazard features.
-- History snapshots for the slider (hazards/roads at a past `sim_time`).
+- History snapshots for the slider (hazards/roads at a past `sim_time`). Until then the dashboard records `/hazards` at each poll itself (`src/history.js`), so the slider only covers time the dashboard was open for; closed roads and routes aren't rewound yet.
 - Priority residents list (fake generated data).
 - Send notification (`POST /notifications`) + sent history.
 - Report status (New / Verified / Dismissed) and updating it.

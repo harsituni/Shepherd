@@ -1,39 +1,50 @@
-import { useState } from 'react'
+// Timeline slider: T+0 → now (recorded snapshots) → now + forecast horizon.
+// Dragging redraws the hazard at that minute and pauses the sim (App does both);
+// "Back to live" returns to following the current step.
+export default function HistoryBar({ now, horizon = 0, viewing, onScrub, onLive }) {
+  const disabled = now == null
+  const live = now ?? 0
+  const max = live + horizon
+  const value = Math.min(viewing ?? live, max)
+  const pct = (t) => (max > 0 ? (t / max) * 100 : 0)
 
-// Step 0: scrubbing only moves the slider. Redrawing past states needs
-// history snapshots (not in the contract yet).
-export default function HistoryBar({ simTime }) {
-  const now = simTime ?? 0
-  const [viewing, setViewing] = useState(null) // null = following live
-  const value = viewing ?? now
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(now * f))
+  const ticks = [{ t: 0, label: 'T+0' }]
+  if (live > 0) ticks.push({ t: live, label: 'Now', now: true })
+  if (horizon > 0) ticks.push({ t: max, label: `T+${max}` })
+
+  let status = 'live'
+  if (viewing != null) status = `T+${value} min${value > live ? ' (forecast)' : ''}`
 
   return (
     <div className="history">
       <span className="history-label">History</span>
       <label className="history-track">
-        <span className="sr-only">Scrub disaster progression</span>
+        <span className="sr-only">Scrub disaster progression, past and forecast</span>
         <input
           type="range"
           min="0"
-          max={now}
-          value={Math.min(value, now)}
-          onChange={(e) => setViewing(+e.target.value)}
-          disabled={simTime == null}
+          max={max}
+          value={value}
+          onChange={(e) => onScrub(+e.target.value)}
+          disabled={disabled || max === 0}
+          aria-valuetext={`T+${value} minutes${value > live ? ', forecast' : ''}`}
         />
-        <span className="history-ticks num">
-          {ticks.map((t, i) => (
-            <span key={i}>
-              T+{t}
-              {i === ticks.length - 1 ? ' now' : ''}
+        <span className="history-ticks num" aria-hidden="true">
+          {ticks.map(({ t, label, now: isNow }) => (
+            <span
+              key={label}
+              className={isNow ? 'history-tick is-now' : 'history-tick'}
+              style={{ left: `${pct(t)}%` }}
+            >
+              {label}
             </span>
           ))}
         </span>
       </label>
       <span className="history-viewing num">
-        Viewing <strong>{viewing == null ? 'live' : `T+${value} min`}</strong>
+        Viewing <strong>{disabled ? 'not started' : status}</strong>
       </span>
-      <button type="button" className="btn-outline" disabled={viewing == null} onClick={() => setViewing(null)}>
+      <button type="button" className="btn-outline" disabled={viewing == null} onClick={onLive}>
         Back to live
       </button>
     </div>
