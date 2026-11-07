@@ -69,7 +69,7 @@ export default function App() {
   const simIdle = !sim || sim.state === 'idle'
   const canSimulate = mode === 'drill'
 
-  // Map click picks where the hazard starts. It can only move before the drill starts.
+  // Map click picks where the hazard starts. It can only move before the simulation starts.
   const pickStart = useCallback(
     ({ lng, lat }) => {
       if (canSimulate && simIdle) setStartPoint({ lng, lat })
@@ -84,15 +84,17 @@ export default function App() {
         if (sim?.state === 'paused') return resumeSim()
         if (!startPoint) return
         const where = { lat: startPoint.lat, lon: startPoint.lng }
+        // fuel_dryness is no longer sent; the backend uses its default (0.7 in the contract).
+        // `tornado` is not a contract v1 scenario yet; it reuses wind_kmh / wind_from_deg
+        // as the storm's travel speed and direction.
         await startSim(
-          hazardKind === 'flood'
-            ? { scenario: 'flood', ...where, river_rise_m_per_hr: conditions.riverRise }
+          hazardKind === 'tornado'
+            ? { scenario: 'tornado', ...where, wind_kmh: conditions.windKmh, wind_from_deg: conditions.windFrom }
             : {
                 scenario: 'wildfire',
                 ...where,
                 wind_kmh: conditions.windKmh,
                 wind_from_deg: conditions.windFrom,
-                fuel_dryness: conditions.fuel / 100,
                 humidity_pct: conditions.humidity,
               },
         )

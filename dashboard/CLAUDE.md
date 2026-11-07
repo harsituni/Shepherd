@@ -6,11 +6,11 @@ Owner: TechShriyaz (also owns `phone/`). Only edit files in `dashboard/` unless 
 The Shepherd command dashboard for the Government of Alberta. Officials use it to simulate and monitor natural disasters around Edmonton/Alberta, see who's at risk, reroute evacuees and push updates to residents. Part of the natHacks 2026 project (Defense & Security theme). The public side is the phone web app in `phone/`.
 
 ## Features (in priority order)
-1. **Disaster simulation + conditions.** Wildfire is the main priority; flood second.
+1. **Disaster simulation + conditions.** Hazards: wildfire (main priority) and tornado. Flood was removed from the simulation.
    - Pick hazard type, click the map to place the start point.
-   - Conditions: wind speed, wind direction, fuel dryness, relative humidity (fire); river rise rate (flood). No temperature control.
+   - Conditions: wind speed and wind direction (both hazards; for a tornado the direction is its path), relative humidity (wildfire only). No fuel dryness control (the backend default is used) and no temperature control. Direction options read start → finish, e.g. "West → East".
    - Play / pause / reset, speed 1× / 4× / 16×, elapsed time (T+min).
-   - Live / Drill mode switch: Live = real data feeds, Drill = simulation.
+   - Live / Simulation mode switch: Live = real data feeds, Simulation = run a scenario. (Internally the mode value is still `drill`.)
 2. **Rerouting map with predicted path.**
    - Current hazard (solid orange) plus predicted spread as dashed rings labelled T+30 / T+60 min; toggle "Show predicted path".
    - Closed roads in red, evacuation routes in blue, shelters as navy squares, all redrawn when the hazard changes.
@@ -25,7 +25,7 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 
 ## Layout (matches the approved mockup)
 - Mockup: `design/dashboard-mockup.html` (screenshot `design/dashboardpic.png`). Visual reference only; rebuild as React components with MapLibre in place of the sketched SVG map.
-- Header (Alberta blue `#005072`): placeholder logo, Shepherd name, "Disaster monitoring · Alberta", Live/Drill switch, last-updated time.
+- Header (Alberta blue `#005072`): placeholder logo, Shepherd name, "Disaster monitoring · Alberta", Live/Simulation switch, last-updated time.
 - Thin light-blue incident banner under it (current hazard + status).
 - Left panel: Simulate & predict controls.
 - Centre: full map, legend bottom-left, zoom top-right, history slider along the bottom.
@@ -39,7 +39,7 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 - Gold `#FEBA35` only for the 3px keyboard focus ring (as on Alberta.ca).
 - Orange `#D9480F` only for the active hazard, red `#C62828` only for closed roads and SOS reports.
 - Font: **Public Sans** (Google Fonts, weights 400/500/600/700), fallback `system-ui, sans-serif`. Use `font-variant-numeric: tabular-nums` for stats and times. Type scale 14/16/18/20px (plus 26px stat values; nothing under 14); section titles are plain sentence-case headings, not uppercase labels.
-- Corners: 6px on controls, 8px on cards. No pills (the Live/Drill switch is a segmented control). Flat surfaces separated by 1px borders, not shadows (one soft shadow only on floating pop-ups).
+- Corners: 6px on controls, 8px on cards. No pills (the Live/Simulation switch is a segmented control). Flat surfaces separated by 1px borders, not shadows (one soft shadow only on floating pop-ups).
 - One solid button per area; others are navy outlines. Disabled controls get a flat style, never `opacity`; a locked selection stays visible.
 - Touch targets ≥44px, text contrast ≥4.5:1.
 - Don't use the Government of Alberta logo or wordmark; this is Shepherd's own branding.
@@ -76,7 +76,8 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 - Send notification (`POST /notifications`) + sent history.
 - Report status (New / Verified / Dismissed) and updating it.
 - Stats: people at risk, active reroutes.
-- Relative humidity as a sim condition (e.g. `humidity_pct` 0–100 on `POST /sim/start`). The model uses wind, fuel dryness and humidity only; no temperature control.
+- Relative humidity as a sim condition (e.g. `humidity_pct` 0–100 on `POST /sim/start`). The UI sends wind and humidity only; fuel dryness is left to the backend default. No temperature control.
+- A `tornado` scenario: `POST /sim/start { scenario: "tornado", lat, lon, wind_kmh, wind_from_deg }`, the storm travelling with the wind, and `kind: "tornado"` hazard features. The dashboard fixture fakes it meanwhile.
 
 ## Rules
 - Build exactly to `shared/contract.md`. Never edit it; ask Harsit (backend/lead) for changes.

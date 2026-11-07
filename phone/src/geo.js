@@ -74,8 +74,8 @@ export function nearestHazard(user, hazards) {
   return best
 }
 
-const KIND_NAME = { wildfire: 'wildfire', flood: 'flood' }
-const KIND_NOUN = { wildfire: 'Fire', flood: 'Flooding' }
+const KIND_NAME = { wildfire: 'wildfire', tornado: 'tornado', flood: 'flood' }
+const KIND_NOUN = { wildfire: 'Fire', tornado: 'Tornado', flood: 'Flooding' }
 
 // "Fire is 2.4 km west of you, moving east." from nearestHazard().
 export function hazardSentence(near) {

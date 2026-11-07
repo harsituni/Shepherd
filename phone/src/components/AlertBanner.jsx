@@ -2,7 +2,7 @@ import { hazardSentence as hazardLine, isCurrentCore, nearestHazard } from '../g
 import { InfoIcon, WarningIcon } from './icons.jsx'
 import { mostSevere, SEVERITY } from './Notifications.jsx'
 
-const KIND_LABEL = { wildfire: 'Wildfire', flood: 'Flood' }
+const KIND_LABEL = { wildfire: 'Wildfire', tornado: 'Tornado', flood: 'Flood' }
 
 function Banner({ tone, Icon, title, line, assertive }) {
   return (

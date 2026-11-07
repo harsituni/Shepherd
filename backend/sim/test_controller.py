@@ -74,6 +74,33 @@ class SimControllerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             c.start({"scenario": "flood", "lat": 53.5, "lon": -113.5})
 
+    def test_set_wind_idle_updates_state(self):
+        c = SimController()
+        s = c.set_wind(40, 270)
+        self.assertEqual(s["wind_kmh"], 40)
+        self.assertEqual(s["wind_from_deg"], 270)
+        self.assertEqual(s["state"], "idle")
+
+    def test_set_wind_running_updates_sim(self):
+        c = SimController()
+        c.start(
+            {
+                "scenario": "wildfire",
+                "lat": 53.535,
+                "lon": -113.663,
+                "wind_kmh": 10,
+                "wind_from_deg": 0,
+            }
+        )
+        c.tick()
+        before = c.features()[0]["geometry"]["coordinates"][0]
+        s = c.set_wind(45, 270)
+        self.assertEqual(s["wind_kmh"], 45)
+        self.assertEqual(s["wind_from_deg"], 270)
+        after = c.features()[0]["geometry"]["coordinates"][0]
+        self.assertEqual(len(after), len(before))
+        self.assertTrue(c.features())
+
 
 if __name__ == "__main__":
     unittest.main()
