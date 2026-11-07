@@ -1,6 +1,6 @@
 // Timeline slider: T+0 → now (recorded snapshots) → now + forecast horizon.
 // Dragging redraws the hazard at that minute and pauses the sim (App does both);
-// "Back to live" returns to following the current step.
+// "Back to live" (shown only while scrubbed away) returns to the current step.
 export default function HistoryBar({ now, horizon = 0, viewing, onScrub, onLive }) {
   const disabled = now == null
   const live = now ?? 0
@@ -8,11 +8,14 @@ export default function HistoryBar({ now, horizon = 0, viewing, onScrub, onLive 
   const value = Math.min(viewing ?? live, max)
   const pct = (t) => (max > 0 ? (t / max) * 100 : 0)
 
-  const ticks = [{ t: 0, label: 'T+0' }]
+  // No "T+0" tick: early in a run it sat on top of "Now". The slider's left end is T+0.
+  const ticks = []
   if (live > 0) ticks.push({ t: live, label: 'Now', now: true })
   if (horizon > 0) ticks.push({ t: max, label: `T+${max}` })
+  // Centre each label on its spot, but keep it inside the bar near either end.
+  const shift = (p) => (p < 8 ? '0' : p > 92 ? '-100%' : '-50%')
 
-  let status = 'live'
+  let status = 'Live'
   if (viewing != null) status = `T+${value} min${value > live ? ' (forecast)' : ''}`
 
   return (
@@ -34,7 +37,7 @@ export default function HistoryBar({ now, horizon = 0, viewing, onScrub, onLive 
             <span
               key={label}
               className={isNow ? 'history-tick is-now' : 'history-tick'}
-              style={{ left: `${pct(t)}%` }}
+              style={{ left: `${pct(t)}%`, transform: `translateX(${shift(pct(t))})` }}
             >
               {label}
             </span>
@@ -44,9 +47,12 @@ export default function HistoryBar({ now, horizon = 0, viewing, onScrub, onLive 
       <span className="history-viewing num">
         Viewing <strong>{disabled ? 'not started' : status}</strong>
       </span>
-      <button type="button" className="btn-outline" disabled={viewing == null} onClick={onLive}>
-        Back to live
-      </button>
+      {/* Only while scrubbed away from live; following live there's nothing to go back to. */}
+      {viewing != null && (
+        <button type="button" className="btn-outline" onClick={onLive}>
+          Back to live
+        </button>
+      )}
     </div>
   )
 }

@@ -199,17 +199,15 @@ export async function getSimState() {
 }
 
 // The predicted path comes from GET /forecast (contract v2): outlines at t_min =
-// 15, 30 … 120 minutes from now. The map draws the 30 and 60 min ones as
-// `predicted_min` features, like the dashboard; all eight would crowd a phone map.
-const FORECAST_MIN_SHOWN = [30, 60]
+// 15, 30 … 120 minutes from now. The map draws only the 60 min one as a
+// `predicted_min` feature, like the dashboard: two nested dotted rings read as a
+// doubled border.
+const FORECAST_MIN_SHOWN = [60]
 const toPredicted = (o) => ({ type: 'Feature', id: o.id, properties: { ...o.properties, predicted_min: o.t_min }, geometry: o.geometry })
 
 // Fixture stand-in for the predicted spread (`predicted_min` features): the
 // current shape, larger and drifted east.
-const PREDICTED_STEPS = [
-  { minutes: 30, scale: 1.5, eastKm: 1.2 },
-  { minutes: 60, scale: 2.1, eastKm: 2.6 },
-]
+const PREDICTED_STEPS = [{ minutes: 60, scale: 2.1, eastKm: 2.6 }]
 function predictedFeatures(grown, center) {
   const [cx, cy] = center
   const kmPerDegLon = 111.32 * Math.cos((cy * Math.PI) / 180)

@@ -6,8 +6,9 @@
 
 const isPredicted = (f) => f.properties?.predicted_min != null
 
-// Which forecast outlines are drawn as the predicted path while following live.
-export const FORECAST_MIN_SHOWN = [30, 60]
+// Which forecast outline is drawn as the predicted path while following live.
+// Just one: two nested dotted rings (30 + 60) read as a doubled border.
+export const FORECAST_MIN_SHOWN = [60]
 
 // ---------- shape blending ----------
 
