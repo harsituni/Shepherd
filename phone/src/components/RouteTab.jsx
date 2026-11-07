@@ -39,7 +39,7 @@ export default function RouteTab({ map, location, route, routeError, shelters, o
     details = (
       <>
         {route.rerouted && (
-          <div className="notice">
+          <div className="notice notice-strong">
             <RerouteIcon />
             <span>Rerouted{route.reroute_reason ? `: ${route.reroute_reason}` : ''}</span>
           </div>

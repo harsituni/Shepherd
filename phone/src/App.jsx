@@ -7,6 +7,19 @@ import RouteTab from './components/RouteTab.jsx'
 import TipsTab from './components/TipsTab.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
 
+// Resolves to [lon, lat], or null if unavailable, denied or slow.
+// Browsers only allow this on https or localhost.
+function deviceLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null)
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve([p.coords.longitude, p.coords.latitude]),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+    )
+  })
+}
+
 const TABS = [
   ['route', 'Route'],
   ['tips', 'Survival tips'],
@@ -79,7 +92,19 @@ export default function App() {
 
   const sendReport = useCallback(
     async (kind, note) => {
-      const loc = locationRef.current
+      let loc = locationRef.current
+      // Need help must always work: without a pinned location, ask the device for one.
+      if (!loc && kind === 'sos') {
+        setSending(true)
+        loc = await deviceLocation()
+        setSending(false)
+        if (!loc) {
+          showToast("Couldn't get your location. Tap the map where you are, or call 911.")
+          setTab('route')
+          return false
+        }
+        setLocationAndRoute(loc)
+      }
       if (!loc) {
         showToast('Tap the map to set your location first.')
         setTab('route')
@@ -99,7 +124,7 @@ export default function App() {
         setSending(false)
       }
     },
-    [showToast],
+    [showToast, setLocationAndRoute],
   )
 
   return (
@@ -176,7 +201,7 @@ export default function App() {
         <button
           type="button"
           className="action action-help"
-          disabled={!location || sending}
+          disabled={sending}
           onClick={() => sendReport('sos')}
         >
           Need help
