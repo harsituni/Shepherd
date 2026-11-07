@@ -1,17 +1,70 @@
 {
+  "lat": 53.520,
+  "lon": -113.620,
+  "sim_time": 12,
+  "leave_by_sim_min": 18,
+  "leave_by_label": "Leave within 6 min (sim)",
+  "best_route_id": "rt_1",
+  "options": [
+    {
+      "id": "rt_1",
+      "shelter_id": "sh_kinsmen",
+      "shelter_name": "Kinsmen Sports Centre",
+      "distance_km": 8.4,
+      "eta_min": 14,
+      "margin_min": 72,
+      "status": "ok",
+      "clear_until_sim_min": 90,
+      "clear_until_label": "Clear until T+90",
+      "reason": null,
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-113.620, 53.520], [-113.540, 53.500], [-113.516, 53.519]]
+      }
+    },
+    {
+      "id": "rt_2",
+      "shelter_id": "sh_commonwealth",
+      "shelter_name": "Commonwealth Rec Centre",
+      "distance_km": 6.1,
+      "eta_min": 11,
+      "margin_min": 25,
+      "status": "tight",
+      "clear_until_sim_min": 48,
+      "clear_until_label": "Clear until T+48",
+      "reason": null,
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-113.620, 53.520], [-113.473, 53.559]]
+      }
+    },
+    {
+      "id": "rt_3",
+      "shelter_id": "sh_terwillegar",
+      "shelter_name": "Terwillegar Rec Centre",
+      "distance_km": 12.0,
+      "eta_min": 22,
+      "margin_min": -8,
+      "status": "blocked",
+      "clear_until_sim_min": null,
+      "clear_until_label": null,
+      "reason": "Blocked near Whitemud: fire arrives at T+40; you would reach that segment at T+55 (needs T+10 with 30 min buffer).",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-113.620, 53.520], [-113.595, 53.440]]
+      }
+    }
+  ],
+  "excluded": [],
   "shelter_id": "sh_kinsmen",
   "shelter_name": "Kinsmen Sports Centre",
   "distance_km": 8.4,
   "eta_min": 14,
   "rerouted": false,
   "reroute_reason": null,
-  "steps": [
-    { "instruction": "Head south on 170 St NW", "distance_km": 1.9 },
-    { "instruction": "Turn left onto Whitemud Dr", "distance_km": 5.8 },
-    { "instruction": "Arrive at Kinsmen Sports Centre", "distance_km": 0.7 }
-  ],
+  "steps": [],
   "geometry": {
     "type": "LineString",
-    "coordinates": [[-113.620, 53.520], [-113.620, 53.490], [-113.540, 53.490], [-113.516, 53.519]]
+    "coordinates": [[-113.620, 53.520], [-113.540, 53.500], [-113.516, 53.519]]
   }
 }

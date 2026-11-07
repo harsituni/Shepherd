@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getHazards, getNotifications, getRoute, getShelters, postReport } from './api.js'
+import { getHazards, getNotifications, getRoute, getShelters, getSimState, postReport, withChoice } from './api.js'
 import { POLL_MS } from './config.js'
+import { isCurrentCore, nearestHazard } from './geo.js'
 import { placeName } from './placeName.js'
+import { nextClock } from './simClock.js'
 import AlertBanner from './components/AlertBanner.jsx'
+import EvacCard from './components/EvacCard.jsx'
 import MapView from './components/MapView.jsx'
 import { AlertsTab, mostSevere, NotificationPopup } from './components/Notifications.jsx'
 import RouteTab from './components/RouteTab.jsx'
 import { CrookIcon } from './components/icons.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
+import { SHEPHERD_VERSION } from './version.js'
 
 // Resolves to [lon, lat], or null if unavailable, denied or slow.
 // Browsers only allow this on https or localhost.
@@ -32,6 +36,7 @@ export default function App() {
   const [location, setLocation] = useState(null) // [lon, lat]
   const [route, setRoute] = useState(null)
   const [routeError, setRouteError] = useState(null)
+  const [chosen, setChosen] = useState(null) // shelter_id of the route card the user picked
   const [hazards, setHazards] = useState(null)
   const [shelters, setShelters] = useState(null)
   const [focusKey, setFocusKey] = useState(null)
@@ -40,6 +45,7 @@ export default function App() {
   const [toast, setToast] = useState(null)
   const [notifications, setNotifications] = useState([])
   const [popup, setPopup] = useState(null)
+  const [clock, setClock] = useState(null) // sim clock for the leave-by countdown
   const seenNotes = useRef(new Set())
   const toastTimer = useRef(null)
   const locationRef = useRef(location)
@@ -83,8 +89,11 @@ export default function App() {
   }, [])
 
   const refresh = useCallback(async () => {
-    const [h, s, n] = await Promise.allSettled([getHazards(), getShelters(), getNotifications()])
+    const [h, s, n, st] = await Promise.allSettled([getHazards(), getShelters(), getNotifications(), getSimState()])
     if (h.status === 'fulfilled') setHazards(h.value)
+    // Sim clock from /sim/state; older backends without it fall back to /hazards' sim_time at 1x.
+    if (st.status === 'fulfilled' && st.value) setClock((c) => nextClock(c, st.value))
+    else if (h.status === 'fulfilled') setClock((c) => nextClock(c, { sim_time: h.value?.sim_time }))
     if (s.status === 'fulfilled') setShelters(s.value)
     if (n.status === 'fulfilled') {
       const fresh = n.value.filter((x) => !seenNotes.current.has(x.id))
@@ -124,6 +133,7 @@ export default function App() {
       setLocation(lngLat)
       setRoute(null)
       setRouteError(null)
+      setChosen(null) // a new location starts from the recommended route
       setFocusKey(Date.now())
       refresh()
     },
@@ -167,6 +177,14 @@ export default function App() {
     [showToast, setLocationAndRoute],
   )
 
+  // The route on screen: the card the user picked, or the backend's best.
+  const { shown, lost } = withChoice(route, chosen)
+
+  // During a wildfire the evacuation card (leave-by countdown) takes the banner's place.
+  const wildfire =
+    route?.leave_by_sim_min != null ||
+    (hazards?.features ?? []).some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
+
   return (
     <div className="phone">
       <header className="header">
@@ -176,14 +194,29 @@ export default function App() {
           </span>
           Shepherd
         </span>
-        <span className="city" aria-live="polite" title={areaName}>
-          {areaName}
+        <span className="header-meta">
+          <span className="city" aria-live="polite" title={areaName}>
+            {areaName}
+          </span>
+          <span className="build-ver num" title="Git revision for this UI build">
+            {SHEPHERD_VERSION}
+          </span>
         </span>
       </header>
 
       {popup && <NotificationPopup key={popup.id} notification={popup} onDismiss={() => setPopup(null)} />}
 
-      <AlertBanner hazards={hazards} location={location} notifications={notifications} />
+      {wildfire ? (
+        <EvacCard
+          location={location}
+          route={shown}
+          routeError={routeError}
+          near={location ? nearestHazard(location, hazards) : null}
+          clock={clock}
+        />
+      ) : (
+        <AlertBanner hazards={hazards} location={location} notifications={notifications} />
+      )}
 
       <nav className="tabs" role="tablist" aria-label="Sections">
         {TABS.map(([id, label]) => (
@@ -209,7 +242,7 @@ export default function App() {
               <MapView
                 hazards={hazards}
                 shelters={shelters}
-                route={route}
+                route={shown}
                 location={location}
                 onTap={setLocationAndRoute}
                 onViewChange={onViewChange}
@@ -219,9 +252,14 @@ export default function App() {
             }
             hazards={hazards}
             location={location}
-            route={route}
+            route={shown}
+            lost={lost}
             routeError={routeError}
             shelters={shelters}
+            onChoose={(shelterId) => {
+              setChosen(shelterId)
+              setFocusKey(Date.now()) // frame the newly picked route
+            }}
             onStartNavigation={() => setFocusKey(Date.now())}
           />
         </div>

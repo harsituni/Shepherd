@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from backend.routing.router import NoRouteError, find_route, load_graph
+from backend.routing.router import NoRouteError, check_route, find_routes, load_graph
 from backend.sim.controller import SimController
 
 controller = SimController()
@@ -116,6 +116,11 @@ class SimSpeed(BaseModel):
     multiplier: int = Field(..., description="1, 4, or 16")
 
 
+class SimWind(BaseModel):
+    wind_kmh: float
+    wind_from_deg: float
+
+
 def circle_polygon(lat: float, lon: float, radius_m: float, n: int = 32) -> list[list[float]]:
     """Return a closed GeoJSON ring [lon, lat] approximating a circle."""
     dlat = radius_m / 111_320
@@ -193,9 +198,26 @@ def delete_hazards() -> dict:
 def get_route(
     lat: float = Query(...),
     lon: float = Query(...),
+    check_route_id: Optional[str] = Query(None),
 ) -> dict:
+    """Multi-option leave-by routes (contract v2)."""
     try:
-        return find_route(lat, lon, all_hazard_features(), SHELTERS)
+        if check_route_id:
+            return check_route(
+                lat,
+                lon,
+                check_route_id,
+                controller.arrival_min,
+                SHELTERS,
+                sim_time=controller.sim_time,
+            )
+        return find_routes(
+            lat,
+            lon,
+            controller.arrival_min,
+            SHELTERS,
+            sim_time=controller.sim_time,
+        )
     except NoRouteError as exc:
         return JSONResponse(
             status_code=404,
@@ -228,6 +250,12 @@ def post_report(body: ReportIn) -> dict:
 @app.get("/reports")
 def get_reports() -> dict:
     return {"type": "FeatureCollection", "features": reports}
+
+
+@app.get("/forecast")
+def get_forecast() -> dict:
+    """Predicted fire outlines at +15…+120 min (contract v2)."""
+    return controller.forecast()
 
 
 @app.get("/sim/state")
@@ -263,3 +291,9 @@ def post_sim_reset() -> dict:
 @app.post("/sim/speed")
 def post_sim_speed(body: SimSpeed) -> dict:
     return controller.set_speed(body.multiplier)
+
+
+@app.post("/sim/wind")
+def post_sim_wind(body: SimWind) -> dict:
+    """Change wind; kicks off spread/forecast recompute (contract v2)."""
+    return controller.set_wind(body.wind_kmh, body.wind_from_deg)

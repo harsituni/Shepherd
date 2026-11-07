@@ -1,18 +1,8 @@
-import { isCurrentCore, nearestHazard } from '../geo.js'
+import { hazardSentence as hazardLine, isCurrentCore, nearestHazard } from '../geo.js'
 import { InfoIcon, WarningIcon } from './icons.jsx'
 import { mostSevere, SEVERITY } from './Notifications.jsx'
 
 const KIND_LABEL = { wildfire: 'Wildfire', tornado: 'Tornado', flood: 'Flood' }
-const KIND_NOUN = { wildfire: 'Fire', tornado: 'Tornado', flood: 'Flooding' }
-
-// "Fire is 2.4 km west of you, moving east." from /hazards + the user's location.
-function hazardLine(near) {
-  if (!near) return null
-  const noun = KIND_NOUN[near.kind] ?? 'Hazard'
-  if (near.inside) return `You are inside the ${(KIND_LABEL[near.kind] ?? 'hazard').toLowerCase()} zone. Leave now.`
-  const moving = near.moving ? `, moving ${near.moving}` : ''
-  return `${noun} is ${near.km.toFixed(1)} km ${near.direction} of you${moving}.`
-}
 
 function Banner({ tone, Icon, title, line, assertive }) {
   return (

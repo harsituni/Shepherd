@@ -28,8 +28,11 @@ Usage:
     python engine/spread0.py 35 270 0.9           # wind_kmh wind_from_deg fuel_dryness
 """
 
+from __future__ import annotations
+
 import heapq
 import math
+from typing import Optional
 
 START_RADIUS_M = 300
 BASE_ROS_M_PER_MIN = 40
@@ -73,6 +76,9 @@ class WildfireSim:
                  wind_from_deg: float = 315, fuel_dryness: float = 0.7):
         self.lat = lat
         self.lon = lon
+        self.wind_kmh = wind_kmh
+        self.wind_from_deg = wind_from_deg
+        self.fuel_dryness = fuel_dryness
         self.model = PlaceholderSpread(wind_kmh, wind_from_deg, fuel_dryness)
         self.minutes = 0
         self.burning = set()
@@ -86,22 +92,116 @@ class WildfireSim:
                     heapq.heappush(self._frontier, (0, (col, row)))
         self._burn_until(0)
 
+    def set_wind(self, wind_kmh: float, wind_from_deg: float) -> None:
+        """Update wind and recompute unburned arrival times from the current fire front."""
+        self.wind_kmh = max(float(wind_kmh), 0)
+        self.wind_from_deg = float(wind_from_deg) % 360
+        self.model = PlaceholderSpread(self.wind_kmh, self.wind_from_deg, self.fuel_dryness)
+
+        burned = set(self.burning)
+        self.arrival = {cell: self.arrival.get(cell, 0.0) for cell in burned}
+        self._frontier = []
+        t0 = float(self.minutes)
+        for cell in burned:
+            head_ros, lb, head_bearing = self.model.rates(*cell)
+            for dc, dr in NEIGHBOURS:
+                nxt = (cell[0] + dc, cell[1] + dr)
+                if nxt in burned or math.hypot(*nxt) * CELL_M > MAX_RADIUS_M:
+                    continue
+                bearing = math.degrees(math.atan2(dc, dr))
+                ros = directional_ros(head_ros, lb, head_bearing, bearing)
+                if ros <= 0:
+                    continue
+                reach = t0 + math.hypot(dc, dr) * CELL_M / ros
+                if reach < self.arrival.get(nxt, math.inf):
+                    self.arrival[nxt] = reach
+                    heapq.heappush(self._frontier, (reach, nxt))
+        self._burn_until(self.minutes)
+
     def step(self, minutes: int) -> None:
         self.minutes += minutes
         self._burn_until(self.minutes)
 
+    def _arrival_map(self, horizon_min: int = 120) -> dict:
+        """Expand fire to horizon without changing the live footprint; return arrivals."""
+        burned_snap = set(self.burning)
+        arrival_snap = dict(self.arrival)
+        frontier_snap = list(self._frontier)
+
+        self._burn_until(horizon_min)
+        arrival_full = dict(self.arrival)
+
+        self.burning = burned_snap
+        self.arrival = arrival_snap
+        self._frontier = frontier_snap
+        heapq.heapify(self._frontier)
+        return arrival_full
+
+    def arrival_min(self, lat: float, lon: float, horizon_min: int = 120) -> Optional[int]:
+        """Sim minute fire reaches (lat, lon), or None if outside the horizon."""
+        north_m = (lat - self.lat) * M_PER_DEG_LAT
+        east_m = (lon - self.lon) * M_PER_DEG_LAT * math.cos(math.radians(self.lat))
+        col = int(round(east_m / CELL_M))
+        row = int(round(north_m / CELL_M))
+        if math.hypot(col, row) * CELL_M > MAX_RADIUS_M:
+            return None
+        at = self._arrival_map(horizon_min).get((col, row))
+        if at is None or at > horizon_min:
+            return None
+        return int(math.ceil(at))
+
+    def forecast(self, horizon_min: int = 120) -> list[dict]:
+        """Return predicted outline Features at 15-min steps up to horizon_min.
+
+        Each item includes top-level ``t_min`` plus a GeoJSON Feature with
+        ``zone: "predicted"`` (contract GET /forecast).
+        Does not change the live sim footprint.
+        """
+        steps = [t for t in range(15, horizon_min + 1, 15)]
+        burned_snap = set(self.burning)
+        arrival_full = self._arrival_map(horizon_min)
+
+        outlines: list[dict] = []
+        for t_min in steps:
+            cells = {cell for cell, at in arrival_full.items() if at <= t_min}
+            if not cells:
+                cells = set(burned_snap)
+            ring = self._ring_for_cells(cells)
+            outlines.append({
+                "t_min": t_min,
+                "type": "Feature",
+                "id": f"fc_{t_min}",
+                "properties": {
+                    "kind": "wildfire",
+                    "t_min": t_min,
+                    "zone": "predicted",
+                },
+                "geometry": {"type": "Polygon", "coordinates": [ring]},
+            })
+        return outlines
+
     def features(self) -> list[dict]:
-        cx = sum(c for c, _ in self.burning) / len(self.burning)
-        cy = sum(r for _, r in self.burning) / len(self.burning)
-        ring = [self._to_lonlat(*self._edge(cx, cy, 2 * math.pi * i / OUTLINE_POINTS))
-                for i in range(OUTLINE_POINTS)]
-        ring.append(ring[0])
+        ring = self._ring_for_cells(self.burning)
         return [{
             "type": "Feature",
             "id": "hz_sim_fire",
             "properties": {"kind": "wildfire", "zone": "core", "source": "sim"},
             "geometry": {"type": "Polygon", "coordinates": [ring]},
         }]
+
+    def _ring_for_cells(self, cells: set) -> list[list[float]]:
+        if not cells:
+            # Degenerate point-ring at ignition so callers always get a polygon.
+            lon, lat = self.lon, self.lat
+            return [[lon, lat], [lon, lat], [lon, lat], [lon, lat]]
+        cx = sum(c for c, _ in cells) / len(cells)
+        cy = sum(r for _, r in cells) / len(cells)
+        ring = [
+            self._to_lonlat(*self._edge_in(cells, cx, cy, 2 * math.pi * i / OUTLINE_POINTS))
+            for i in range(OUTLINE_POINTS)
+        ]
+        ring.append(ring[0])
+        return ring
 
     def _burn_until(self, t):
         # Dijkstra, paused at time t: pop cells that have caught fire, and offer each
@@ -126,13 +226,16 @@ class WildfireSim:
                     heapq.heappush(self._frontier, (reach, nxt))
 
     def _edge(self, cx, cy, angle):
-        # Walk out from the burnt area's centre in half-cell steps until leaving the
-        # burning cells, then return the last burning cell's outer edge as (east_m, north_m)
+        return self._edge_in(self.burning, cx, cy, angle)
+
+    def _edge_in(self, cells, cx, cy, angle):
+        # Walk out from the area's centre in half-cell steps until leaving the
+        # cells, then return the last cell's outer edge as (east_m, north_m)
         dx, dy = math.sin(angle), math.cos(angle)
         dist = 0.0
         while True:
             nxt = dist + 0.5
-            if (round(cx + nxt * dx), round(cy + nxt * dy)) not in self.burning:
+            if (round(cx + nxt * dx), round(cy + nxt * dy)) not in cells:
                 break
             dist = nxt
         dist += 0.5

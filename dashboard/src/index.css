@@ -92,6 +92,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .mode-switch button + button { border-left: 1px solid var(--on-navy-muted); }
 .mode-switch button[aria-pressed='true'] { background: #fff; color: var(--navy); font-weight: 600; }
 .updated { font-size: var(--fs-sm); color: var(--on-navy-muted); }
+.build-ver {
+  font-size: 12px; font-weight: 500; color: var(--on-navy-muted);
+  opacity: 0.85; letter-spacing: 0.01em; white-space: nowrap;
+}
 
 /* ---------- incident banner (the only tinted surface) ---------- */
 

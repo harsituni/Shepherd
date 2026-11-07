@@ -17,6 +17,8 @@ const cssVar = (name, fallback) =>
 const HAZARD = cssVar('--hazard', '#D9480F')
 const MAP_BG = cssVar('--map-bg', '#F3F7FB')
 const ROUTE = cssVar('--blue', '#0070C4')
+const ALT = cssVar('--muted-2', '#5B7590')
+const CLOSED = cssVar('--closed', '#C62828')
 
 // Predicted features carry `predicted_min`; everything else is the hazard now.
 const PREDICTED = ['has', 'predicted_min']
@@ -170,6 +172,20 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
         filter: ['all', CURRENT, ['==', ['get', 'zone'], 'core']],
         paint: { 'fill-color': HAZARD, 'fill-opacity': 0.85 },
       })
+      // The other route options: thin and dashed, blocked ones in closure red.
+      map.addSource('route-alts', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'route-alts',
+        type: 'line',
+        source: 'route-alts',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': ['case', ['==', ['get', 'status'], 'blocked'], CLOSED, ALT],
+          'line-width': 3,
+          'line-dasharray': [2, 2],
+          'line-opacity': 0.85,
+        },
+      })
       // White casing under the blue line keeps it legible over grey tiles and orange hazards.
       map.addLayer({
         id: 'route-casing',
@@ -246,6 +262,10 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
     if (!loaded) return
     const data = route?.geometry ? { type: 'Feature', properties: {}, geometry: route.geometry } : EMPTY
     mapRef.current?.getSource('route')?.setData(data)
+    const alts = (route?.options ?? [])
+      .filter((o) => o.id !== route.route_id && o.geometry)
+      .map((o) => ({ type: 'Feature', properties: { status: o.status }, geometry: o.geometry }))
+    mapRef.current?.getSource('route-alts')?.setData({ type: 'FeatureCollection', features: alts })
   }, [route, loaded])
 
   // Shelters as navy squares; the route's destination shows its name.

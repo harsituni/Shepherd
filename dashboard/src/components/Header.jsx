@@ -1,4 +1,5 @@
 import { CrookIcon } from './icons.jsx'
+import { SHEPHERD_VERSION } from '../version.js'
 
 function formatTime(date) {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
@@ -36,6 +37,9 @@ export default function Header({ mode, onModeChange, lastUpdated, connectionErro
         </div>
         <span className="updated num" role="status">
           {status}
+        </span>
+        <span className="build-ver num" title="Git revision for this UI build">
+          {SHEPHERD_VERSION}
         </span>
       </div>
     </header>
