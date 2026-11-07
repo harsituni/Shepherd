@@ -28,9 +28,9 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 
 ## Layout (matches the approved mockup)
 - Mockup: `design/dashboard-mockup.html` (screenshot `design/dashboardpic.png`). Visual reference only; rebuild as React components with MapLibre in place of the sketched SVG map.
-- Header (Alberta blue `#005072`): placeholder logo, Shepherd name, "Disaster monitoring · Alberta", Live/Simulation switch, last-updated time.
+- Header (Alberta blue `#005072`): placeholder logo, "Shepherd" (no subtitle; 26px, centred on the logo), Live/Simulation switch, last-updated time.
 - Thin light-blue incident banner under it (current hazard + status).
-- Left panel: Simulate & predict controls.
+- Left panel: simulation controls, titled "Simulate". No instruction hint under the hazard buttons.
 - Centre: full map, legend bottom-left (blue "LEGEND" header bar with a minimise / expand button; minimised, only the bar stays at the bottom of the map; the all-caps title is a deliberate exception to the sentence-case rule), zoom top-right, history slider along the bottom.
 - Right panel: 4 stat tiles, then tabs: **Reports** (hazard reports; reports from high-priority residents are specially marked) · **Notify** (send update + history; severity colours: Alert deep yellow `#9A6B00`, Evacuation order deep red `#8A2F06`). No separate Updates or Priority tabs.
 - Fluid page layout; panels stack on narrow screens.
