@@ -12,11 +12,12 @@ That single script:
 1. Frees ports 8000 / 5173 / 5174 if needed  
 2. Starts API + dashboard + phone  
 3. Opens two Cloudflare tunnels (phone UI + API)  
-4. Writes `demo-join.html` with an embedded QR (`?api=` baked in)  
+4. Writes `demo-join.html` + `dashboard/public/demo-join.json` (QR with `?api=` baked in)  
 5. Prints a **join URL** to paste in team chat  
 
 **Share the join URL / QR.** Any phone (Wi‑Fi or cellular) can open it.  
-**Ctrl+C** stops the stack and the tunnels.
+The same QR also appears in the **dashboard right panel** (“Phone join”).  
+**Ctrl+C** stops the stack and the tunnels (dashboard QR goes Offline).
 
 Dashboard for you: http://localhost:5173  
 
