@@ -202,13 +202,61 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    which would otherwise collapse the map to 0px tall. */
 .map-wrap > .map { position: absolute; inset: 0; }
 
+/* Floating legend: a slim blue header bar over the list. Anchored to the bottom,
+   so minimising folds the list down and leaves just the header docked at the
+   bottom of the map. No overflow:hidden, so the toggle's tap area can reach past
+   the slim bar; the bar rounds its own corners instead. */
 .legend {
-  position: absolute; left: 16px; bottom: 16px; z-index: 1; margin: 0;
-  list-style: none; background: #fff; border: 1px solid var(--border);
-  border-radius: var(--radius-control); padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--text);
+  position: absolute; left: 16px; bottom: 16px; z-index: 1; min-width: 200px;
+  background: #fff; border: 1px solid var(--border); border-radius: var(--radius-control);
+  transition: border-color 220ms ease;
 }
-.legend li { display: flex; align-items: center; gap: 8px; }
+.legend.is-collapsed { border-color: var(--header); }
+/* A label strip, sized to its word: 14px bold capitals (Public Sans caps are
+   0.723 em, ~10px tall) with ~7px of air above and below in a 24px bar. Tight
+   enough to read as a header, not a band; never so short it clips the letters. */
+.legend-head {
+  position: relative; display: flex; align-items: center; justify-content: space-between;
+  height: 24px; padding: 0 0 0 12px; background: var(--header); color: #fff;
+  border-radius: 5px 5px 0 0; transition: border-radius 220ms ease;
+}
+.legend.is-collapsed .legend-head { border-radius: 5px; }
+/* All caps on request (an exception to the sentence-case rule); 8.8:1 white on header blue.
+   Tracked out a little, as small capitals need. */
+.legend-title {
+  margin: 0; font-size: var(--fs-sm); line-height: 1; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+/* Square to the bar, with a 14px icon; its invisible ::before tap area is 44px. */
+.legend-toggle {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0; border: 0; border-radius: 0 5px 0 0;
+  background: transparent; color: #fff; cursor: pointer;
+}
+.legend.is-collapsed .legend-toggle { border-radius: 0 5px 5px 0; }
+.legend-toggle::before { content: ''; position: absolute; inset: -10px; }
+.legend-toggle:hover { background: var(--navy); }
+.legend-toggle svg { width: 14px; height: 14px; }
+/* Smooth fold: animate the row from its full height (1fr) to nothing (0fr). */
+.legend-body {
+  display: grid; grid-template-rows: 1fr;
+  transition: grid-template-rows 220ms ease, visibility 0s 0s;
+}
+.legend.is-collapsed .legend-body {
+  grid-template-rows: 0fr; visibility: hidden;
+  transition: grid-template-rows 220ms ease, visibility 0s 220ms;
+}
+.legend-body > .legend-items { min-height: 0; overflow: hidden; }
+.legend-items {
+  margin: 0; padding: 12px 14px; list-style: none;
+  display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--text);
+  transition: padding 220ms ease;
+}
+.legend.is-collapsed .legend-items { padding-top: 0; padding-bottom: 0; }
+.legend-items li { display: flex; align-items: center; gap: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .legend, .legend-head, .legend-body, .legend.is-collapsed .legend-body, .legend-items { transition: none; }
+}
 .swatch { display: inline-block; flex: 0 0 auto; }
 /* Orange edge, dark red centre: solid colours, no gradient. */
 .swatch-hazard { width: 12px; height: 12px; border-radius: 3px; background: var(--hazard-high); border: 3px solid var(--hazard); }
