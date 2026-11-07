@@ -21,12 +21,12 @@ export default function TipsTab() {
   const [kind, setKind] = useState('wildfire')
   return (
     <div className="tips">
-      <div className="pill-group" role="group" aria-label="Hazard type">
+      <div className="segmented" role="group" aria-label="Hazard type">
         {[
           ['wildfire', 'Wildfire'],
           ['flood', 'Flood'],
         ].map(([v, label]) => (
-          <button key={v} type="button" className="pill" aria-pressed={kind === v} onClick={() => setKind(v)}>
+          <button key={v} type="button" aria-pressed={kind === v} onClick={() => setKind(v)}>
             {label}
           </button>
         ))}

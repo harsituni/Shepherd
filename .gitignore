@@ -25,3 +25,6 @@ cache/
 Thumbs.db
 .idea/
 .vscode/
+
+# Impeccable per-developer config (hook consent, local overrides)
+.impeccable/config.local.json

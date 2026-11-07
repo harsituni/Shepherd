@@ -11,8 +11,14 @@ import MapLegend from './MapLegend.jsx'
 import { MinusIcon, PlusIcon } from './icons.jsx'
 
 const EMPTY = { type: 'FeatureCollection', features: [] }
-const HAZARD = '#D9480F'
-const PREDICTED_COLOR = '#0070C4'
+// Map layer colours come from the CSS tokens in index.css (see /DESIGN.md);
+// the hex fallbacks only apply if the stylesheet hasn't loaded.
+const cssVar = (name, fallback) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+const HAZARD = cssVar('--hazard', '#D9480F')
+const PREDICTED_COLOR = cssVar('--blue', '#0070C4')
+const MAP_BG = cssVar('--map-bg', '#F3F7FB')
+const SURFACE = cssVar('--surface', '#FFFFFF')
 
 // OSM raster tiles, muted so our orange/blue layers stand out (as in the mockup).
 const BASE_STYLE = {
@@ -27,7 +33,7 @@ const BASE_STYLE = {
     },
   },
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#F3F7FB' } },
+    { id: 'background', type: 'background', paint: { 'background-color': MAP_BG } },
     {
       id: 'osm',
       type: 'raster',
@@ -166,7 +172,7 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
         type: 'fill',
         source: 'hazards',
         filter: ['all', CURRENT, ['==', ['get', 'zone'], 'core']],
-        paint: { 'fill-color': HAZARD, 'fill-opacity': 0.82 },
+        paint: { 'fill-color': HAZARD, 'fill-opacity': 0.85 },
       })
       map.addLayer({
         id: 'hazard-outline',
@@ -183,7 +189,7 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
         source: 'reports',
         paint: {
           'circle-radius': 6,
-          'circle-color': '#FFFFFF',
+          'circle-color': SURFACE,
           'circle-stroke-color': HAZARD,
           'circle-stroke-width': 2.5,
         },

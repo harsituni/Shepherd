@@ -1,0 +1,548 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-07T18:08:28+00:00",
+  "title": "Design System: Shepherd",
+  "extensions": {
+    "colorMeta": {
+      "navy": {
+        "role": "primary",
+        "displayName": "Masthead Navy",
+        "canonical": "#0B3D6E",
+        "tonalRamp": [
+          "#182634",
+          "#224465",
+          "#24619D",
+          "#1F7FDC",
+          "#4F9CE6",
+          "#8CB8E4",
+          "#C0D5EA",
+          "#EEF2F7"
+        ]
+      },
+      "navy-deep": {
+        "role": "primary",
+        "displayName": "Deep Navy",
+        "canonical": "#0A3360",
+        "tonalRamp": [
+          "#182634",
+          "#224265",
+          "#255E9C",
+          "#2079DC",
+          "#5097E6",
+          "#8CB6E4",
+          "#C0D4EA",
+          "#EEF2F7"
+        ]
+      },
+      "blue": {
+        "role": "primary",
+        "displayName": "Service Blue",
+        "canonical": "#0070C4",
+        "tonalRamp": [
+          "#152937",
+          "#1A496C",
+          "#176BAA",
+          "#0A8EF1",
+          "#3FA8F7",
+          "#82C0EE",
+          "#BCD9EF",
+          "#EDF3F8"
+        ]
+      },
+      "blue-hover": {
+        "role": "primary",
+        "displayName": "Pressed Blue",
+        "canonical": "#005A9E",
+        "tonalRamp": [
+          "#152937",
+          "#1A496C",
+          "#176BAA",
+          "#0A8EF1",
+          "#3FA8F7",
+          "#82C0EE",
+          "#BCD9EF",
+          "#EDF3F8"
+        ]
+      },
+      "tint": {
+        "role": "neutral",
+        "displayName": "Sky Tint",
+        "canonical": "#EAF3FB",
+        "tonalRamp": [
+          "#1B2732",
+          "#28455F",
+          "#2E6393",
+          "#2F82CC",
+          "#5C9FDA",
+          "#93BADD",
+          "#C4D6E6",
+          "#EEF2F6"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Frost Border",
+        "canonical": "#D3E3F2",
+        "tonalRamp": [
+          "#1D2730",
+          "#2D445A",
+          "#386289",
+          "#3F80BD",
+          "#699CCD",
+          "#9AB9D5",
+          "#C7D6E3",
+          "#EFF2F5"
+        ]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Frost Divider",
+        "canonical": "#E3ECF5",
+        "tonalRamp": [
+          "#1E262E",
+          "#304357",
+          "#3E6183",
+          "#477EB5",
+          "#6F9BC7",
+          "#9EB8D2",
+          "#C9D5E1",
+          "#F0F2F5"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#0B2545",
+        "tonalRamp": [
+          "#1A2533",
+          "#264061",
+          "#2B5B96",
+          "#2A75D2",
+          "#5894DE",
+          "#91B4DF",
+          "#C3D3E8",
+          "#EEF2F6"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Slate Muted",
+        "canonical": "#3B5A7A",
+        "tonalRamp": [
+          "#20262C",
+          "#354352",
+          "#47607A",
+          "#557DA6",
+          "#7B9ABB",
+          "#A5B8CB",
+          "#CCD5DE",
+          "#F0F2F4"
+        ]
+      },
+      "muted-2": {
+        "role": "neutral",
+        "displayName": "Slate Faint",
+        "canonical": "#5B7590",
+        "tonalRamp": [
+          "#22262A",
+          "#3A434D",
+          "#506071",
+          "#647D98",
+          "#869AB0",
+          "#ACB8C4",
+          "#CFD5DB",
+          "#F1F2F4"
+        ]
+      },
+      "on-navy-muted": {
+        "role": "neutral",
+        "displayName": "On-Navy Muted",
+        "canonical": "#BFD7EE",
+        "tonalRamp": [
+          "#1C2630",
+          "#2C445B",
+          "#36618B",
+          "#3A7FC1",
+          "#659CD0",
+          "#98B9D7",
+          "#C6D5E4",
+          "#EFF2F6"
+        ]
+      },
+      "map-bg": {
+        "role": "neutral",
+        "displayName": "Map Paper",
+        "canonical": "#F3F7FB",
+        "tonalRamp": [
+          "#1E262F",
+          "#2F4358",
+          "#3C6185",
+          "#447EB8",
+          "#6D9BC9",
+          "#9DB8D3",
+          "#C8D5E2",
+          "#EFF2F5"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "hazard": {
+        "role": "signal",
+        "displayName": "Hazard Orange",
+        "canonical": "#D9480F",
+        "tonalRamp": [
+          "#352017",
+          "#673420",
+          "#A14520",
+          "#E35219",
+          "#EB784A",
+          "#E7A389",
+          "#EBCBBF",
+          "#F7F0ED"
+        ]
+      },
+      "closed": {
+        "role": "signal",
+        "displayName": "Closure Red",
+        "canonical": "#C62828",
+        "tonalRamp": [
+          "#321B1B",
+          "#5F2828",
+          "#923030",
+          "#CB3131",
+          "#D85E5E",
+          "#DC9494",
+          "#E6C4C4",
+          "#F6EEEE"
+        ]
+      },
+      "danger-bg": {
+        "role": "signal",
+        "displayName": "Ember Wash",
+        "canonical": "#FFF3EC",
+        "tonalRamp": [
+          "#372215",
+          "#6C391A",
+          "#AA4D17",
+          "#F15F0A",
+          "#F7833F",
+          "#EEAA82",
+          "#EFCEBC",
+          "#F8F1ED"
+        ]
+      },
+      "danger-border": {
+        "role": "signal",
+        "displayName": "Ember Edge",
+        "canonical": "#F6D2BE",
+        "tonalRamp": [
+          "#332319",
+          "#623B24",
+          "#985129",
+          "#D56526",
+          "#E18755",
+          "#E1AC8F",
+          "#E8D0C2",
+          "#F7F1EE"
+        ]
+      },
+      "danger-title": {
+        "role": "signal",
+        "displayName": "Ember Ink",
+        "canonical": "#8A2F06",
+        "tonalRamp": [
+          "#362016",
+          "#69351E",
+          "#A4471D",
+          "#E85514",
+          "#EF7B46",
+          "#EAA586",
+          "#ECCCBE",
+          "#F8F0ED"
+        ]
+      },
+      "danger-text": {
+        "role": "signal",
+        "displayName": "Ember Text",
+        "canonical": "#6B3A1F",
+        "tonalRamp": [
+          "#30241D",
+          "#5A3D2D",
+          "#895538",
+          "#BD6B3E",
+          "#CE8C68",
+          "#D6AF9A",
+          "#E3D1C7",
+          "#F5F1EF"
+        ]
+      },
+      "danger-icon": {
+        "role": "signal",
+        "displayName": "Ember Mark",
+        "canonical": "#B4400B",
+        "tonalRamp": [
+          "#352117",
+          "#68361F",
+          "#A2481F",
+          "#E45717",
+          "#EC7C49",
+          "#E8A688",
+          "#ECCDBF",
+          "#F7F0ED"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Stat tile values (26px) and phone ETA (28px); numbers only."
+      },
+      "heading": {
+        "displayName": "Heading",
+        "purpose": "20px: phone shelter name, report sheet heading."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "18px: brand name and dashboard panel titles (sentence case)."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "16px default: alert titles, banner, notices, list titles, buttons, inputs, phone tabs."
+      },
+      "body-strong": {
+        "displayName": "Body Strong",
+        "purpose": "16px 600: primary button labels, list item titles."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "14px: supporting copy, field labels, hints, timestamps, legend, dashboard tabs, choice labels."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "14px 600: map labels (with halo), field values."
+      }
+    },
+    "shadows": [
+      {
+        "name": "tab-underline",
+        "value": "inset 0 -3px 0 #0070C4",
+        "purpose": "Selected-tab indicator; an inset rule, not elevation."
+      },
+      {
+        "name": "map-label-halo",
+        "value": "0 0 3px #fff, 0 0 3px #fff",
+        "purpose": "text-shadow keeping map labels legible over the basemap."
+      },
+      {
+        "name": "sheet-scrim",
+        "value": "rgba(11, 37, 69, 0.45)",
+        "purpose": "Backdrop behind the phone report sheet."
+      }
+    ],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "dashboard-compact",
+        "value": "600px"
+      },
+      {
+        "name": "phone-frame",
+        "value": "520px"
+      },
+      {
+        "name": "dashboard-stack",
+        "value": "1100px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action per view, e.g. Send update or Start navigation.",
+      "html": "<button class=\"ds-btn-primary\">Send update</button>",
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-btn-primary{min-height:48px;padding:0 24px;border:0;border-radius:6px;background:var(--blue);color:#fff;font:600 16px 'Public Sans',system-ui,sans-serif;cursor:pointer} .ds-btn-primary:hover{background:var(--blue-hover)} .ds-btn-primary:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action in navy outline, e.g. Back to live on the history bar.",
+      "html": "<button class=\"ds-btn-outline\">Back to live</button>",
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-btn-outline{min-height:40px;padding:0 14px;border:1px solid var(--navy);border-radius:6px;background:#fff;color:var(--navy);font:600 14px 'Public Sans',system-ui,sans-serif;cursor:pointer} .ds-btn-outline:hover{background:var(--map-bg)} .ds-btn-outline:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}"
+    },
+    {
+      "name": "Choice Tiles",
+      "kind": "chip",
+      "refersTo": "choice",
+      "description": "Hazard-type picker; selected is a navy fill with white text.",
+      "html": "<div class=\"ds-choices\"><button class=\"ds-choice\" aria-pressed=\"true\">Wildfire</button><button class=\"ds-choice\" aria-pressed=\"false\">Flood</button></div>",
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:260px} .ds-choice{min-height:44px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text);font:500 14px 'Public Sans',system-ui,sans-serif;cursor:pointer} .ds-choice:hover{background:var(--map-bg)} .ds-choice[aria-pressed='true']{border-color:var(--navy);background:var(--navy);color:#fff;font-weight:600} .ds-choice:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Bordered field for notification title and message.",
+      "html": "<label class=\"ds-field\">Title<input class=\"ds-input\" value=\"Evacuate west Edmonton\"></label>",
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-field{display:flex;flex-direction:column;gap:6px;width:280px;font:400 14px 'Public Sans',system-ui,sans-serif;color:var(--muted)} .ds-input{min-height:40px;padding:0 10px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text);font:400 16px 'Public Sans',system-ui,sans-serif} .ds-input:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Equal-width panel tabs with a 3px blue inset underline on the selected tab.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button role=\"tab\" aria-selected=\"true\">Updates</button><button role=\"tab\" aria-selected=\"false\">Reports</button><button role=\"tab\" aria-selected=\"false\">Priority</button><button role=\"tab\" aria-selected=\"false\">Notify</button></div>",
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-tabs{display:flex;width:340px;border-bottom:1px solid var(--divider)} .ds-tabs button{flex:1;min-height:44px;border:0;background:#fff;color:var(--muted);font:500 14px 'Public Sans',system-ui,sans-serif;cursor:pointer} .ds-tabs button:hover{color:var(--navy)} .ds-tabs button[aria-selected='true']{color:var(--navy);font-weight:600;box-shadow:inset 0 -3px 0 var(--blue)} .ds-tabs button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}"
+    },
+    {
+      "name": "Stat Tile",
+      "kind": "card",
+      "refersTo": "stat-tile",
+      "description": "One of the four dashboard key numbers; flat, bordered, tabular value.",
+      "html": "<div class=\"ds-tile\"><span class=\"ds-tile-label\">Roads closed</span><span class=\"ds-tile-value\">7</span></div>",
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-tile{display:flex;flex-direction:column;gap:4px;width:160px;padding:14px;border:1px solid var(--border);border-radius:8px;background:#fff} .ds-tile-label{font:400 14px 'Public Sans',system-ui,sans-serif;color:var(--muted)} .ds-tile-value{font:700 26px 'Public Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--closed)}"
+    },
+    {
+      "name": "Header",
+      "kind": "nav",
+      "refersTo": "header",
+      "description": "Solid navy masthead with brand and sub-line.",
+      "html": "<header class=\"ds-header\"><div><div class=\"ds-brand\">Shepherd</div><div class=\"ds-sub\">Disaster monitoring · Alberta</div></div><span class=\"ds-sub\">Updated 14:02</span></header>",
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-header{display:flex;align-items:center;justify-content:space-between;gap:16px;width:420px;padding:14px 28px;background:var(--navy);color:#fff;font-family:'Public Sans',system-ui,sans-serif} .ds-brand{font-size:18px;font-weight:700} .ds-sub{font-size:14px;color:#bfd7ee}"
+    },
+    {
+      "name": "Evacuation Alert",
+      "kind": "custom",
+      "refersTo": "alert-evacuation",
+      "description": "Phone alert banner in the Evacuation Tint family for evacuation orders.",
+      "html": "<div class=\"ds-alert\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3 2 21h20L12 3z\"/><path d=\"M12 10v5\"/><path d=\"M12 18h.01\"/></svg><div><strong>Evacuation order</strong><span>Leave now via Whitemud Dr. Fire is 2 km west, moving east.</span></div></div>",
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-alert{display:flex;gap:12px;align-items:flex-start;width:360px;padding:14px 20px;background:var(--danger-bg);border-bottom:1px solid var(--danger-border);font-family:'Public Sans',system-ui,sans-serif} .ds-alert svg{flex:0 0 20px;margin-top:2px;color:var(--danger-icon)} .ds-alert div{display:flex;flex-direction:column;gap:2px} .ds-alert strong{font-size:16px;font-weight:700;color:var(--danger-title)} .ds-alert span{font-size:14px;color:var(--danger-text)}"
+    },
+    {
+      "name": "Phone Action Bar",
+      "kind": "custom",
+      "refersTo": "action-help",
+      "description": "Always-visible three-button bar: Report hazard and I'm safe share a navy outline; Need help is the one solid button and is never disabled.",
+      "html": "<div class=\"ds-actions\"><button class=\"ds-action\">Report hazard</button><button class=\"ds-action\">I'm safe</button><button class=\"ds-action ds-help\">Need help</button></div>",
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:360px;padding:12px 16px;border-top:1px solid var(--divider);background:#fff} .ds-action{min-height:48px;padding:0 6px;border:1px solid var(--navy);border-radius:6px;background:#fff;color:var(--navy);font:600 14px 'Public Sans',system-ui,sans-serif;cursor:pointer} .ds-action:hover{background:var(--map-bg)} .ds-help{background:var(--navy);color:#fff} .ds-help:hover{background:#0a3360} .ds-action:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "chip",
+      "refersTo": "choice",
+      "description": "Joined options in one 6px bordered strip; selected is navy. Used for speed, severity and the phone tips filter. Replaces pills.",
+      "html": "<div class=\"ds-seg\" role=\"group\"><button aria-pressed=\"false\">1×</button><button aria-pressed=\"true\">4×</button><button aria-pressed=\"false\">16×</button></div>",
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-seg{display:flex;width:240px;border:1px solid var(--border);border-radius:6px;overflow:hidden} .ds-seg button{flex:1;min-height:42px;border:0;background:#fff;color:var(--text);font:500 14px 'Public Sans',system-ui,sans-serif;cursor:pointer} .ds-seg button+button{border-left:1px solid var(--border)} .ds-seg button[aria-pressed='true']{background:var(--navy);color:#fff;font-weight:600} .ds-seg button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Public Service Map",
+    "overview": "Shepherd looks like a civic service, not a product launch. The map is the subject; everything around it is plain white paper with navy and blue ink, organised like a good government information page: a solid navy masthead, a thin tinted status strip, then content in calm, bordered panels. Nothing competes with the hazard, which is the only warm colour on screen.\n\nThe two surfaces share one system at two densities. The dashboard (emergency managers, desktop) is a three-column command layout: controls, map, stats and feeds. It is dense but quiet, with plain sentence-case section headings and tabular numbers. The phone (residents, ~390px) is the same vocabulary scaled for thumbs and stress: larger targets, one primary action per view, and an always-visible action bar. Both surfaces use the same square-ish 6px corners and the same type scale, in the manner of Alberta.ca: plain, text-led and squared off rather than rounded and app-like.\n\nThe visual rejections are explicit and binding (see Do's and Don'ts): no gradients, no glass, no glows, no emoji icons, no default \"AI website\" fonts, no decorative charts, no pill shapes. Depth comes from 1px borders, never from shadows. The Sky Tint is reserved for the alert surface.",
+    "keyCharacteristics": [
+      "White surfaces, navy chrome, blue as the primary-action and route colour.",
+      "Orange means hazard and red means closed road. Neither colour ever appears for any other purpose.",
+      "Flat. 1px borders separate surfaces; the tint belongs to the alert banner alone.",
+      "One solid button per area; everything else is a plain outline.",
+      "Public Sans throughout, with tabular numerals for every time, ETA, distance and stat.",
+      "Touch targets of at least 44px everywhere and at least 48px for primary phone actions."
+    ],
+    "rules": [
+      {
+        "name": "The Two Warnings Rule",
+        "body": "Orange is the hazard; red is a closed road. Neither may be used for decoration, emphasis, branding, or generic errors.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Ink Rule",
+        "body": "Blue marks the primary action and the route. Anything blue is either the main thing to press or a route/prediction on the map. Selection is navy, not blue.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Tint Rule",
+        "body": "Sky Tint means \"this is the alert\". If the banner and a hint look the same, the banner has lost its authority, so inline hints and notices are plain text with an icon.",
+        "section": "colors"
+      },
+      {
+        "name": "The Quiet Basemap Rule",
+        "body": "The OpenStreetMap raster is desaturated (saturation −0.85, contrast −0.15, opacity 0.6) over Map Paper, so Shepherd's own layers are always the loudest thing on the map.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every number that updates (T+min, ETA, km, counts, percentages) uses `font-variant-numeric: tabular-nums` (the `.num` class), so live values don't jitter as they tick.",
+        "section": "typography"
+      },
+      {
+        "name": "The 16px Input Rule",
+        "body": "Phone text inputs are 16px so iOS doesn't zoom on focus.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Float Rule",
+        "body": "At most one soft shadow exists in the whole system, and it belongs only to a floating pop-up notification. Everything else stays flat.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No Eyebrow Rule",
+        "body": "No small uppercase tracked labels above headings. A section has a plain bold heading or nothing.",
+        "section": "typography"
+      },
+      {
+        "name": "The Square Corner Rule",
+        "body": "Corners stay at 6px, with 8px for cards. No 10px \"bubble\" controls and no pills (999px). A two-way or three-way choice is a segmented control (one bordered strip with joined buttons), not a row of pills.",
+        "section": "shapes"
+      },
+      {
+        "name": "The One Solid Rule",
+        "body": "Each area has at most one solid-filled button: play/pause in the controls panel, \"Send update\" in Notify, \"Start navigation\" in the phone route view, and \"Need help\" in the phone action bar. Everything beside it is an outline.",
+        "section": "components"
+      },
+      {
+        "name": "The Never Disabled Rule",
+        "body": "\"Need help\" is never disabled. Without a pinned location it asks the device for one, and if that fails it tells the resident to tap the map or call 911.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do use Public Sans only, at weights 400/500/600/700.",
+      "Do keep surfaces flat and white, separated by 1px Frost Border (#D3E3F2) or Frost Divider (#E3ECF5).",
+      "Do use a navy fill with white text for every selected state, and keep Sky Tint (#EAF3FB) for the alert banner only.",
+      "Do keep corners at 6px (8px for cards), and use a segmented control for small option sets.",
+      "Do give disabled controls a flat Map Paper / Slate Faint style.",
+      "Do use the 14/16/18/20 type scale, with 16px as the default.",
+      "Do keep touch targets at least 44px, primary phone actions at least 48px, and text contrast at least 4.5:1.",
+      "Do use tabular numerals for every live number.",
+      "Do use simple inline stroke SVG icons.",
+      "Do keep both apps on the same token values. A colour added to one `index.css` belongs in the other, and here, too."
+    ],
+    "donts": [
+      "Don't use Inter, Roboto, Poppins, Montserrat, DM Sans, Manrope, Space Grotesk, Plus Jakarta Sans, Geist, Outfit or any other default \"AI website\" font.",
+      "Don't use gradients of any kind: backgrounds, buttons, text or glows.",
+      "Don't use emoji as icons.",
+      "Don't use glassmorphism or blur, neon glows, coloured left-border accent cards, oversized rounded \"bubble\" cards or bouncy animations.",
+      "Don't use orange or red for anything except the hazard and closed roads.",
+      "Don't use pill shapes (999px corners) or 10px \"bubble\" controls.",
+      "Don't fade disabled controls with `opacity`, and never disable \"Need help\".",
+      "Don't set text smaller than 14px, or use small uppercase tracked eyebrow labels.",
+      "Don't put three different button treatments side by side.",
+      "Don't add drop shadows to cards, tiles or panels. The only one allowed is on a floating pop-up notification.",
+      "Don't add filler stats, decorative charts or lorem ipsum. Every number comes from the backend or a fixture.",
+      "Don't use the Government of Alberta logo or wordmark. Shepherd is its own brand."
+    ]
+  }
+}

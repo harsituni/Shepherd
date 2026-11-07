@@ -9,8 +9,13 @@ import { MAP_CENTER, MAP_ZOOM } from '../config.js'
 setWorkerUrl(maplibreWorkerUrl)
 
 const EMPTY = { type: 'FeatureCollection', features: [] }
-const HAZARD = '#D9480F'
-const BLUE = '#0070C4'
+// Map layer colours come from the CSS tokens in index.css (see /DESIGN.md);
+// the hex fallbacks only apply if the stylesheet hasn't loaded.
+const cssVar = (name, fallback) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+const HAZARD = cssVar('--hazard', '#D9480F')
+const MAP_BG = cssVar('--map-bg', '#F3F7FB')
+const ROUTE = cssVar('--blue', '#0070C4')
 
 // OSM raster tiles, muted so the hazard and route stand out (as in the mockup).
 const BASE_STYLE = {
@@ -25,7 +30,7 @@ const BASE_STYLE = {
     },
   },
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#F3F7FB' } },
+    { id: 'background', type: 'background', paint: { 'background-color': MAP_BG } },
     {
       id: 'osm',
       type: 'raster',
@@ -102,12 +107,20 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
         filter: ['==', ['get', 'zone'], 'core'],
         paint: { 'fill-color': HAZARD, 'fill-opacity': 0.85 },
       })
+      // White casing under the blue line keeps it legible over grey tiles and orange hazards.
+      map.addLayer({
+        id: 'route-casing',
+        type: 'line',
+        source: 'route',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#FFFFFF', 'line-width': 9 },
+      })
       map.addLayer({
         id: 'route-line',
         type: 'line',
         source: 'route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': BLUE, 'line-width': 5 },
+        paint: { 'line-color': ROUTE, 'line-width': 5 },
       })
       setLoaded(true)
     })

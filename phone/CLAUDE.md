@@ -25,6 +25,7 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
 - Bottom bar, always visible: **Report hazard** · **I'm safe** · **Need help**.
 
 ## Design
+- **Visual system: see `/DESIGN.md`** (shared with `dashboard/`; tokens, components, rules). If it and this section disagree, flag it rather than picking one.
 - Minimalist, inspired by Alberta.ca's wildfire pages: plain blue and white, calm, big tap targets.
 - Colours: navy `#0B3D6E`, blue `#0070C4` (primary, route, predicted path), tint `#EAF3FB`, borders `#D3E3F2`, text `#0B2545`, muted `#3B5A7A`.
 - Orange `#D9480F` only for the hazard and evacuation-order alerts, red `#C62828` only for closed roads.
