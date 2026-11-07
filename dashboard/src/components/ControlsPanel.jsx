@@ -40,6 +40,7 @@ export default function ControlsPanel({
   onReset,
   onSpeedChange,
   onWindChange,
+  error,
   showPredicted,
   onShowPredictedChange,
 }) {
@@ -164,6 +165,11 @@ export default function ControlsPanel({
         <span className="elapsed num" aria-live="polite">
           {idle ? 'Not started' : `${sim.state === 'paused' ? 'Paused' : 'Running'} · T+${sim.sim_time ?? 0} min`}
         </span>
+        {error && (
+          <span className="hint sim-error" role="alert">
+            {error}
+          </span>
+        )}
       </div>
 
       <label className="toggle-row">

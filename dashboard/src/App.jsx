@@ -20,6 +20,13 @@ import ControlsPanel from './components/ControlsPanel.jsx'
 import HistoryBar from './components/HistoryBar.jsx'
 import SidePanel from './components/SidePanel.jsx'
 
+// Backend errors come back as { error, message } (contract). The raw message can be
+// misleading (a tornado start says "Flood deferred"), so known codes get plain text.
+function simErrorText(err) {
+  if (err.code === 'unsupported_scenario') return "The backend can't simulate this hazard yet. Only wildfire runs for now."
+  return `The backend refused this: ${err.message}`
+}
+
 export default function App() {
   const [mode, setMode] = useState('drill')
   const [hazardKind, setHazardKind] = useState('wildfire')
@@ -55,12 +62,17 @@ export default function App() {
   }, [])
 
   // Run a sim command, then redraw straight away instead of waiting for the next poll.
+  // A refusal from the backend (it answered with an error) is shown by the controls;
+  // only a failed request (no answer) counts as the backend being unreachable.
+  const [simError, setSimError] = useState(null)
   const run = useCallback(
     async (fn) => {
       try {
         await fn()
-      } catch {
-        setConnectionError(true)
+        setSimError(null)
+      } catch (err) {
+        if (err.code) setSimError(simErrorText(err))
+        else setConnectionError(true)
       }
       await refresh()
     },
@@ -156,6 +168,7 @@ export default function App() {
           onReset={reset}
           onSpeedChange={changeSpeed}
           onWindChange={changeWind}
+          error={simError}
           showPredicted={showPredicted}
           onShowPredictedChange={setShowPredicted}
         />
