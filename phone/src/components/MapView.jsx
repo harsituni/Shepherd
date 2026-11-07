@@ -15,7 +15,7 @@ const cssVar = (name, fallback) =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 const HAZARD = cssVar('--hazard', '#D9480F')
 const MAP_BG = cssVar('--map-bg', '#F3F7FB')
-const ROUTE_CYAN = '#00C2D7'
+const ROUTE = cssVar('--blue', '#0070C4')
 
 // OSM raster tiles, muted so the hazard and route stand out (as in the mockup).
 const BASE_STYLE = {
@@ -107,12 +107,20 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
         filter: ['==', ['get', 'zone'], 'core'],
         paint: { 'fill-color': HAZARD, 'fill-opacity': 0.85 },
       })
+      // White casing under the blue line keeps it legible over grey tiles and orange hazards.
+      map.addLayer({
+        id: 'route-casing',
+        type: 'line',
+        source: 'route',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#FFFFFF', 'line-width': 9 },
+      })
       map.addLayer({
         id: 'route-line',
         type: 'line',
         source: 'route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': ROUTE_CYAN, 'line-width': 6 },
+        paint: { 'line-color': ROUTE, 'line-width': 5 },
       })
       setLoaded(true)
     })
