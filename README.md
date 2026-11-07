@@ -44,14 +44,14 @@ Phone: `cd phone && npm install && npm run dev` → http://localhost:5174
 
 ## Demo / QR (judges + teammates on phones)
 
-See **[demo.md](demo.md)**. Recommended (works on cellular / VPN):
+See **[demo.md](demo.md)**. One command (stack + Cloudflare tunnels + QR):
 
 ```bash
-./dev.sh                  # terminal 1
-./scripts/demo_phone.sh   # terminal 2 — tunnels + QR; share the join URL
+brew install cloudflared   # once
+./demo.sh                  # share the printed join URL / QR page
 ```
 
-Needs once: `brew install cloudflared`
+Laptop-only (no tunnels): `./dev.sh`
 
 ## How we work
 - Read `AGENT_CONTEXT.md` and `shared/contract.md` first.
