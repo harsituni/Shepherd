@@ -31,4 +31,5 @@ Thumbs.db
 
 # Generated judge-join QR page / tunnel logs (see scripts/demo_phone.sh)
 demo-join.html
+dashboard/public/demo-join.json
 .demo/

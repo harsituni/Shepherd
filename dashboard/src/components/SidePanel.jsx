@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import JoinQr from './JoinQr.jsx'
 
 function shelterCapacityPct(shelters) {
   const features = shelters?.features ?? []
@@ -131,6 +132,8 @@ export default function SidePanel({ shelters, reports, onReportSelect }) {
 
   return (
     <aside className="side" aria-label="Status">
+      <JoinQr />
+
       <div className="tiles">
         <Tile label="People at risk" />
         <Tile label="Roads closed" tone="red" />
