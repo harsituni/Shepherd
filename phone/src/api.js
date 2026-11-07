@@ -126,7 +126,7 @@ export async function getNotifications() {
   }
 }
 
-// kind: fire | flooded_road | blocked_road | safe | sos
+// kind: fire | flooded_road | blocked_road | safe | sos | other (other: not in contract v1 yet)
 export async function postReport({ kind, lat, lon, note }) {
   const body = { kind, lat, lon, ...(note ? { note } : {}) }
   if (!USE_FIXTURES) return request('/reports', { method: 'POST', body: JSON.stringify(body) })

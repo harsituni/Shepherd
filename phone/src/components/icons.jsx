@@ -20,6 +20,15 @@ function Svg({ size = 18, strokeWidth = 2, children, style, className }) {
   )
 }
 
+// Placeholder logo: a shepherd's crook (matches the dashboard's mark).
+export const CrookIcon = (p) => (
+  <Svg strokeWidth={2.2} {...p}>
+    <path d="M7 21V9a5 5 0 0 1 10 0" />
+    <path d="M17 9v2" />
+    <path d="M4 21h16" />
+  </Svg>
+)
+
 export const WarningIcon = (p) => (
   <Svg size={20} {...p}>
     <path d="M12 3 2 20h20L12 3z" />

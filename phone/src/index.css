@@ -1,5 +1,7 @@
 :root {
   --navy: #0b3d6e;
+  /* Header: Alberta's brand dark blue (GoA design tokens --goa-color-brand-dark). */
+  --header: #005072;
   --blue: #0070c4;
   --blue-hover: #005a9e;
   --tint: #eaf3fb;
@@ -46,8 +48,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
-/* Edge-to-edge tabs and joined segments would clip an outside ring; draw it inside. */
-.tabs button:focus-visible, .segmented button:focus-visible { outline-offset: -3px; }
+/* Edge-to-edge tabs would clip an outside ring; draw it inside. */
+.tabs button:focus-visible { outline-offset: -3px; }
 [hidden] { display: none !important; }
 
 .num { font-variant-numeric: tabular-nums; }
@@ -65,11 +67,17 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   .phone { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 }
 
+/* Even top/bottom padding and line-height 1 so the brand and city share one centre line. */
 .header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px 12px; background: var(--navy); color: #fff;
+  min-height: 56px; padding: 12px 20px; background: var(--header); color: #fff; line-height: 1;
 }
-.brand { font-size: var(--fs-brand); font-weight: 700; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: var(--fs-brand); font-weight: 700; }
+/* Placeholder mark until Shepherd has a real logo; same as the dashboard's. */
+.brand-mark {
+  width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--radius); background: #fff; color: var(--navy);
+  display: flex; align-items: center; justify-content: center;
+}
 .city { font-size: var(--fs-sm); color: var(--on-navy-muted); }
 
 /* ---------- alert banner (the only tinted surface) ---------- */
@@ -177,20 +185,9 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .btn-primary:hover:not(:disabled) { background: var(--blue-hover); }
 .btn-primary:disabled { background: var(--divider); color: var(--muted-2); cursor: default; }
 
-/* ---------- tips + gov tabs ---------- */
+/* ---------- alerts tab ---------- */
 
-.tips, .gov { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-
-/* Segmented control: one bordered strip, square-ish corners, selected segment filled navy. */
-.segmented {
-  display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
-}
-.segmented button {
-  flex: 1; min-height: 44px; border: 0; background: #fff;
-  color: var(--text); font-size: var(--fs-sm); font-weight: 500;
-}
-.segmented button + button { border-left: 1px solid var(--border); }
-.segmented button[aria-pressed='true'] { background: var(--navy); color: #fff; font-weight: 600; }
+.gov { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 
 .list { margin: 0; padding: 0; list-style: none; }
 .list li {
@@ -200,13 +197,6 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .list li:last-child { border-bottom: 0; }
 .list strong { font-size: var(--fs-body); }
 .list span { font-size: var(--fs-sm); color: var(--muted); }
-/* Visible step numbers, like Alberta.ca's "what to do" guidance. */
-.list-numbered { counter-reset: step; }
-.list-numbered li { counter-increment: step; position: relative; padding-left: 32px; }
-.list-numbered li::before {
-  content: counter(step) '.'; position: absolute; left: 0; top: 14px;
-  font-size: var(--fs-body); font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums;
-}
 
 /* ---------- government notifications ---------- */
 /* Severity: Advisory blue, Alert navy, Evacuation order orange (Ember Ink for text contrast). */
@@ -255,7 +245,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   min-height: 48px; padding: 0 6px; border: 1px solid var(--navy); border-radius: var(--radius);
   background: #fff; color: var(--navy); font-size: var(--fs-sm); font-weight: 600;
 }
-.action-help { border-color: var(--navy); background: var(--navy); color: #fff; }
+/* Emergency red, the same as closed roads and SOS: white on #C62828 is 5.6:1. */
+.action-help { border-color: var(--closed); background: var(--closed); color: #fff; }
 .action:disabled {
   border-color: var(--border); background: var(--map-bg); color: var(--muted-2); cursor: default;
 }
@@ -285,7 +276,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   width: 44px; height: 44px; border: 0; background: transparent; color: var(--muted);
   display: flex; align-items: center; justify-content: center; border-radius: var(--radius);
 }
-.choice-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.choice-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .choice {
   min-height: 48px; padding: 0 6px; border: 1px solid var(--border); border-radius: var(--radius);
   background: #fff; color: var(--text); font-size: var(--fs-sm); font-weight: 500;

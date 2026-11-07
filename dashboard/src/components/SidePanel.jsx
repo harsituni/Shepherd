@@ -23,6 +23,7 @@ const REPORT_KINDS = {
   blocked_road: 'Blocked road',
   safe: "I'm safe",
   sos: 'SOS',
+  other: 'Other',
 }
 
 // Newest first: highest sim_time, then highest id number as a tie-break.

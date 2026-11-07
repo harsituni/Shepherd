@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-07T18:17:29+00:00",
+  "generatedAt": "2026-11-07T18:34:16+00:00",
   "title": "Design System: Shepherd",
   "extensions": {
     "colorMeta": {
@@ -318,6 +318,21 @@
           "#F3E2BE",
           "#FAF6EE"
         ]
+      },
+      "header": {
+        "role": "primary",
+        "displayName": "Alberta Header Blue",
+        "canonical": "#005072",
+        "tonalRamp": [
+          "#162A33",
+          "#1C4A5E",
+          "#1A6B8C",
+          "#0F8DBF",
+          "#3FA9D6",
+          "#83C3DE",
+          "#BEDDEA",
+          "#EDF5F8"
+        ]
       }
     },
     "typographyMeta": {
@@ -452,15 +467,15 @@
       "name": "Phone Action Bar",
       "kind": "custom",
       "refersTo": "action-help",
-      "description": "Always-visible three-button bar: Report hazard and I'm safe share a navy outline; Need help is the one solid button and is never disabled.",
+      "description": "Always-visible three-button bar: Report hazard and I'm safe share a navy outline; Need help is the one solid button, in Closure Red, and is never disabled.",
       "html": "<div class=\"ds-actions\"><button class=\"ds-action\">Report hazard</button><button class=\"ds-action\">I'm safe</button><button class=\"ds-action ds-help\">Need help</button></div>",
-      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;--focus:#feba35;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:360px;padding:12px 16px;border-top:1px solid var(--divider);background:#fff} .ds-action{min-height:48px;padding:0 6px;border:1px solid var(--navy);border-radius:6px;background:#fff;color:var(--navy);font:600 14px 'Public Sans',system-ui,sans-serif;cursor:pointer} .ds-action:hover{background:var(--map-bg)} .ds-help{background:var(--navy);color:#fff} .ds-help:hover{background:#0a3360} .ds-action:focus-visible{outline:3px solid var(--focus);outline-offset:2px;}"
+      "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;--focus:#feba35;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:360px;padding:12px 16px;border-top:1px solid var(--divider);background:#fff} .ds-action{min-height:48px;padding:0 6px;border:1px solid var(--navy);border-radius:6px;background:#fff;color:var(--navy);font:600 14px 'Public Sans',system-ui,sans-serif;cursor:pointer} .ds-action:hover{background:var(--map-bg)} .ds-help{border-color:var(--closed);background:var(--closed);color:#fff} .ds-help:hover{background:#a82020} .ds-action:focus-visible{outline:3px solid var(--focus);outline-offset:2px;}"
     },
     {
       "name": "Segmented Control",
       "kind": "chip",
       "refersTo": "choice",
-      "description": "Joined options in one 6px bordered strip; selected is navy. Used for speed, severity and the phone tips filter. Replaces pills.",
+      "description": "Joined options in one 6px bordered strip; selected is navy. Used for the dashboard speed and severity controls. Replaces pills.",
       "html": "<div class=\"ds-seg\" role=\"group\"><button aria-pressed=\"false\">1×</button><button aria-pressed=\"true\">4×</button><button aria-pressed=\"false\">16×</button></div>",
       "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;--focus:#feba35;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-seg{display:flex;width:240px;border:1px solid var(--border);border-radius:6px;overflow:hidden} .ds-seg button{flex:1;min-height:42px;border:0;background:#fff;color:var(--text);font:500 14px 'Public Sans',system-ui,sans-serif;cursor:pointer} .ds-seg button+button{border-left:1px solid var(--border)} .ds-seg button[aria-pressed='true']{background:var(--navy);color:#fff;font-weight:600} .ds-seg button:focus-visible{outline:3px solid var(--focus);outline-offset:2px;}"
     }
@@ -479,7 +494,7 @@
     "rules": [
       {
         "name": "The Two Warnings Rule",
-        "body": "Orange is the hazard; red is a closed road. Neither may be used for decoration, emphasis, branding, or generic errors.",
+        "body": "Orange is the hazard; red is a closed road or a call for help (SOS reports and the phone's \"Need help\" button). Neither may be used for decoration, emphasis, branding, or generic errors.",
         "section": "colors"
       },
       {
@@ -555,7 +570,7 @@
       "Don't use gradients of any kind: backgrounds, buttons, text or glows.",
       "Don't use emoji as icons.",
       "Don't use glassmorphism or blur, neon glows, coloured left-border accent cards, oversized rounded \"bubble\" cards or bouncy animations.",
-      "Don't use orange or red for anything except the hazard and closed roads, or Focus Gold for anything but the focus ring.",
+      "Don't use orange or red for anything except the hazard, closed roads and calls for help (SOS, \"Need help\"), or Focus Gold for anything but the focus ring.",
       "Don't use pill shapes (999px corners) or 10px \"bubble\" controls.",
       "Don't fade disabled controls with `opacity`, and never disable \"Need help\".",
       "Don't set text smaller than 14px, or use small uppercase tracked eyebrow labels.",
