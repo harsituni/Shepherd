@@ -44,7 +44,18 @@ The demo uses the contract's approximate shelter locations and fictional
 availability. Its user is at latitude 53.520, longitude -113.620.
 It prints the selected shelter, road distance, illustrative ETA, and GeoJSON.
 
-The first run downloads driving roads from OpenStreetMap through Overpass.
+To use an existing GraphML file, set this before starting the backend or demo:
+
+```powershell
+$env:SHEPHERD_GRAPH_PATH = "backend/routing/data/downtown_drive.graphml"
+```
+
+Relative paths are resolved from the current working directory. An explicit
+path must point to an existing file; missing files raise a clear error without
+contacting Overpass. Load errors also propagate without a download fallback.
+Set the variable before the first `load_graph()` call; later calls reuse memory.
+
+When the variable is unset, the first run downloads driving roads from OpenStreetMap through Overpass.
 The demo area is longitude -113.70 to -113.43 and latitude 53.42 to 53.58.
 The graph is saved at `backend/routing/data/edmonton_drive.graphml`.
 Later processes load that file; repeat calls in the same process reuse memory.

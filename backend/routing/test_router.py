@@ -2,6 +2,7 @@
 
 import inspect
 import json
+import os
 import tempfile
 
 import unittest
@@ -341,6 +342,69 @@ class RoutingTests(unittest.TestCase):
 
 
 class GraphLoadingTests(unittest.TestCase):
+    def setUp(self):
+        env_patch = patch.dict(os.environ)
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        os.environ.pop("SHEPHERD_GRAPH_PATH", None)
+
+        graph_patch = patch.object(router, "_graph", None)
+        graph_patch.start()
+        self.addCleanup(graph_patch.stop)
+
+        download_patch = patch.object(
+            router.ox, "graph_from_bbox",
+            side_effect=AssertionError("A test tried to download roads"),
+        )
+        self.download = download_patch.start()
+        self.addCleanup(download_patch.stop)
+
+    def test_environment_path_loads_saved_graph_once(self):
+        with tempfile.TemporaryDirectory() as folder:
+            saved_file = Path(folder) / "saved roads.graphml"
+            router.ox.save_graphml(fake_graph(), saved_file)
+            os.environ["SHEPHERD_GRAPH_PATH"] = str(saved_file)
+            with patch.object(router.ox, "load_graphml", wraps=router.ox.load_graphml) as load:
+                load_graph()
+                load_graph()
+                load.assert_called_once_with(saved_file)
+            result = find_route(53.54, -113.50, [], [shelter("sh_a", 3)])
+            self.assertEqual(result["distance_km"], 0.7)
+            self.assertIn(list(BEND), result["geometry"]["coordinates"])
+            self.download.assert_not_called()
+
+    def test_missing_environment_path_raises_clear_error(self):
+        with tempfile.TemporaryDirectory() as folder:
+            saved_file = Path(folder) / "missing.graphml"
+            os.environ["SHEPHERD_GRAPH_PATH"] = str(saved_file)
+            with self.assertRaisesRegex(FileNotFoundError, "SHEPHERD_GRAPH_PATH") as error:
+                load_graph()
+            self.assertIn(repr(str(saved_file)), str(error.exception))
+            self.assertIsNone(router._graph)
+            self.assertFalse(saved_file.exists())
+            self.download.assert_not_called()
+
+    def test_environment_path_must_be_a_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            for saved_path in [folder, ""]:
+                with self.subTest(saved_path=saved_path):
+                    os.environ["SHEPHERD_GRAPH_PATH"] = saved_path
+                    with self.assertRaisesRegex(FileNotFoundError, "SHEPHERD_GRAPH_PATH"):
+                        load_graph()
+                    self.assertIsNone(router._graph)
+            self.download.assert_not_called()
+
+    def test_environment_file_error_does_not_download(self):
+        with tempfile.TemporaryDirectory() as folder:
+            saved_file = Path(folder) / "roads.graphml"
+            saved_file.touch()
+            os.environ["SHEPHERD_GRAPH_PATH"] = str(saved_file)
+            with patch.object(router.ox, "load_graphml", side_effect=ValueError("invalid graph")):
+                with self.assertRaisesRegex(ValueError, "invalid graph"):
+                    load_graph()
+            self.assertIsNone(router._graph)
+            self.download.assert_not_called()
+
     def test_download_once_then_use_saved_file(self):
         # Pretend the download works, then check that the file is reused.
         with tempfile.TemporaryDirectory() as folder:

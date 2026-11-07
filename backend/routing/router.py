@@ -5,6 +5,7 @@ eta_min is illustrative at 30 km/h, not an actual traffic estimate.
 """
 
 from math import ceil
+import os
 from pathlib import Path
 
 import networkx as nx
@@ -26,17 +27,27 @@ class NoRouteError(Exception):
 
 
 def load_graph() -> None:
-    """Load saved roads, or download and save them on the first run.
+    """Load SHEPHERD_GRAPH_PATH, or use the default saved roads.
 
+    Only the default path can trigger a download if missing.
     Call once at startup. Download and file errors propagate to the caller.
     """
     global _graph
     if _graph is not None:
         return
 
+    saved_path = os.environ.get("SHEPHERD_GRAPH_PATH")
+    graph_path = GRAPH_PATH
+    if saved_path is not None:
+        graph_path = Path(saved_path)
+        if not graph_path.is_file():
+            raise FileNotFoundError(
+                f"SHEPHERD_GRAPH_PATH must point to an existing GraphML file: {saved_path!r}"
+            )
+
     # Load the roads
-    if GRAPH_PATH.exists():
-        graph = ox.load_graphml(GRAPH_PATH)
+    if graph_path.exists():
+        graph = ox.load_graphml(graph_path)
     else:
         GRAPH_PATH.parent.mkdir(parents=True, exist_ok=True)
         ox.settings.cache_folder = str(ROUTING_DIR / "data" / "http_cache")
