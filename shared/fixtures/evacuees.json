@@ -1,0 +1,27 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "ev_judge_3",
+      "properties": {
+        "route_id": "rt_1",
+        "route_status": "ok",
+        "shelter_id": "sh_kinsmen",
+        "updated_sim_time": 14
+      },
+      "geometry": { "type": "Point", "coordinates": [-113.610, 53.521] }
+    },
+    {
+      "type": "Feature",
+      "id": "ev_judge_1",
+      "properties": {
+        "route_id": "rt_2",
+        "route_status": "tight",
+        "shelter_id": "sh_commonwealth",
+        "updated_sim_time": 14
+      },
+      "geometry": { "type": "Point", "coordinates": [-113.550, 53.540] }
+    }
+  ]
+}
