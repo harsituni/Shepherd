@@ -1,0 +1,133 @@
+{
+  "lat": 56.71,
+  "lon": -111.425,
+  "timezone": "America/Edmonton",
+  "timezone_offset": -25200,
+  "hourly": [
+    {
+      "dt": 1794168000,
+      "temp": 24.0,
+      "humidity": 18,
+      "wind_speed": 5.0,
+      "wind_deg": 350,
+      "weather": [
+        {
+          "id": 800
+        }
+      ],
+      "pop": 0,
+      "wind_gust": 8.0
+    },
+    {
+      "dt": 1794171600,
+      "temp": 23.5,
+      "humidity": 19,
+      "wind_speed": 5.3,
+      "wind_deg": 355,
+      "weather": [
+        {
+          "id": 800
+        }
+      ],
+      "pop": 0
+    },
+    {
+      "dt": 1794175200,
+      "temp": 23.0,
+      "humidity": 20,
+      "wind_speed": 5.6,
+      "wind_deg": 0,
+      "weather": [
+        {
+          "id": 800
+        }
+      ],
+      "pop": 0,
+      "wind_gust": 8.0
+    },
+    {
+      "dt": 1794178800,
+      "temp": 22.5,
+      "humidity": 21,
+      "wind_speed": 5.9,
+      "wind_deg": 5,
+      "weather": [
+        {
+          "id": 800
+        }
+      ],
+      "pop": 0,
+      "rain": {
+        "1h": 0.4
+      }
+    },
+    {
+      "dt": 1794182400,
+      "temp": 22.0,
+      "humidity": 22,
+      "wind_speed": 6.2,
+      "wind_deg": 10,
+      "weather": [
+        {
+          "id": 800
+        }
+      ],
+      "pop": 0,
+      "wind_gust": 8.0
+    },
+    {
+      "dt": 1794186000,
+      "temp": 21.5,
+      "humidity": 23,
+      "wind_speed": 6.5,
+      "wind_deg": 15,
+      "weather": [
+        {
+          "id": 800
+        }
+      ],
+      "pop": 0
+    },
+    {
+      "dt": 1794189600,
+      "temp": 21.0,
+      "humidity": 24,
+      "wind_speed": 6.8,
+      "wind_deg": 20,
+      "weather": [
+        {
+          "id": 800
+        }
+      ],
+      "pop": 0,
+      "wind_gust": 8.0
+    },
+    {
+      "dt": 1794193200,
+      "temp": 20.5,
+      "humidity": 25,
+      "wind_speed": 7.1,
+      "wind_deg": 25,
+      "weather": [
+        {
+          "id": 800
+        }
+      ],
+      "pop": 0
+    },
+    {
+      "dt": 1794196800,
+      "temp": 20.0,
+      "humidity": 26,
+      "wind_speed": 7.4,
+      "wind_deg": 30,
+      "weather": [
+        {
+          "id": 800
+        }
+      ],
+      "pop": 0,
+      "wind_gust": 8.0
+    }
+  ]
+}

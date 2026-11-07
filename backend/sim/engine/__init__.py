@@ -1,4 +1,9 @@
-"""FBP-based wildfire spread engine: Contract A scenario in, B1 arrival grid + B2 frames out.
+"""Standalone FBP engine. Public interface: run_simulation, SimulationResult, ArrivalQuery."""
+# Lazy import keeps numerical submodules usable without circular imports.
+def run_simulation(scenario):
+    from backend.sim.engine.simulation import run_simulation as run
+    return run(scenario)
 
-Entry point: backend.sim.engine.run.run_engine (or `python -m backend.sim.engine.run`).
-"""
+from backend.sim.engine.result import ArrivalQuery, SimulationResult
+
+__all__ = ['run_simulation', 'SimulationResult', 'ArrivalQuery']

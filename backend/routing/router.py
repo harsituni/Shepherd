@@ -5,6 +5,7 @@ eta_min is illustrative at 30 km/h, not an actual traffic estimate.
 """
 
 from math import ceil, floor
+import heapq
 import logging
 import os
 from pathlib import Path
@@ -120,6 +121,25 @@ def _shortest_edge(graph, start, end):
     return shortest
 
 
+def _edge_coordinates(graph, start, end, edge):
+    """Follow this exact road in its driving direction."""
+    start_point = [float(graph.nodes[start]["x"]), float(graph.nodes[start]["y"])]
+    end_point = [float(graph.nodes[end]["x"]), float(graph.nodes[end]["y"])]
+
+    # Follow the road's curves
+    if edge.get("geometry") is not None:
+        points = []
+        for lon, lat in edge["geometry"].coords:
+            points.append([float(lon), float(lat)])
+        first_distance = (points[0][0] - start_point[0]) ** 2 + (points[0][1] - start_point[1]) ** 2
+        last_distance = (points[-1][0] - start_point[0]) ** 2 + (points[-1][1] - start_point[1]) ** 2
+        if last_distance < first_distance:
+            points.reverse()
+    else:
+        points = [start_point, end_point]
+    return points
+
+
 def _route_details(graph, path):
     """Add road lengths and join road shapes in travel order."""
     distance_m = 0.0
@@ -129,20 +149,7 @@ def _route_details(graph, path):
         end = path[index + 1]
         edge = _shortest_edge(graph, start, end)
         distance_m += edge["length"]
-        start_point = [float(graph.nodes[start]["x"]), float(graph.nodes[start]["y"])]
-        end_point = [float(graph.nodes[end]["x"]), float(graph.nodes[end]["y"])]
-
-        # Follow the road's curves
-        if edge.get("geometry") is not None:
-            points = []
-            for lon, lat in edge["geometry"].coords:
-                points.append([float(lon), float(lat)])
-            first_distance = (points[0][0] - start_point[0]) ** 2 + (points[0][1] - start_point[1]) ** 2
-            last_distance = (points[-1][0] - start_point[0]) ** 2 + (points[-1][1] - start_point[1]) ** 2
-            if last_distance < first_distance:
-                points.reverse()
-        else:
-            points = [start_point, end_point]
+        points = _edge_coordinates(graph, start, end, edge)
 
         for point in points:
             if not coordinates or point != coordinates[-1]:
@@ -302,9 +309,8 @@ def closed_roads(hazards: list[dict]) -> list[dict]:
     return []
 
 
-def _route_timing(route, arrival_min_fn, sim_time):
-    """Sample the route geometry using the simulation's arrival times."""
-    coordinates = route["geometry"]["coordinates"]
+def _line_samples(coordinates, minutes, elapsed=0.0):
+    """Place timing samples along a road, including its bends."""
     lengths = []
     total = 0.0
     for index in range(len(coordinates) - 1):
@@ -314,9 +320,7 @@ def _route_timing(route, arrival_min_fn, sim_time):
         lengths.append(length)
         total += length
 
-    leave_by = None
-    clear_until = None
-    reason = None
+    samples = []
     travelled = 0.0
     for index, length in enumerate(lengths):
         lon, lat = coordinates[index]
@@ -325,39 +329,54 @@ def _route_timing(route, arrival_min_fn, sim_time):
         count = max(1, ceil(length / 50))
         for step in range(count + 1):
             fraction = step / count
-            sample_lat = lat + (end_lat - lat) * fraction
-            sample_lon = lon + (end_lon - lon) * fraction
-            fire_at = arrival_min_fn(sample_lat, sample_lon)
-            if fire_at is None:
-                continue
             offset = 0.0
             if total > 0:
-                offset = (travelled + length * fraction) / total * route["eta_min"]
-            deadline = fire_at - 30
-            latest_start = floor(deadline - offset)
-            if leave_by is None or latest_start < leave_by:
-                leave_by = latest_start
-            if clear_until is None or deadline < clear_until:
-                clear_until = deadline
-            if sim_time + offset > deadline and reason is None:
-                reason = (
-                    f"Fire predicted near ({sample_lat:.3f}, {sample_lon:.3f}) "
-                    f"at T+{fire_at}; estimated arrival T+{sim_time + offset:.1f} "
-                    f"misses the 30 minute buffer (T+{deadline})."
-                )
+                offset = (travelled + length * fraction) / total * minutes
+            samples.append((
+                lat + (end_lat - lat) * fraction,
+                lon + (end_lon - lon) * fraction,
+                elapsed + offset,
+            ))
         travelled += length
+    return samples
+
+
+def _sample_timing(samples, arrival_min_fn, sim_time):
+    """Compare driver arrival with the supplied fire prediction."""
+    leave_by = None
+    clear_until = None
+    reason = None
+    complete = True
+    for lat, lon, offset in samples:
+        fire_at = arrival_min_fn(lat, lon)
+        if fire_at is None:
+            complete = False
+            continue
+        deadline = fire_at - 30
+        latest_start = floor(deadline - offset)
+        if leave_by is None or latest_start < leave_by:
+            leave_by = latest_start
+        if clear_until is None or deadline < clear_until:
+            clear_until = deadline
+        if sim_time + offset > deadline and reason is None:
+            reason = (
+                f"Fire predicted near ({lat:.3f}, {lon:.3f}) at T+{fire_at}; "
+                f"estimated arrival T+{sim_time + offset:.1f} misses the "
+                f"30 minute buffer (T+{deadline})."
+            )
 
     margin = None
     status = "ok"
     if leave_by is not None:
         margin = leave_by - sim_time
-        if margin < 0:
+        if reason is not None:
             status = "blocked"
         elif margin < 60:
             status = "tight"
     return {
         "margin_min": margin,
         "status": status,
+        "forecast_complete": complete,
         "clear_until_sim_min": clear_until if status != "blocked" else None,
         "clear_until_label": (
             f"Sampled forecast buffer until T+{clear_until} (estimate)"
@@ -366,6 +385,77 @@ def _route_timing(route, arrival_min_fn, sim_time):
         "reason": reason,
         "_leave_by": leave_by,
     }
+
+
+def _route_timing(route, arrival_min_fn, sim_time):
+    """Check a backup line using its unrounded travel time."""
+    minutes = route["distance_km"] / ILLUSTRATIVE_SPEED_KMH * 60
+    samples = _line_samples(route["geometry"]["coordinates"], minutes)
+    return _sample_timing(samples, arrival_min_fn, sim_time)
+
+
+def _forecast_route(lat, lon, shelter, arrival_min_fn, sim_time):
+    """Find the shortest road path that meets all known fire deadlines."""
+    end_lon, end_lat = shelter["geometry"]["coordinates"]
+    start = ox.distance.nearest_nodes(_graph, X=lon, Y=lat)
+    end = ox.distance.nearest_nodes(_graph, X=end_lon, Y=end_lat)
+    node = _graph.nodes[start]
+    start_samples = [(node["y"], node["x"], 0.0)]
+    if _sample_timing(start_samples, arrival_min_fn, sim_time)["status"] == "blocked":
+        raise NoRouteError("The starting road misses the 30 minute fire buffer")
+
+    # Visit the earliest reachable road node first.
+    distances = {start: 0.0}
+    previous = {}
+    pending = [(0.0, start)]
+    while pending:
+        distance, current = heapq.heappop(pending)
+        if distance != distances[current]:
+            continue
+        if current == end:
+            break
+        elapsed = distance / 1000 / ILLUSTRATIVE_SPEED_KMH * 60
+        for next_node, roads in _graph[current].items():
+            for key, road in roads.items():
+                next_distance = distance + road["length"]
+                if next_distance >= distances.get(next_node, float("inf")):
+                    continue
+                coordinates = _edge_coordinates(_graph, current, next_node, road)
+                minutes = road["length"] / 1000 / ILLUSTRATIVE_SPEED_KMH * 60
+                samples = _line_samples(coordinates, minutes, elapsed)
+                if _sample_timing(samples, arrival_min_fn, sim_time)["status"] == "blocked":
+                    continue
+                distances[next_node] = next_distance
+                previous[next_node] = (current, key)
+                heapq.heappush(pending, (next_distance, next_node))
+
+    if end not in distances:
+        raise NoRouteError("No road path meets the known 30 minute fire buffer")
+
+    # Keep the exact parallel roads chosen by the search.
+    roads = []
+    current = end
+    while current != start:
+        before, key = previous[current]
+        roads.append((before, current, key))
+        current = before
+    roads.reverse()
+    coordinates = []
+    samples = start_samples.copy()
+    elapsed = 0.0
+    for before, after, key in roads:
+        road = _graph[before][after][key]
+        points = _edge_coordinates(_graph, before, after, road)
+        minutes = road["length"] / 1000 / ILLUSTRATIVE_SPEED_KMH * 60
+        samples.extend(_line_samples(points, minutes, elapsed))
+        elapsed += minutes
+        for point in points:
+            if not coordinates or point != coordinates[-1]:
+                coordinates.append(point)
+    if not roads:
+        coordinates = [[float(node["x"]), float(node["y"])]] * 2
+    return distances[end] / 1000, coordinates, _sample_timing(samples, arrival_min_fn, sim_time)
+
 
 
 def _select_option(body, option):
@@ -378,7 +468,7 @@ def _select_option(body, option):
         body["leave_by_label"] = f"Leave within {max(0, leave_by - body['sim_time'])} min (sim)"
     for field in ("shelter_id", "shelter_name", "distance_km", "eta_min",
                   "geometry", "rerouted", "reroute_reason", "steps",
-                  "approximate", "warning"):
+                  "approximate", "warning", "forecast_complete"):
         body[field] = option[field]
 
 
@@ -402,14 +492,35 @@ def find_routes(lat: float, lon: float, arrival_min_fn,
             continue
         # Shelter-based IDs stay stable when another option disappears.
         option["id"] = "rt_" + shelter["id"]
-        option.update(_route_timing(option, arrival_min_fn, sim_time))
+        if _graph is None:
+            option.update(_route_timing(option, arrival_min_fn, sim_time))
+        else:
+            try:
+                distance, coordinates, timing = _forecast_route(
+                    lat, lon, shelter, arrival_min_fn, sim_time
+                )
+                changed = (coordinates != option["geometry"]["coordinates"]
+                           or distance != option["distance_km"])
+                option["geometry"]["coordinates"] = coordinates
+                option["distance_km"] = distance
+                option["eta_min"] = ceil(distance / ILLUSTRATIVE_SPEED_KMH * 60)
+                option["rerouted"] = changed
+                if changed:
+                    option["reroute_reason"] = "Route changed because of predicted fire arrival"
+                option.update(timing)
+            except NoRouteError as error:
+                option.update({
+                    "status": "blocked", "reason": str(error), "margin_min": None,
+                    "clear_until_sim_min": None, "clear_until_label": None,
+                    "_leave_by": None, "forecast_complete": False,
+                })
         option["leave_by_sim_min"] = option.pop("_leave_by")
         option["approximate"] = option.get("approximate", False)
         warning = option.get("warning", "Road geometry with illustrative travel times only.")
         warning += " Forecast checks sample the route; they are not a safety guarantee."
-        if option["margin_min"] is None:
-            # No fire samples on the path — not an emergency; leave deadline unset.
-            option["clear_until_label"] = None
+        if not option["forecast_complete"] and option["status"] != "blocked":
+            warning += " Some fire arrival times are unknown; any margin or deadline covers known samples only."
+            option["clear_until_label"] = "Fire timing unknown; no safety guarantee"
         option["warning"] = warning
         options.append(option)
         if option["status"] == "blocked":

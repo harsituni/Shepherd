@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from backend.routing import router
-from backend.routing.test_router import BEND, fake_graph, shelter
+from backend.routing.test_router import BEND, POINTS, fake_graph, shelter
 
 
 class FindRoutesTests(unittest.TestCase):
@@ -55,8 +55,11 @@ class FindRoutesTests(unittest.TestCase):
                 return 0
             return None
         body = self.routes(arrival)
-        self.assertEqual(body["shelter_id"], "sh_c")
-        self.assertEqual(len(body["excluded"]), 2)
+        self.assertEqual(body["shelter_id"], "sh_a")
+        self.assertEqual(len(body["excluded"]), 0)
+        self.assertTrue(body["rerouted"])
+        self.assertAlmostEqual(body["distance_km"], 0.9)
+        self.assertNotIn(list(BEND), body["geometry"]["coordinates"])
 
     def test_fire_between_vertices(self):
         body = self.routes(lambda lat, lon: 0 if 53.544 < lat < 53.546 else None)
@@ -119,6 +122,111 @@ class FindRoutesTests(unittest.TestCase):
                                   self.shelters)
         self.assertEqual(body["best_route_id"], "rt_sh_a")
         self.assertEqual(body["shelter_id"], "sh_a")
+
+    def test_exact_buffer_is_allowed(self):
+        self.shelters = [shelter("sh_a", 2)]
+        for road in self.graph[1][2].values():
+            road["length"] = 500.0
+        body = self.routes(lambda lat, lon: 31)
+        self.assertEqual(body["options"][0]["margin_min"], 0)
+        with self.assertRaises(router.NoRouteError):
+            self.routes(lambda lat, lon: 30.99)
+
+    def test_cumulative_time_blocks_later_road(self):
+        self.shelters = [shelter("sh_b", 3)]
+        # Reaching node 2 takes one minute, then node 3 takes another.
+        self.graph.remove_edge(1, 3)
+        for road in self.graph[1][2].values():
+            road["length"] = 500.0
+        self.graph[2][3][0]["length"] = 500.0
+        def arrival(lat, lon):
+            return 31.5 if lon > -113.481 else None
+        with self.assertRaises(router.NoRouteError):
+            self.routes(arrival)
+        self.graph[2][3][0]["length"] = 200.0
+        body = self.routes(arrival)
+        self.assertAlmostEqual(body["distance_km"], 0.7)
+        self.assertFalse(body["forecast_complete"])
+        self.assertIn("known samples only", body["warning"])
+
+    def test_detour_through_different_nodes(self):
+        self.shelters = [shelter("sh_b", 3)]
+        self.graph.add_edge(4, 3, length=500.0)
+        def arrival(lat, lon):
+            return 0 if abs(lat - 53.54) < 0.0001 and -113.496 < lon < -113.484 else 120
+        body = self.routes(arrival)
+        self.assertTrue(body["rerouted"])
+        self.assertEqual(body["geometry"]["coordinates"],
+                         [list(POINTS[1]), list(POINTS[4]), list(POINTS[3])])
+        self.assertAlmostEqual(body["distance_km"], 2.0)
+
+    def test_reversed_detour_is_not_usable(self):
+        self.shelters = [shelter("sh_b", 3)]
+        self.graph.add_edge(3, 4, length=500.0)
+        def arrival(lat, lon):
+            return 0 if abs(lat - 53.54) < 0.0001 and -113.496 < lon < -113.484 else 120
+        with self.assertRaises(router.NoRouteError):
+            self.routes(arrival)
+
+    def test_detour_can_also_be_too_late(self):
+        self.shelters = [shelter("sh_b", 3)]
+        self.graph.add_edge(4, 3, length=500.0)
+        def arrival(lat, lon):
+            if abs(lat - 53.54) < 0.0001 and -113.496 < lon < -113.484:
+                return 0
+            if lon > -113.481:
+                return 33  # The detour takes four minutes.
+            return 120
+        with self.assertRaises(router.NoRouteError):
+            self.routes(arrival)
+
+    def test_advancing_clock_switches_to_detour(self):
+        self.shelters = [shelter("sh_a", 2)]
+        def arrival(lat, lon):
+            return 31 if abs(lat - BEND[1]) < 0.0001 else None
+        early = self.routes(arrival)
+        later = self.routes(arrival, sim_time=1)
+        self.assertAlmostEqual(early["distance_km"], 0.3)
+        self.assertAlmostEqual(later["distance_km"], 0.9)
+        self.assertTrue(later["rerouted"])
+
+    def test_unknown_forecast_has_no_invented_deadline(self):
+        body = self.routes()
+        self.assertFalse(body["forecast_complete"])
+        self.assertIsNone(body["leave_by_sim_min"])
+        for option in body["options"]:
+            self.assertIsNone(option["margin_min"])
+            self.assertIsNone(option["clear_until_sim_min"])
+            self.assertIn("unknown", option["warning"])
+
+    def test_known_predictions_allow_early_driver(self):
+        body = self.routes(lambda lat, lon: 120, sim_time=10)
+        self.assertTrue(body["forecast_complete"])
+        self.assertFalse(body["rerouted"])
+        self.assertAlmostEqual(body["distance_km"], 0.3)
+        self.assertEqual(body["options"][0]["margin_min"], 79)
+
+    def test_check_route_keeps_shelter_with_a_detour(self):
+        def arrival(lat, lon):
+            return 0 if abs(lat - BEND[1]) < 0.0001 else None
+        body = router.check_route(53.54, -113.50, "rt_sh_a", arrival, self.shelters)
+        self.assertEqual(body["best_route_id"], "rt_sh_a")
+        self.assertTrue(body["rerouted"])
+        self.assertAlmostEqual(body["distance_km"], 0.9)
+
+    def test_zero_length_route_still_checks_start(self):
+        self.shelters = [shelter("start", 1)]
+        self.assertEqual(self.routes()["distance_km"], 0)
+        with self.assertRaises(router.NoRouteError):
+            self.routes(lambda lat, lon: 0)
+
+    def test_search_keeps_graph_unchanged(self):
+        from copy import deepcopy
+        import networkx as nx
+        before = deepcopy(self.graph)
+        self.routes(lambda lat, lon: 31 if abs(lat - BEND[1]) < 0.0001 else None,
+                    sim_time=1)
+        self.assertTrue(nx.utils.graphs_equal(before, self.graph))
 
 
 if __name__ == "__main__":

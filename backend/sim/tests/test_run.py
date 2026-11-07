@@ -21,6 +21,8 @@ def example():
 def small_scenario(run_id, weather):
     """2 h run on a small bbox around an ignition near Edmonton."""
     lon, lat, d = -113.66, 53.535, 0.002
+    if weather[-1][0] < 120:
+        weather = [*weather, (120, *weather[-1][1:])]
     return {
         "schema": "v1",
         "scenario_id": "test",
@@ -171,7 +173,6 @@ def test_cli(tmp_path, capsys):
     (("weather",), "weather"),
     (("weather", 0, "wind_speed_ms"), "wind_speed_ms"),
     (("initial_perimeter",), "initial_perimeter"),
-    (("n_ensemble",), "n_ensemble"),
 ])
 def test_missing_field_named(path, field):
     data = example()

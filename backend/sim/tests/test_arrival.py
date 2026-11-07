@@ -26,6 +26,7 @@ def grid(tmp_path_factory):
         },
         "weather": [{"t_min": 0, "wind_speed_ms": 7, "wind_dir_deg": 270, "temp_c": 20, "rh_pct": 20, "precip_mm": 0}],
         "n_ensemble": 1,
+        "weather_end_policy": "hold",
     }
     out = tmp_path_factory.mktemp("runs")
     return ArrivalGrid.load(run_engine(json.dumps(scenario), out)["out_dir"])

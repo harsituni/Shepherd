@@ -1,0 +1,25 @@
+{
+  "coord": {
+    "lon": -111.425,
+    "lat": 56.71
+  },
+  "weather": [
+    {
+      "id": 800,
+      "main": "Clear"
+    }
+  ],
+  "main": {
+    "temp": 23.6,
+    "humidity": 19,
+    "pressure": 1012
+  },
+  "wind": {
+    "speed": 4.8,
+    "deg": 275,
+    "gust": 6.9
+  },
+  "dt": 1794167700,
+  "name": "Sample",
+  "cod": 200
+}

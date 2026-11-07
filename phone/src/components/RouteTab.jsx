@@ -177,6 +177,8 @@ export default function RouteTab({
   return (
     <>
       {map}
+      {/* Once a location is set the phone sends it to responders (POST /evacuees), so say so. */}
+      {location && <p className="location-shared">Your location is shared with responders.</p>}
       <MapKey hazards={hazards} shelters={shelters} route={route} location={location} />
       <div className="route-details">{details}</div>
     </>

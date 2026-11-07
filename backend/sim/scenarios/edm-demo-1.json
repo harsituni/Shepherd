@@ -1,0 +1,52 @@
+{
+  "scenario_id": "edm-demo-1",
+  "bbox": [
+    -113.7,
+    53.42,
+    -113.43,
+    53.58
+  ],
+  "initial_perimeter": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -113.667,
+          53.533
+        ],
+        [
+          -113.659,
+          53.533
+        ],
+        [
+          -113.659,
+          53.537
+        ],
+        [
+          -113.667,
+          53.537
+        ],
+        [
+          -113.667,
+          53.533
+        ]
+      ]
+    ]
+  },
+  "horizon_min": 360,
+  "step_min": 15,
+  "n_ensemble": 1,
+  "fbp": {
+    "fuel_type": "M-1",
+    "pc": 50,
+    "ffmc": 92,
+    "bui": 90
+  },
+  "weather_default_source": "openweather:forecast-3h",
+  "wind_shift": {
+    "start_min": 120,
+    "ramp_min": 60,
+    "rotate_deg": -60,
+    "speed_factor": 1.4
+  }
+}

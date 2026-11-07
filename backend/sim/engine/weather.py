@@ -1,4 +1,4 @@
-"""Forecast weather → per-minute fire spread lookup table.
+"""Forecast weather → fire spread rates at integration knots.
 
 This is the only module that converts wind units (contract m/s → FBP km/h) or
 turns the meteorological "from" direction into the bearing fire spreads toward.
@@ -62,7 +62,7 @@ def interpolate_wind(weather, t):
 
 @dataclass(frozen=True)
 class WeatherTable:
-    """Wind and FBP spread rates for every whole sim minute 0..horizon (index = t_min)."""
+    """Wind and FBP rates at times_min knots (legacy: whole minutes if omitted)."""
 
     wind_speed_ms: np.ndarray
     wind_dir_deg: np.ndarray
@@ -71,25 +71,37 @@ class WeatherTable:
     fros: np.ndarray
     lb: np.ndarray
     spread_bearing_deg: np.ndarray
+    times_min: np.ndarray | None = None
 
     def __len__(self):
         return len(self.ros)
 
     def index(self, t):
         """Table row for sim time t (minutes): the whole minute it falls in."""
-        return min(int(t), len(self) - 1)
+        index = int(t) if self.times_min is None else int(np.searchsorted(self.times_min, t, side="right")) - 1
+        return max(0, min(index, len(self) - 1))
 
 
-def build_weather_table(weather, fuel, horizon_min) -> WeatherTable:
-    """Precompute spread rates per minute so the spread loop never calls exp.
+def build_weather_table(weather, fuel, horizon_min, integration_step_min=1.0) -> WeatherTable:
+    """Precompute spread rates at integration knots so propagation never calls exp.
 
     fuel: anything with fuel_type, pc, ffmc and bui attributes.
     """
-    winds = [interpolate_wind(weather, t) for t in range(horizon_min + 1)]
+    if not math.isfinite(integration_step_min) or integration_step_min <= 0:
+        raise ValueError("integration_step_min must be finite and positive")
+    if not weather or horizon_min <= 0:
+        raise ValueError("weather and a positive horizon are required")
+    # Include forecast knots exactly; no integration interval straddles a knot.
+    times = np.unique(np.concatenate((
+        np.arange(0, horizon_min, integration_step_min), [horizon_min],
+        [w.t_min for w in weather if 0 <= w.t_min <= horizon_min],
+    )))
+    winds = [interpolate_wind(weather, t) for t in times]
     speed_ms = np.array([s for s, _ in winds])
     dir_deg = np.array([d for _, d in winds])
     rates = fbp.spread_rates(fuel.fuel_type, fuel.pc, fuel.ffmc, fuel.bui, ms_to_kmh(speed_ms))
     return WeatherTable(
+        times_min=times,
         wind_speed_ms=speed_ms,
         wind_dir_deg=dir_deg,
         ros=rates.ros,

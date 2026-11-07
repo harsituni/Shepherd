@@ -29,12 +29,22 @@ detours exactly as before. The updated API calls `find_routes()` and
 `check_route()` instead. Both accept the simulation's `arrival_min` callback
 and optional `sim_time`, and return v2 options plus the old flat fields.
 
-Each eligible shelter gets a shortest road path, using the same road geometry
-and lengths as `find_route()`. Up to three options are returned. Forecast
-checks follow that geometry, sampling bends and points at most 50 metres apart.
-Travel time is distributed along the geometry using the illustrative ETA.
-The callback supplies all fire arrival times; routing subtracts the contract's
-30 minute buffer and estimated travel time to calculate leave-by and margin.
+Each eligible shelter gets the shortest road path that meets the known fire
+deadlines. The search visits the earliest reachable nodes first and skips roads
+where the driver would arrive after `fire arrival - 30 minutes`. If the usual
+path is blocked, it searches other roads, including parallel roads, without
+changing the saved graph. One-way directions are respected.
+
+Driver arrival is `sim_time + cumulative road length / speed`, using the same
+illustrative 30 km/h speed as before. Each road uses its saved length; its travel
+time is spread along its geometry. Only the displayed ETA is rounded up.
+Equality with the 30-minute deadline is allowed. Earlier arrival at a node is
+always at least as useful as later arrival under these fixed fire deadlines,
+so the search only needs to remember the earliest arrival at each node.
+
+Up to three options are returned. Forecast checks sample road bends and points
+at most 50 metres apart. The callback supplies all fire arrival times; routing
+subtracts the contract's buffer and cumulative travel time for leave-by/margin.
 Blocked options are excluded from selection. With no usable options,
 `NoRouteError` is raised; blocked roads never activate straight-line backup.
 
@@ -43,7 +53,12 @@ shelter does not change the meaning of a selected ID. `check_route()` recalculat
 the path to that shelter and updates both the flat fields and selected timing.
 It does not remember an old road path.
 
-Missing fire arrival values do not establish safety. If every sampled value is
+Missing fire arrival values do not establish safety. `forecast_complete: false`
+and a warning identify missing predictions, including partly known routes.
+These routes remain eligible for this simulation, but are not verified safe.
+Any numeric margin or deadline covers only the samples with known predictions.
+`forecast_complete: true` only means every sampled point returned a time, not
+that the route is safe. If every sampled value is
 `None`, margin and leave-by are `null`, rather than main's artificial `999` minute
 margin. The option retains `status: "ok"` to mean no sampled forecast conflict,
 with an explicit unknown-timing label and warning. This is a contract limitation:
@@ -56,10 +71,12 @@ Remaining integration limits:
 - The API supplies no core hazard polygons to the v2 calls. Dashboard-dropped
   hazards are therefore not checked by `/route`. Exact polygon avoidance is
   preserved in `find_route()`, but needs API wiring for v2.
-- V2 rejects a forecast-blocked shortest path; it does not yet search for a
-  forecast-based detour to that same shelter. Another shelter may remain usable.
 - Forecast sampling can miss small hazards between samples. Snapped road
   endpoints do not model travel from the user's position or into a building.
+- Travel speed is fixed; traffic and turn restrictions are not modeled. The
+  search has only been tested on tiny offline graphs here, not benchmarked on
+  the full Edmonton graph. A forecast callback must stay consistent during a
+  request and return absolute simulation minutes, not minutes from now.
 - Backup v2 options are marked `approximate: true` at both option and response
   level. Their timing is also only an estimate, not navigation instructions.
 
