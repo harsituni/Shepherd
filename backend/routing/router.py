@@ -1,4 +1,4 @@
-"""Step 1 road routing. Hazards are ignored; routes are not safety-checked.
+"""Road routing around core hazard polygons; routes are not safety-certified.
 
 Routes and distances run between snapped road nodes, not building entrances.
 eta_min is illustrative at 30 km/h, not an actual traffic estimate.
@@ -10,7 +10,7 @@ from pathlib import Path
 import networkx as nx
 import osmnx as ox
 
-from shapely.geometry import LineString, shape
+from shapely.geometry import LineString, Point, shape
 
 
 ROUTING_DIR = Path(__file__).resolve().parent
@@ -125,31 +125,46 @@ def _blocked_edges(graph, hazards):
 
     return blocked
 
-def find_route(lat: float, lon: float,
-               hazards: list[dict],
-               shelters: list[dict]) -> dict:
-    """Choose the shortest reachable road route. Hazards are ignored for now.
+def _blocked_connection(lon, lat, node, hazards):
+    """Check the location and its connection to the nearby road."""
+    road_point = (_graph.nodes[node]["x"], _graph.nodes[node]["y"])
+    connection = LineString([(lon, lat), road_point])
+    for hazard in hazards:
+        if hazard["properties"].get("zone") != "core":
+            continue
+        area = shape(hazard["geometry"])
+        if area.intersects(Point(lon, lat)) or area.intersects(Point(road_point)):
+            return True
+        if connection.intersects(area):
+            return True
+    return False
 
-    Inputs are Feature lists. ETA is illustrative, not a traffic estimate.
-    The API layer must translate NoRouteError into the contract's HTTP 404.
-    """
-    if _graph is None:
-        raise RuntimeError("Road graph is not loaded. Call load_graph() at startup.")
-    if len(_graph) == 0 or not _inside_demo(lat, lon):
-        raise NoRouteError("No route in the Edmonton demo area")
 
-    # Copy the roads so the original map stays the same.
-    safe_graph = _graph.copy()
+def _path_roads(graph, path):
+    """Remember which roads were used, including parallel roads."""
+    roads = []
+    for index in range(len(path) - 1):
+        start, end = path[index], path[index + 1]
+        shortest = _shortest_edge(graph, start, end)
+        for key, road in graph[start][end].items():
+            if road is shortest:
+                roads.append((start, end, key))
+                break
+    return roads
 
-    # Remove roads that cross the fire.
-    blocked = _blocked_edges(_graph, hazards)
-    safe_graph.remove_edges_from(blocked)
+
+def _choose_route(graph, lat, lon, hazards, shelters):
+    """Find the shortest reachable shelter on the given roads."""
 
     # Find nearby road nodes
-    start = ox.distance.nearest_nodes(safe_graph, X=lon, Y=lat)
+    # Keep the same nearby nodes before and after closures.
+    start = ox.distance.nearest_nodes(_graph, X=lon, Y=lat)
+    if _blocked_connection(lon, lat, start, hazards):
+        raise NoRouteError("The starting location or its road connection intersects a core hazard")
     nearest = None
     best_distance = float("inf")
     best_coordinates = None
+    best_roads = None
 
     for shelter in shelters:
         properties = shelter["properties"]
@@ -160,29 +175,62 @@ def find_route(lat: float, lon: float,
         shelter_lon, shelter_lat = shelter["geometry"]["coordinates"]
         if not _inside_demo(shelter_lat, shelter_lon):
             continue
-        end = ox.distance.nearest_nodes(safe_graph, X=shelter_lon, Y=shelter_lat)
+        end = ox.distance.nearest_nodes(_graph, X=shelter_lon, Y=shelter_lat)
+        if _blocked_connection(shelter_lon, shelter_lat, end, hazards):
+            continue
 
         # Find the shortest route
         try:
-            path = nx.shortest_path(safe_graph, start, end, weight="length")
+            path = nx.shortest_path(graph, start, end, weight="length")
         except nx.NetworkXNoPath:
             continue
-        distance, coordinates = _route_details(safe_graph, path)
+        distance, coordinates = _route_details(graph, path)
         if distance < best_distance:
             nearest = shelter
             best_distance = distance
             best_coordinates = coordinates
+            best_roads = _path_roads(graph, path)
 
     if nearest is None:
         raise NoRouteError("No reachable open shelter with available capacity")
+
+    return nearest, best_distance, best_coordinates, best_roads
+
+
+def find_route(lat: float, lon: float,
+               hazards: list[dict],
+               shelters: list[dict]) -> dict:
+    """Compare roads with and without core hazards for this request.
+
+    Inputs are Feature lists. ETA is illustrative, not a traffic estimate.
+    The API layer must translate NoRouteError into the contract's HTTP 404.
+    """
+    if _graph is None:
+        raise RuntimeError("Road graph is not loaded. Call load_graph() at startup.")
+    if len(_graph) == 0 or not _inside_demo(lat, lon):
+        raise NoRouteError("No route in the Edmonton demo area")
+
+    normal_shelter, _, _, normal_roads = _choose_route(_graph, lat, lon, [], shelters)
+
+    # Remove blocked roads from a copy of the map.
+    available_graph = _graph.copy()
+    available_graph.remove_edges_from(_blocked_edges(_graph, hazards))
+    nearest, best_distance, best_coordinates, roads = _choose_route(
+        available_graph, lat, lon, hazards, shelters
+    )
+
+    rerouted = nearest["id"] != normal_shelter["id"] or roads != normal_roads
+    reason = None
+    if rerouted:
+        reason = "Route changed because of a core hazard"
 
     return {
         "shelter_id": nearest["id"],
         "shelter_name": nearest["properties"]["name"],
         "distance_km": best_distance,
         "eta_min": ceil(best_distance / ILLUSTRATIVE_SPEED_KMH * 60),
-        "rerouted": False,
-        "reroute_reason": None,
+        "rerouted": rerouted,
+        "reroute_reason": reason,
         "steps": [],
         "geometry": {"type": "LineString", "coordinates": best_coordinates},
     }

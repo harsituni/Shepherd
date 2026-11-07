@@ -12,8 +12,8 @@ from unittest.mock import patch
 import networkx as nx
 from shapely.geometry import LineString
 
-import router
-from router import NoRouteError, closed_roads, find_route, load_graph
+from backend.routing import router
+from backend.routing.router import NoRouteError, closed_roads, find_route, load_graph
 
 
 # Small fake road map. Each point is (longitude, latitude).
@@ -58,6 +58,18 @@ def shelter(name, node, is_open=True, capacity=100, occupancy=0):
             "type": "Point",
             "coordinates": list(POINTS[node]),
         },
+    }
+
+
+def hazard_box(west, south, east, north, zone="core"):
+    """Make a small rectangular fire for testing."""
+    return {
+        "type": "Feature",
+        "properties": {"kind": "wildfire", "zone": zone},
+        "geometry": {"type": "Polygon", "coordinates": [[
+            [west, south], [east, south], [east, north],
+            [west, north], [west, south],
+        ]]},
     }
 
 
@@ -108,9 +120,97 @@ class RoutingTests(unittest.TestCase):
         # The new route should be longer.
         self.assertEqual(normal["distance_km"], 0.7)
         self.assertEqual(detour["distance_km"], 1.3)
+        self.assertFalse(normal["rerouted"])
+        self.assertIsNone(normal["reroute_reason"])
+        self.assertTrue(detour["rerouted"])
+        self.assertEqual(detour["reroute_reason"], "Route changed because of a core hazard")
 
         # Make sure the original roads were not changed.
         self.assertEqual(self.graph.number_of_edges(), original_edges)
+
+    def test_detour_uses_different_nodes(self):
+        fire = hazard_box(-113.486, 53.539, -113.484, 53.541)
+        self.graph.add_edge(4, 3, length=1000.0,
+                            geometry=LineString([POINTS[4], (-113.48, 53.55), POINTS[3]]))
+        result = find_route(53.54, -113.50, [fire], [shelter("sh_a", 3)])
+        self.assertEqual(result["distance_km"], 2.5)
+        self.assertIn(list(POINTS[4]), result["geometry"]["coordinates"])
+        self.assertTrue(result["rerouted"])
+        self.assertIsInstance(result["reroute_reason"], str)
+
+    def test_unrelated_closed_road_does_not_mean_rerouted(self):
+        fire = hazard_box(-113.501, 53.546, -113.499, 53.547)
+        self.assertTrue(router._blocked_edges(self.graph, [fire]))
+        choices = [shelter("sh_a", 3)]
+        self.assertEqual(find_route(53.54, -113.50, [fire], choices), self.route(choices))
+
+    def test_distant_hazard_and_buffer_do_not_change_route(self):
+        choices = [shelter("sh_a", 3)]
+        for fire in [hazard_box(-113.65, 53.56, -113.64, 53.57),
+                     hazard_box(-113.51, 53.53, -113.47, 53.56, zone="buffer")]:
+            with self.subTest(fire=fire):
+                self.assertEqual(find_route(53.54, -113.50, [fire], choices), self.route(choices))
+
+    def test_hazard_changes_selected_shelter(self):
+        fire = hazard_box(-113.486, 53.539, -113.484, 53.541)
+        choices = [shelter("sh_a", 3), shelter("sh_b", 4)]
+        self.assertEqual(self.route(choices)["shelter_id"], "sh_a")
+        result = find_route(53.54, -113.50, [fire], choices)
+        self.assertEqual(result["shelter_id"], "sh_b")
+        self.assertTrue(result["rerouted"])
+        self.assertIsNotNone(result["reroute_reason"])
+
+    def test_all_paths_blocked_with_endpoints_outside_fire(self):
+        fire = hazard_box(-113.486, 53.539, -113.484, 53.541)
+        with self.assertRaises(NoRouteError):
+            find_route(53.54, -113.50, [fire], [shelter("sh_a", 3)])
+
+    def test_start_inside_hazard_even_when_road_node_is_outside(self):
+        fire = hazard_box(-113.5002, 53.5397, -113.4998, 53.5399)
+        with self.assertRaises(NoRouteError):
+            find_route(53.5398, -113.50, [fire], [shelter("sh_a", 3)])
+
+    def test_destination_inside_hazard_is_not_selected(self):
+        fire = hazard_box(-113.4802, 53.5397, -113.4798, 53.5399)
+        destination = shelter("sh_a", 3)
+        destination["geometry"]["coordinates"] = [-113.48, 53.5398]
+        with self.assertRaises(NoRouteError):
+            find_route(53.54, -113.50, [fire], [destination])
+
+    def test_same_node_inside_hazard_is_not_a_zero_distance_route(self):
+        fire = hazard_box(-113.501, 53.539, -113.499, 53.541)
+        with self.assertRaises(NoRouteError):
+            find_route(53.54, -113.50, [fire], [shelter("sh_here", 1)])
+
+    def test_snapping_connection_cannot_cross_hazard(self):
+        # The point and node are outside, but the gap between them crosses fire.
+        start_fire = hazard_box(-113.5002, 53.5394, -113.4998, 53.5396)
+        with self.assertRaises(NoRouteError):
+            find_route(53.539, -113.50, [start_fire], [shelter("sh_a", 3)])
+        end_fire = hazard_box(-113.4802, 53.5394, -113.4798, 53.5396)
+        destination = shelter("sh_a", 3)
+        destination["geometry"]["coordinates"] = [-113.48, 53.539]
+        with self.assertRaises(NoRouteError):
+            find_route(53.54, -113.50, [end_fire], [destination])
+
+    def test_closure_does_not_snap_to_a_different_road(self):
+        fire = hazard_box(-113.486, 53.539, -113.484, 53.541)
+        # Node 2 loses all outgoing roads, but node 3 still has a route.
+        self.graph.add_edge(3, 4, length=1000.0)
+        with self.assertRaises(NoRouteError):
+            find_route(53.54, -113.49, [fire], [shelter("sh_a", 4)])
+
+    def test_successful_detour_preserves_inputs_and_entire_graph(self):
+        hazards = [hazard_box(-113.496, 53.5415, -113.494, 53.5425)]
+        choices = [shelter("sh_a", 3)]
+        original_inputs = deepcopy((hazards, choices))
+        original_graph = deepcopy(self.graph)
+        normal = self.route(choices)
+        result = find_route(53.54, -113.50, hazards, choices)
+        self.assertTrue(result["rerouted"])
+        self.assertEqual((hazards, choices), original_inputs)
+        self.assertTrue(nx.utils.graphs_equal(self.graph, original_graph))
+        self.assertEqual(self.route(choices), normal)
 
     def route(self, shelters):
         return find_route(53.54, -113.50, [], shelters)
