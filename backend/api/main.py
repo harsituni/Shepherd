@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from backend.routing.router import NoRouteError, find_route, load_graph
+from backend.routing.router import NoRouteError, check_route, find_routes, load_graph
 from backend.sim.controller import SimController
 
 controller = SimController()
@@ -198,9 +198,26 @@ def delete_hazards() -> dict:
 def get_route(
     lat: float = Query(...),
     lon: float = Query(...),
+    check_route_id: Optional[str] = Query(None),
 ) -> dict:
+    """Multi-option leave-by routes (contract v2)."""
     try:
-        return find_route(lat, lon, all_hazard_features(), SHELTERS)
+        if check_route_id:
+            return check_route(
+                lat,
+                lon,
+                check_route_id,
+                controller.arrival_min,
+                SHELTERS,
+                sim_time=controller.sim_time,
+            )
+        return find_routes(
+            lat,
+            lon,
+            controller.arrival_min,
+            SHELTERS,
+            sim_time=controller.sim_time,
+        )
     except NoRouteError as exc:
         return JSONResponse(
             status_code=404,

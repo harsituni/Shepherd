@@ -123,3 +123,9 @@ class SimController:
             return body
         body["outlines"] = self.sim.forecast(FORECAST_HORIZON_MIN)
         return body
+
+    def arrival_min(self, lat: float, lon: float) -> Optional[int]:
+        """Minute fire reaches this point, or None if idle / outside horizon."""
+        if self.sim is None or self.state == "idle":
+            return None
+        return self.sim.arrival_min(lat, lon, FORECAST_HORIZON_MIN)
