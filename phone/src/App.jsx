@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getHazards, getNotifications, getRoute, getShelters, getSimState, postReport } from './api.js'
+import { getHazards, getNotifications, getRoute, getShelters, getSimState, postReport, withChoice } from './api.js'
 import { POLL_MS } from './config.js'
 import { isCurrentCore, nearestHazard } from './geo.js'
 import { placeName } from './placeName.js'
@@ -36,6 +36,7 @@ export default function App() {
   const [location, setLocation] = useState(null) // [lon, lat]
   const [route, setRoute] = useState(null)
   const [routeError, setRouteError] = useState(null)
+  const [chosen, setChosen] = useState(null) // shelter_id of the route card the user picked
   const [hazards, setHazards] = useState(null)
   const [shelters, setShelters] = useState(null)
   const [focusKey, setFocusKey] = useState(null)
@@ -132,6 +133,7 @@ export default function App() {
       setLocation(lngLat)
       setRoute(null)
       setRouteError(null)
+      setChosen(null) // a new location starts from the recommended route
       setFocusKey(Date.now())
       refresh()
     },
@@ -175,6 +177,9 @@ export default function App() {
     [showToast, setLocationAndRoute],
   )
 
+  // The route on screen: the card the user picked, or the backend's best.
+  const { shown, lost } = withChoice(route, chosen)
+
   // During a wildfire the evacuation card (leave-by countdown) takes the banner's place.
   const wildfire =
     route?.leave_by_sim_min != null ||
@@ -204,7 +209,7 @@ export default function App() {
       {wildfire ? (
         <EvacCard
           location={location}
-          route={route}
+          route={shown}
           routeError={routeError}
           near={location ? nearestHazard(location, hazards) : null}
           clock={clock}
@@ -237,7 +242,7 @@ export default function App() {
               <MapView
                 hazards={hazards}
                 shelters={shelters}
-                route={route}
+                route={shown}
                 location={location}
                 onTap={setLocationAndRoute}
                 onViewChange={onViewChange}
@@ -247,9 +252,14 @@ export default function App() {
             }
             hazards={hazards}
             location={location}
-            route={route}
+            route={shown}
+            lost={lost}
             routeError={routeError}
             shelters={shelters}
+            onChoose={(shelterId) => {
+              setChosen(shelterId)
+              setFocusKey(Date.now()) // frame the newly picked route
+            }}
             onStartNavigation={() => setFocusKey(Date.now())}
           />
         </div>

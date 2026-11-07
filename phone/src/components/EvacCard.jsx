@@ -33,6 +33,12 @@ export default function EvacCard({ location, route, routeError, near, clock }) {
     big = routeError ? 'Reconnecting…' : 'Working it out…'
     lines = [routeError ? "Can't reach Shepherd right now." : 'Finding when you need to leave.']
     spoken = `Wildfire. Evacuate. ${lines[0]}`
+  } else if (leaveBy == null && route.options) {
+    // v2 with no leave-by: the fire isn't forecast to reach any route within the
+    // forecast horizon (the backend's margin_min 999), so there's no deadline yet.
+    big = 'No deadline yet'
+    lines = ["The fire isn't forecast to reach your routes in the next 2 hours.", where, hazardSentence(near)]
+    spoken = `Wildfire. ${lines[0]}`
   } else if (leaveBy == null) {
     // Backend still on the Step 0 /route shape: no leave-by time to count down.
     big = 'Leave as soon as you can'
