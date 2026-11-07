@@ -3,6 +3,7 @@ name: Shepherd
 description: Live evacuation routing for Edmonton. One plain blue-and-white service across the command dashboard and the public phone app.
 colors:
   navy: "#0B3D6E"
+  header: "#005072"
   navy-deep: "#0A3360"
   blue: "#0070C4"
   blue-hover: "#005A9E"
@@ -161,7 +162,7 @@ components:
 
 **Creative North Star: "The Public Service Map"**
 
-Shepherd looks like a civic service, not a product launch. The map is the subject; everything around it is plain white paper with navy and blue ink, organised like a good government information page: a solid navy masthead, a thin tinted status strip, then content in calm, bordered panels. Nothing competes with the hazard, which is the only warm colour on screen.
+Shepherd looks like a civic service, not a product launch. The map is the subject; everything around it is plain white paper with navy and blue ink, organised like a good government information page: a solid Alberta-blue masthead, a thin tinted status strip, then content in calm, bordered panels. Nothing competes with the hazard, which is the only warm colour on screen.
 
 The two surfaces share one system at two densities. The **dashboard** (emergency managers, desktop) is a three-column command layout: controls, map, stats and feeds. It is dense but quiet, with plain sentence-case section headings and tabular numbers. The **phone** (residents, ~390px) is the same vocabulary scaled for thumbs and stress: larger targets, one primary action per view, and an always-visible action bar. Both surfaces use the same square-ish 6px corners and the same type scale, in the manner of Alberta.ca: plain, text-led and squared off rather than rounded and app-like.
 
@@ -181,11 +182,12 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 
 ### Primary
 - **Service Blue** (#0070C4): the one primary-action and route colour. Primary buttons, range accents, the tab underline, evacuation routes, and the dashed predicted-spread rings. On the phone it is also the "you" dot and the Advisory severity label. Hover deepens to **Pressed Blue** (#005A9E).
-- **Masthead Navy** (#0B3D6E): headers, shelter markers, selected-state fills (choice tiles and segmented controls), outline-button borders and labels, icon-button glyphs, the toast and the "Need help" action. **Deep Navy** (#0A3360) is a reserved token and currently unused.
+- **Alberta Header Blue** (#005072): the header on both surfaces, matching Alberta's brand dark blue (`--goa-color-brand-dark` in the GoA design tokens). White text on it is 8.8:1.
+- **Masthead Navy** (#0B3D6E): shelter markers, selected-state fills (choice tiles and segmented controls), outline-button borders and labels, icon-button glyphs and the toast. **Deep Navy** (#0A3360) is a reserved token and currently unused.
 
 ### Signal
 - **Hazard Orange** (#D9480F): the active hazard only, used as fills, outlines, the incident-banner dot, the start marker and report-pin strokes.
-- **Closure Red** (#C62828): closed roads, the "Roads closed" stat and SOS reports only.
+- **Closure Red** (#C62828): closed roads, the "Roads closed" stat, SOS reports, and the phone's "Need help" button (white text, 5.6:1). Nothing else.
 - **Focus Gold** (#FEBA35): the keyboard focus ring only, as on Alberta.ca: a 3px outline. Never decoration, never a fill. Gold on white is about 1.7:1, below WCAG 2.2's 3:1 guidance for focus indicators, so the 3px width is what carries it. If an accessibility review flags it, keep the gold and add a 1px navy ring inside it rather than switching back to blue.
 - **Evacuation Tint family**, shared by both surfaces for evacuation-order alerts and "no safe route" states: background **Ember Wash** (#FFF3EC), border **Ember Edge** (#F6D2BE), title **Ember Ink** (#8A2F06), body **Ember Text** (#6B3A1F) and icon **Ember Mark** (#B4400B). Ember Ink is also the fill of the selected "Evacuation" severity segment (white text, which passes 4.5:1 where Hazard Orange would not).
 
@@ -197,10 +199,10 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 - **Frost Divider** (#E3ECF5): panel separators and list rules, lighter than a border. Also the fill of a disabled primary button.
 - **Sky Tint** (#EAF3FB): the alert surface only, i.e. the dashboard incident banner and the phone alert banner. Not for selection, hover, notices or buttons.
 - **Map Paper** (#F3F7FB): the map background under the desaturated basemap, the page behind the phone column on desktop, hover rows, and the fill of disabled controls.
-- **On-Navy Muted** (#BFD7EE): secondary text on the navy header.
+- **On-Navy Muted** (#BFD7EE): secondary text on the header (5.9:1 on Alberta Header Blue).
 
 ### Named Rules
-**The Two Warnings Rule.** Orange is the hazard; red is a closed road. Neither may be used for decoration, emphasis, branding, or generic errors.
+**The Two Warnings Rule.** Orange is the hazard; red is a closed road or a call for help (SOS reports and the phone's "Need help" button). Neither may be used for decoration, emphasis, branding, or generic errors.
 
 **The One Ink Rule.** Blue marks the primary action and the route. Anything blue is either the main thing to press or a route/prediction on the map. Selection is navy, not blue.
 
@@ -233,8 +235,8 @@ One scale for both surfaces, exposed as tokens in each `index.css`: `--fs-sm` 14
 
 ## Layout
 
-- **Dashboard:** a full-height column with a navy header (padding 14px 28px), the incident banner (10px 28px), then a wrapping three-column flex row: controls (260–300px, 24px padding), the map centre (grows, map minimum height 620px) with a history slider bar along the bottom, and a side panel (340–380px, 24px padding) with a 2×2 stat-tile grid and tabs. The map has the legend at bottom-left and zoom buttons at top-right, both inset 16px.
-- **Phone:** a single column, max 480px wide and 100dvh tall, centred on Map Paper with 1px side borders on desktop. Navy header, alert banner, tabs (Route · Safety tips · Alerts), scrolling content, and a fixed three-button action bar that respects `env(safe-area-inset-bottom)`. The route map is `min(440px, 55dvh)` tall until a location is set (the map is the whole task then), and 290px after, with a one-row map key under it.
+- **Dashboard:** a full-height column with an Alberta Header Blue header (padding 14px 28px), the incident banner (10px 28px), then a wrapping three-column flex row: controls (260–300px, 24px padding), the map centre (grows, map minimum height 620px) with a history slider bar along the bottom, and a side panel (340–380px, 24px padding) with a 2×2 stat-tile grid and tabs. The map has the legend at bottom-left and zoom buttons at top-right, both inset 16px.
+- **Phone:** a single column, max 480px wide and 100dvh tall, centred on Map Paper with 1px side borders on desktop. A 56px Alberta Header Blue header with even padding, so the brand and city share one centre line (a 28px white placeholder mark with a navy crook, left of the Shepherd name, same as the dashboard), alert banner, tabs (Route · Alerts), scrolling content, and a fixed three-button action bar that respects `env(safe-area-inset-bottom)`. The route map is `min(440px, 55dvh)` tall until a location is set (the map is the whole task then), and 290px after, with a one-row map key under it.
 - **Spacing rhythm:** 4 / 6 / 8 / 12 / 14 / 16 / 20 / 24 px, with a 28px horizontal gutter on the dashboard chrome and 20px on the phone. Gaps inside groups are 6–8px; between sections, 14–24px.
 - **Responsive:** below 1100px the dashboard panels stack and the separators move from left/right borders to top/bottom (map minimum 480px). Below 600px the gutters drop to 16px.
 
@@ -274,7 +276,7 @@ Plain and confident, with solid fills and no ornament.
 
 ### Choices and segmented controls
 - **Choice tile:** a 44–48px white tile with a 1px border and 6px corners. Selected is a navy fill with white 600 text. Uses `aria-pressed` on the dashboard and `aria-checked` on the phone. A selected tile that is locked (disabled during a drill) becomes a Slate Faint fill with white text, so the choice stays visible.
-- **Segmented control:** buttons joined inside one 6px bordered container, separated by 1px Frost Border rules. Selected is a navy fill with white 600 text. The "Evacuation" severity uses an Ember Ink fill when selected. Used for speed, severity and the phone Survival tips hazard filter.
+- **Segmented control:** buttons joined inside one 6px bordered container, separated by 1px Frost Border rules. Selected is a navy fill with white 600 text. The "Evacuation" severity uses an Ember Ink fill when selected. Used for the dashboard speed and severity controls.
 - **Live/Drill switch (dashboard header):** the same segmented form on navy, with an On-Navy Muted 1px border. The selected half is white with navy text.
 
 ### Inputs
@@ -282,7 +284,7 @@ Plain and confident, with solid fills and no ornament.
 - **Range sliders and checkboxes:** native controls with `accent-color: #0070C4`.
 
 ### Navigation
-- **Header:** a solid navy masthead with the Shepherd name (700) and a sub-line in On-Navy Muted. The dashboard adds the Live/Drill segmented switch and a 14px last-updated line.
+- **Header:** a solid Alberta Header Blue (#005072) masthead with a 28px white placeholder mark, the Shepherd name (700) and a sub-line in On-Navy Muted. The dashboard adds the Live/Drill segmented switch and a 14px last-updated line.
 - **Tabs:** full-width, equal-flex, Slate Muted 500 text. Dashboard: 44px tall, 14px (four tabs share a narrow column). Phone: 48px tall, 16px. The selected tab is navy 600 with the 3px blue inset underline, and the row sits on a Frost Divider.
 
 ### Stat tiles (dashboard)
@@ -298,9 +300,6 @@ A 2×2 grid of four tiles only: People at risk, Roads closed, Active reroutes an
 ### Route summary (phone)
 The shelter name as a 20px 700 heading, then one 16px line: **ETA** in Ink 700, then distance and "% full" in Slate Muted, separated by middots ("**6 min** · 4.1 km · 41% full"). No eyebrow label and no oversized ETA figure.
 
-### Safety tips (phone)
-A numbered list. Each step number is a navy 700 16px tabular "1." in a 32px gutter, with a 16px bold instruction and a 14px muted explanation, rows separated by Frost Divider lines.
-
 ### Alerts tab (phone)
 Government notifications, newest first, as plain divided rows: the coloured severity · time line, a 16px bold title and a 14px muted message. The empty state is one muted sentence.
 
@@ -308,7 +307,7 @@ Government notifications, newest first, as plain divided rows: the coloured seve
 Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 title (SOS in Closure Red), a 14px Slate Faint time and location, and a 14px muted note. Hovering a row fills it with Map Paper, and every row is at least 44px tall.
 
 ### Phone action bar and toast
-- **Action bar:** a three-column grid of 48px buttons with 6px corners and 14px labels. "Report hazard" and "I'm safe" share the navy outline style; "Need help" is the one solid navy button.
+- **Action bar:** a three-column grid of 48px buttons with 6px corners and 14px labels. "Report hazard" and "I'm safe" share the navy outline style; "Need help" is the one solid button, in Closure Red.
 - **Toast:** a solid navy bar with 6px corners and white 500 14px text, floating just above the action bar.
 
 ### Map layers (signature)
@@ -339,7 +338,7 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 titl
 - **Don't** use gradients of any kind: backgrounds, buttons, text or glows.
 - **Don't** use emoji as icons.
 - **Don't** use glassmorphism or blur, neon glows, coloured left-border accent cards, oversized rounded "bubble" cards or bouncy animations.
-- **Don't** use orange or red for anything except the hazard and closed roads, or Focus Gold for anything but the focus ring.
+- **Don't** use orange or red for anything except the hazard, closed roads and calls for help (SOS, "Need help"), or Focus Gold for anything but the focus ring.
 - **Don't** use pill shapes (999px corners) or 10px "bubble" controls.
 - **Don't** fade disabled controls with `opacity`, and never disable "Need help".
 - **Don't** set text smaller than 14px, or use small uppercase tracked eyebrow labels.
