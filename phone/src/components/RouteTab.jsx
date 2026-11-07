@@ -1,3 +1,4 @@
+import { isCurrentCore, isPredicted } from '../geo.js'
 import { PinIcon, RerouteIcon, TurnIcon } from './icons.jsx'
 
 function percentFull(shelters, shelterId) {
@@ -6,20 +7,45 @@ function percentFull(shelters, shelterId) {
   return Math.round((s.properties.occupancy / s.properties.capacity) * 100)
 }
 
-export default function RouteTab({ map, location, route, routeError, shelters, onStartNavigation }) {
+// One-row key for what's actually drawn on the map right now.
+function MapKey({ hazards, route, location }) {
+  const features = hazards?.features ?? []
+  const items = [
+    features.some(isCurrentCore) && ['swatch-hazard', 'Hazard now'],
+    features.some(isPredicted) && ['swatch-predicted', 'Predicted spread'],
+    route?.geometry && ['swatch-route', 'Your route'],
+    ['swatch-shelter', 'Shelter'],
+    location && ['swatch-you', 'You'],
+  ].filter(Boolean)
+  return (
+    <ul className="map-key" aria-label="Map key">
+      {items.map(([swatch, label]) => (
+        <li key={label}>
+          <span className={`swatch ${swatch}`} aria-hidden="true" />
+          {label}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+export default function RouteTab({ map, hazards, location, route, routeError, shelters, onStartNavigation }) {
   let details
   if (!location) {
     details = (
       <div className="notice">
         <PinIcon />
-        <span>Tap the map to set your location. We'll find the safest route to a shelter.</span>
+        <span>
+          Tap the map where you are. Shepherd finds the safest route to an open shelter and updates it as conditions
+          change.
+        </span>
       </div>
     )
   } else if (routeError === 'no_route') {
     details = (
-          <div className="no-route" role="alert">
-            <strong>No safe route found</strong>
-            <span>Stay where you are if it is safe and call 911.</span>
+      <div className="no-route" role="alert">
+        <strong>No safe route found</strong>
+        <span>Stay where you are if it is safe and call 911.</span>
         <a className="btn-primary" href="tel:911">
           Call 911
         </a>
@@ -45,24 +71,17 @@ export default function RouteTab({ map, location, route, routeError, shelters, o
           </div>
         )}
         <div className="shelter">
-          <div className="shelter-info">
-            <span className="muted small">Go to shelter</span>
-            <span className="shelter-name">{route.shelter_name}</span>
-            <span className="muted num">
-              {route.distance_km} km{full != null && ` · ${full}% full`}
-            </span>
-          </div>
-          <div className="eta">
-            <span className="eta-value num">{route.eta_min}</span>
-            <span className="muted small">min</span>
-          </div>
+          <span className="shelter-name">{route.shelter_name}</span>
+          <span className="trip num">
+            <strong>{route.eta_min} min</strong> · {route.distance_km} km{full != null && ` · ${full}% full`}
+          </span>
         </div>
         {next && (
           <div className="next-turn">
             <TurnIcon />
             <div className="next-turn-text">
               <span className="next-turn-title">{next.instruction}</span>
-              <span className="muted small num">in {next.distance_km} km</span>
+              <span className="muted num">in {next.distance_km} km</span>
             </div>
           </div>
         )}
@@ -76,6 +95,7 @@ export default function RouteTab({ map, location, route, routeError, shelters, o
   return (
     <>
       {map}
+      <MapKey hazards={hazards} route={route} location={location} />
       <div className="route-details">{details}</div>
     </>
   )

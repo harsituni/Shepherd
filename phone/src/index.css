@@ -18,6 +18,8 @@
   --danger-title: #8a2f06;
   --danger-text: #6b3a1f;
   --danger-icon: #b4400b;
+  /* Gold focus ring, as on Alberta.ca. Focus only; never decoration. */
+  --focus: #feba35;
   --font: 'Public Sans', system-ui, sans-serif;
 
   /* Type scale: 14 secondary, 16 body, 18 brand, 20 headings, 28 ETA figure. */
@@ -41,9 +43,11 @@ body { margin: 0; background: #ffffff; }
 button, input, textarea { font-family: inherit; color: inherit; }
 button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible, textarea:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
+/* Edge-to-edge tabs and joined segments would clip an outside ring; draw it inside. */
+.tabs button:focus-visible, .segmented button:focus-visible { outline-offset: -3px; }
 [hidden] { display: none !important; }
 
 .num { font-variant-numeric: tabular-nums; }
@@ -75,9 +79,13 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   border-bottom: 1px solid var(--border); background: var(--tint);
 }
 .alert-icon { flex: 0 0 20px; margin-top: 2px; color: var(--navy); }
-.alert-text { display: flex; flex-direction: column; gap: 2px; }
+.alert-advisory .alert-icon { color: var(--blue); }
+.alert-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .alert-text strong { font-size: var(--fs-body); font-weight: 700; color: var(--navy); }
-.alert-text span { font-size: var(--fs-sm); color: var(--muted); }
+.alert-text span {
+  font-size: var(--fs-sm); color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .alert-danger { background: var(--danger-bg); border-bottom-color: var(--danger-border); }
 .alert-danger .alert-icon { color: var(--danger-icon); }
 .alert-danger .alert-text strong { color: var(--danger-title); }
@@ -99,6 +107,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 /* ---------- route tab ---------- */
 
 .map-wrap { position: relative; height: 290px; background: var(--map-bg); }
+/* Before a location is set the map is the whole task, so give it the room. */
+.map-wrap-tall { height: min(440px, 55dvh); }
 /* More specific than maplibre-gl.css's `.maplibregl-map { position: relative }`. */
 .map-wrap > .map { position: absolute; inset: 0; }
 .maplibregl-ctrl-attrib { font-family: var(--font); font-size: 10px; }
@@ -107,14 +117,32 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   position: relative; width: 18px; height: 18px; border-radius: 50%;
   background: var(--blue); border: 3px solid #fff;
 }
-.you-label {
-  position: absolute; left: 22px; top: 50%; transform: translateY(-50%);
+.map-label {
   font: 600 var(--fs-sm) var(--font); color: var(--navy); white-space: nowrap;
-  text-shadow: 0 0 3px #fff, 0 0 3px #fff; pointer-events: none;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; pointer-events: none;
 }
+.you-label, .shelter-label { position: absolute; top: 50%; transform: translateY(-50%); }
+.you-label { left: 22px; }
 .shelter-marker {
-  width: 20px; height: 20px; border-radius: 4px; background: var(--navy); border: 2px solid #fff;
+  position: relative; width: 20px; height: 20px; border-radius: 4px; background: var(--navy); border: 2px solid #fff;
 }
+.shelter-label { left: 24px; color: var(--text); display: none; }
+.shelter-marker.is-target .shelter-label { display: block; }
+.shelter-marker.label-left .shelter-label { left: auto; right: 24px; }
+
+/* One-row key under the map, listing only what is drawn. */
+.map-key {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 10px 20px;
+  list-style: none; border-bottom: 1px solid var(--divider);
+  font-size: var(--fs-sm); color: var(--muted);
+}
+.map-key li { display: flex; align-items: center; gap: 6px; }
+.swatch { display: inline-block; flex: 0 0 auto; }
+.swatch-hazard { width: 12px; height: 12px; border-radius: 3px; background: var(--hazard); }
+.swatch-predicted { width: 12px; height: 12px; border-radius: 3px; border: 1.5px dashed var(--blue); }
+.swatch-route { width: 16px; height: 4px; border-radius: 2px; background: var(--blue); }
+.swatch-shelter { width: 12px; height: 12px; border-radius: 3px; background: var(--navy); }
+.swatch-you { width: 12px; height: 12px; border-radius: 50%; background: var(--blue); }
 
 .route-details { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
 /* Inline notices are plain text with an icon, so the alert banner keeps the emphasis. */
@@ -124,11 +152,10 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 }
 .notice svg { flex: 0 0 auto; margin-top: 2px; }
 .notice-strong { color: var(--navy); font-weight: 600; }
-.shelter { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
-.shelter-info { display: flex; flex-direction: column; gap: 2px; }
-.shelter-name { font-size: var(--fs-h); font-weight: 700; }
-.eta { display: flex; flex-direction: column; align-items: flex-end; }
-.eta-value { font-size: 28px; font-weight: 700; color: var(--blue); line-height: 1.1; }
+.shelter { display: flex; flex-direction: column; gap: 4px; }
+.shelter-name { font-size: var(--fs-h); font-weight: 700; line-height: 1.25; }
+.trip { font-size: var(--fs-body); color: var(--muted); }
+.trip strong { color: var(--text); font-weight: 700; }
 .next-turn {
   display: flex; gap: 12px; align-items: center; padding: 12px 0;
   border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); color: var(--navy);
@@ -173,6 +200,48 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .list li:last-child { border-bottom: 0; }
 .list strong { font-size: var(--fs-body); }
 .list span { font-size: var(--fs-sm); color: var(--muted); }
+/* Visible step numbers, like Alberta.ca's "what to do" guidance. */
+.list-numbered { counter-reset: step; }
+.list-numbered li { counter-increment: step; position: relative; padding-left: 32px; }
+.list-numbered li::before {
+  content: counter(step) '.'; position: absolute; left: 0; top: 14px;
+  font-size: var(--fs-body); font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums;
+}
+
+/* ---------- government notifications ---------- */
+/* Severity: Advisory blue, Alert navy, Evacuation order orange (Ember Ink for text contrast). */
+
+.note-meta { font-size: var(--fs-sm); font-weight: 600; }
+.sev-advisory .note-meta { color: var(--blue); }
+.sev-alert .note-meta { color: var(--navy); }
+.sev-evacuation .note-meta { color: var(--danger-title); }
+
+/* The pop-up: the one element in the system with a shadow. */
+.popup {
+  position: absolute; top: 8px; left: 8px; right: 8px; z-index: 8;
+  display: flex; align-items: flex-start; gap: 10px; padding: 8px 0 8px 14px;
+  background: #fff; border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(11, 37, 69, 0.18);
+  animation: popup-in 220ms ease-out;
+}
+.popup.sev-evacuation { border-color: var(--danger-border); }
+.popup-icon { flex: 0 0 20px; margin-top: 6px; color: var(--navy); }
+.sev-advisory .popup-icon { color: var(--blue); }
+.sev-evacuation .popup-icon { color: var(--danger-icon); }
+.popup-body {
+  flex: 1; min-width: 0; min-height: 44px; padding: 4px 0; border: 0; background: transparent;
+  display: flex; flex-direction: column; gap: 2px; text-align: left; color: var(--text);
+}
+.popup-title { font-size: var(--fs-body); font-weight: 700; }
+.popup-message { font-size: var(--fs-sm); color: var(--muted); line-height: 1.4; }
+.popup-more { font-size: var(--fs-sm); color: var(--muted-2); }
+@keyframes popup-in {
+  from { transform: translateY(calc(-100% - 8px)); }
+  to { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .popup { animation: none; }
+}
 
 /* ---------- bottom action bar ---------- */
 /* One solid button (Need help); the other two share one plain outline style. */

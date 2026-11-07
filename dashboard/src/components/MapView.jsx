@@ -38,7 +38,7 @@ const BASE_STYLE = {
       id: 'osm',
       type: 'raster',
       source: 'osm',
-      paint: { 'raster-saturation': -0.85, 'raster-contrast': -0.15, 'raster-opacity': 0.6 },
+      paint: { 'raster-saturation': -0.85, 'raster-contrast': -0.15, 'raster-opacity': 0.8 },
     },
   ],
 }
