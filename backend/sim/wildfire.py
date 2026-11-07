@@ -128,7 +128,8 @@ class WildfireSim:
         arrival_snap = dict(self.arrival)
         frontier_snap = list(self._frontier)
 
-        self._burn_until(horizon_min)
+        # horizon_min is "minutes from now", not an absolute sim minute.
+        self._burn_until(self.minutes + horizon_min)
         arrival_full = dict(self.arrival)
 
         self.burning = burned_snap
@@ -146,7 +147,7 @@ class WildfireSim:
         if math.hypot(col, row) * CELL_M > MAX_RADIUS_M:
             return None
         at = self._arrival_map(horizon_min).get((col, row))
-        if at is None or at > horizon_min:
+        if at is None or at > self.minutes + horizon_min:
             return None
         return int(math.ceil(at))
 
@@ -163,7 +164,8 @@ class WildfireSim:
 
         outlines: list[dict] = []
         for t_min in steps:
-            cells = {cell for cell, at in arrival_full.items() if at <= t_min}
+            # t_min is minutes ahead of now (+15 … +120), arrivals are absolute.
+            cells = {cell for cell, at in arrival_full.items() if at <= self.minutes + t_min}
             if not cells:
                 cells = set(burned_snap)
             ring = self._ring_for_cells(cells)
