@@ -30,7 +30,7 @@ export default function Header({ mode, onModeChange, lastUpdated, connectionErro
               aria-pressed={mode === m}
               onClick={() => onModeChange(m)}
             >
-              {m === 'live' ? 'Live' : 'Drill'}
+              {m === 'live' ? 'Live' : 'Simulation'}
             </button>
           ))}
         </div>

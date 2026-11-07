@@ -14,14 +14,13 @@ const WIND_DIRECTIONS = [
   { deg: 225, label: 'Southwest → Northeast' },
 ]
 
-function dryness(pct) {
-  if (pct < 34) return 'Low'
-  if (pct < 67) return 'Medium'
-  return 'High'
-}
+const HAZARDS = [
+  ['wildfire', 'Wildfire'],
+  ['tornado', 'Tornado'],
+]
 
 function startHint({ canSimulate, idle, startPoint }) {
-  if (!canSimulate) return 'Live mode shows real data feeds. Switch to Drill to run a simulation.'
+  if (!canSimulate) return 'Live mode shows real data feeds. Switch to Simulation to run one.'
   if (!idle) return 'Reset to pick a new hazard or start point.'
   if (!startPoint) return 'Click the map to place the start point.'
   return `Start point ${startPoint.lat.toFixed(3)}, ${startPoint.lng.toFixed(3)}. Press play to start.`
@@ -29,6 +28,8 @@ function startHint({ canSimulate, idle, startPoint }) {
 
 // The simulation itself runs on the backend (/sim/*). This panel picks the scenario
 // and conditions, sends them on play, and drives pause / resume / reset / speed.
+// Wind speed and direction apply to both hazards (a tornado travels with the wind);
+// relative humidity is wildfire-only.
 export default function ControlsPanel({
   canSimulate,
   hazardKind,
@@ -43,9 +44,7 @@ export default function ControlsPanel({
 }) {
   const [windKmh, setWindKmh] = useState(18)
   const [windFrom, setWindFrom] = useState(270)
-  const [fuel, setFuel] = useState(75)
   const [humidity, setHumidity] = useState(22)
-  const [riverRise, setRiverRise] = useState(0.5)
   const [speed, setSpeed] = useState(4)
   const [showPriority, setShowPriority] = useState(true)
 
@@ -70,10 +69,7 @@ export default function ControlsPanel({
       <div className="stack-8">
         <span className="field">Hazard</span>
         <div className="choice-grid" role="group" aria-label="Hazard type">
-          {[
-            ['wildfire', 'Wildfire'],
-            ['flood', 'Flood'],
-          ].map(([value, label]) => (
+          {HAZARDS.map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -91,56 +87,28 @@ export default function ControlsPanel({
 
       <fieldset className="stack-14 conditions" disabled={locked}>
         <legend className="sr-only">Conditions</legend>
-        {hazardKind === 'wildfire' ? (
-          <>
-            <label className="field">
-              <span className="field-row">
-                Wind speed <strong className="num">{windKmh} km/h</strong>
-              </span>
-              <input type="range" min="0" max="60" value={windKmh} onChange={(e) => setWindKmh(+e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Wind direction</span>
-              <select className="select" value={windFrom} onChange={(e) => setWindFrom(+e.target.value)}>
-                {WIND_DIRECTIONS.map((d) => (
-                  <option key={d.deg} value={d.deg}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="field-row">
-                Fuel dryness <strong>{dryness(fuel)}</strong>
-              </span>
-              <input type="range" min="0" max="100" value={fuel} onChange={(e) => setFuel(+e.target.value)} />
-            </label>
-            <label className="field">
-              <span className="field-row">
-                Relative humidity <strong className="num">{humidity}%</strong>
-              </span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={humidity}
-                onChange={(e) => setHumidity(+e.target.value)}
-              />
-            </label>
-          </>
-        ) : (
+        <label className="field">
+          <span className="field-row">
+            Wind speed <strong className="num">{windKmh} km/h</strong>
+          </span>
+          <input type="range" min="0" max="60" value={windKmh} onChange={(e) => setWindKmh(+e.target.value)} />
+        </label>
+        <label className="field">
+          <span>{hazardKind === 'tornado' ? 'Path direction' : 'Wind direction'}</span>
+          <select className="select" value={windFrom} onChange={(e) => setWindFrom(+e.target.value)}>
+            {WIND_DIRECTIONS.map((d) => (
+              <option key={d.deg} value={d.deg}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {hazardKind === 'wildfire' && (
           <label className="field">
             <span className="field-row">
-              River rise rate <strong className="num">{riverRise.toFixed(1)} m/hr</strong>
+              Relative humidity <strong className="num">{humidity}%</strong>
             </span>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.1"
-              value={riverRise}
-              onChange={(e) => setRiverRise(+e.target.value)}
-            />
+            <input type="range" min="0" max="100" value={humidity} onChange={(e) => setHumidity(+e.target.value)} />
           </label>
         )}
       </fieldset>
@@ -152,7 +120,7 @@ export default function ControlsPanel({
             className="icon-btn primary"
             aria-label={running ? 'Pause' : idle ? 'Start simulation' : 'Resume'}
             disabled={!canPlay}
-            onClick={() => onPlay({ windKmh, windFrom, fuel, humidity, riverRise }, speed)}
+            onClick={() => onPlay({ windKmh, windFrom, humidity }, speed)}
           >
             {running ? <PauseIcon /> : <PlayIcon />}
           </button>
