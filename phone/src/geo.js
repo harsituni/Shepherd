@@ -73,3 +73,14 @@ export function nearestHazard(user, hazards) {
   if (best) best.moving = movement(best.feature, features)
   return best
 }
+
+const KIND_NAME = { wildfire: 'wildfire', tornado: 'tornado', flood: 'flood' }
+const KIND_NOUN = { wildfire: 'Fire', tornado: 'Tornado', flood: 'Flooding' }
+
+// "Fire is 2.4 km west of you, moving east." from nearestHazard().
+export function hazardSentence(near) {
+  if (!near) return null
+  if (near.inside) return `You are inside the ${KIND_NAME[near.kind] ?? 'hazard'} zone. Leave now.`
+  const moving = near.moving ? `, moving ${near.moving}` : ''
+  return `${KIND_NOUN[near.kind] ?? 'Hazard'} is ${near.km.toFixed(1)} km ${near.direction} of you${moving}.`
+}

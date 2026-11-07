@@ -44,6 +44,13 @@ function grownFeature(h) {
   return { ...h.feature, geometry: { type: 'Polygon', coordinates: [ring] } }
 }
 
+// Minutes the fake fire needs per km to reach you, for the fixture leave-by time.
+const FAKE_FIRE_MIN_PER_KM = 6
+const FAKE_BUFFER_MIN = 5
+let fakeLeaveBy = { key: null, value: null }
+
+// Fixture /route in the contract v2 shape: one option to the nearest open shelter,
+// with a leave-by time from how far the (growing) fake fire is from you.
 function fakeRoute(lat, lon) {
   const here = [lon, lat]
   const open = sheltersFixture.features.filter((f) => f.properties.open)
@@ -56,23 +63,80 @@ function fakeRoute(lat, lon) {
   const nearest = open
     .map((f) => ({ f, km: distanceKm(here, f.geometry.coordinates) }))
     .sort((a, b) => a.km - b.km)[0]
+  const eta = Math.max(1, Math.round((nearest.km / FAKE_SPEED_KMH) * 60))
+  const fireKm = Math.min(
+    ...fakeHazards.map((h) => Math.min(...grownFeature(h).geometry.coordinates[0].map((p) => distanceKm(here, p)))),
+  )
+  // Fixed per location, like a forecast-based leave-by: it only moves when the
+  // forecast changes, so the countdown runs down instead of drifting.
+  const key = `${lat.toFixed(4)},${lon.toFixed(4)}`
+  if (fakeLeaveBy.key !== key) {
+    fakeLeaveBy = {
+      key,
+      value: fakeSimTime + Math.max(0, Math.round(fireKm * FAKE_FIRE_MIN_PER_KM) - eta - FAKE_BUFFER_MIN),
+    }
+  }
+  const leaveBy = fakeLeaveBy.value
   return {
-    shelter_id: nearest.f.id,
-    shelter_name: nearest.f.properties.name,
-    distance_km: Math.round(nearest.km * 10) / 10,
-    eta_min: Math.max(1, Math.round((nearest.km / FAKE_SPEED_KMH) * 60)),
+    lat,
+    lon,
+    sim_time: fakeSimTime,
+    leave_by_sim_min: leaveBy,
+    leave_by_label: `Leave within ${Math.max(0, leaveBy - fakeSimTime)} min (sim)`,
+    best_route_id: 'rt_1',
+    options: [
+      {
+        id: 'rt_1',
+        shelter_id: nearest.f.id,
+        shelter_name: nearest.f.properties.name,
+        distance_km: Math.round(nearest.km * 10) / 10,
+        eta_min: eta,
+        margin_min: Math.max(0, leaveBy - fakeSimTime),
+        status: leaveBy - fakeSimTime >= 60 ? 'ok' : 'tight',
+        clear_until_sim_min: null,
+        clear_until_label: null,
+        reason: null,
+        geometry: { type: 'LineString', coordinates: [here, nearest.f.geometry.coordinates] },
+      },
+    ],
+    excluded: [],
+  }
+}
+
+// /route comes back as contract v2 (`options` + `leave_by_*`) or, until the backend
+// migrates, the Step 0 flat shape. Flatten v2's best option onto the top level so the
+// map and route details read one shape; `leave_by_sim_min` is undefined for v1.
+export function normalizeRoute(body) {
+  if (!Array.isArray(body?.options)) return body
+  const best = body.options.find((o) => o.id === body.best_route_id) ?? body.options.find((o) => o.status !== 'blocked')
+  return {
     rerouted: false,
     reroute_reason: null,
     steps: [],
-    geometry: { type: 'LineString', coordinates: [here, nearest.f.geometry.coordinates] },
+    ...body,
+    ...(best ?? {}),
+    id: undefined,
+    route_id: best?.id ?? null,
   }
 }
 
 // ---------- public API ----------
 
 export async function getRoute(lat, lon) {
-  if (!USE_FIXTURES) return request(`/route?lat=${lat}&lon=${lon}`)
-  return fakeRoute(lat, lon)
+  if (!USE_FIXTURES) return normalizeRoute(await request(`/route?lat=${lat}&lon=${lon}`))
+  return normalizeRoute(fakeRoute(lat, lon))
+}
+
+// Sim clock: { state: idle|running|paused, sim_time, speed, ... }. Null if the
+// backend doesn't have /sim/state, so the phone still works against older builds.
+export async function getSimState() {
+  if (USE_FIXTURES) return { state: 'running', scenario: 'wildfire', sim_time: fakeSimTime, speed: 1 }
+  try {
+    return await request('/sim/state')
+  } catch (err) {
+    if (err.status === 404) return null
+    throw err
+  }
 }
 
 // Fixture stand-in for the predicted spread the backend adds to /hazards
