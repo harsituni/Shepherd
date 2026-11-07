@@ -35,10 +35,12 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 ## Design
 - **Visual system: see `/DESIGN.md`** (shared with `phone/`; tokens, components, rules). If it and this section disagree, flag it rather than picking one.
 - Minimalist, inspired by Alberta.ca's wildfire pages: plain blue and white, lots of whitespace, no decorative charts.
-- Colours: navy `#0B3D6E` (header, shelters), blue `#0070C4` (primary, routes, predicted path), tint `#EAF3FB`, borders `#D3E3F2`, text `#0B2545`, muted text `#3B5A7A`.
+- Colours: navy `#0B3D6E` (header, shelters, selected states, outline buttons), blue `#0070C4` (primary, routes, predicted path), tint `#EAF3FB` (incident banner only), borders `#D3E3F2`, text `#0B2545`, muted text `#3B5A7A`.
+- Gold `#FEBA35` only for the 3px keyboard focus ring (as on Alberta.ca).
 - Orange `#D9480F` only for the active hazard, red `#C62828` only for closed roads.
-- Font: **Public Sans** (Google Fonts, weights 400/500/600/700), fallback `system-ui, sans-serif`. Use `font-variant-numeric: tabular-nums` for stats and times.
-- Corners: 6px on controls, 8px on cards. Flat surfaces separated by 1px borders, not shadows (one soft shadow only on floating pop-ups).
+- Font: **Public Sans** (Google Fonts, weights 400/500/600/700), fallback `system-ui, sans-serif`. Use `font-variant-numeric: tabular-nums` for stats and times. Type scale 14/16/18/20px (plus 26px stat values; nothing under 14); section titles are plain sentence-case headings, not uppercase labels.
+- Corners: 6px on controls, 8px on cards. No pills (the Live/Drill switch is a segmented control). Flat surfaces separated by 1px borders, not shadows (one soft shadow only on floating pop-ups).
+- One solid button per area; others are navy outlines. Disabled controls get a flat style, never `opacity`; a locked selection stays visible.
 - Touch targets ≥44px, text contrast ≥4.5:1.
 - Don't use the Government of Alberta logo or wordmark; this is Shepherd's own branding.
 

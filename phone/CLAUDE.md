@@ -10,27 +10,30 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
    - Set your location (tap the map or pick a preset).
    - Draw the safest route to a shelter from `GET /route`; auto-reroute whenever hazards or closed roads change.
    - Show a reroute notice with the reason ("Rerouted: Stony Plain Rd closed and fire heading toward 149 St").
-   - Below the map: shelter name, distance, how full it is, ETA, next turn, "Start navigation".
-2. **Government notifications.** Updates sent from the dashboard pop up as a banner at the top of the screen (slide down, tap to expand, dismissable). Colour by severity: Advisory (blue), Alert (dark blue), Evacuation order (orange). The persistent alert banner shows the most severe active one. Past updates live in the **Gov updates** tab.
+   - Below the map: a map key, then the shelter name and one line "**ETA** · distance · % full", next turn, "Start navigation".
+2. **Government notifications.** Updates sent from the dashboard pop up as a banner at the top of the screen (slide down, tap to expand, dismissable). Colour by severity: Advisory (blue), Alert (dark blue), Evacuation order (orange). The persistent alert banner shows the most severe active one. Past updates live in the **Alerts** tab.
 3. **Report hazards/events.** "Report hazard" opens a sheet: type (fire, flooded road, blocked road; the contract's `kind` values), uses your current location, optional note, submit → `POST /reports`. Also "I'm safe" and "Need help" buttons, which send the same endpoint and show up on the dashboard. Confirm with a short toast.
 4. **Predicted path of the disaster.** On the map: the hazard now (solid orange) and its predicted spread as dashed rings labelled T+30 / T+60, plus "Fire is X km west of you, moving east" in the alert.
-5. **Survival tips** (secondary): short, practical tips per hazard type in their own tab.
+5. **Safety tips** (secondary): short, practical, numbered tips per hazard type in their own tab.
 
 ## Layout (matches the approved mockup)
 - Mockup: `design/phone-mockup.html` (screenshot `design/phone.png`). Visual reference only; rebuild as React components with MapLibre in place of the sketched SVG map.
 - Navy header: Shepherd + city name.
 - Notification / alert banner directly under the header.
-- Tabs: **Route** · **Survival tips** · **Gov updates**.
-- Route tab: map (~290px tall), reroute notice, shelter + ETA, next turn, Start navigation.
+- Tabs: **Route** · **Safety tips** · **Alerts**.
+- Route tab: map (taller until a location is set, then ~290px), map key, reroute notice, shelter + ETA line, next turn, Start navigation.
+- The mockup predates the Alberta-style pass: where it differs (big ETA number, pill buttons, tinted notices), follow `/DESIGN.md`.
 - Bottom bar, always visible: **Report hazard** · **I'm safe** · **Need help**.
 
 ## Design
 - **Visual system: see `/DESIGN.md`** (shared with `dashboard/`; tokens, components, rules). If it and this section disagree, flag it rather than picking one.
 - Minimalist, inspired by Alberta.ca's wildfire pages: plain blue and white, calm, big tap targets.
-- Colours: navy `#0B3D6E`, blue `#0070C4` (primary, route, predicted path), tint `#EAF3FB`, borders `#D3E3F2`, text `#0B2545`, muted `#3B5A7A`.
+- Colours: navy `#0B3D6E` (selected states, outline buttons, Need help), blue `#0070C4` (primary, route, predicted path), tint `#EAF3FB` (alert banner only), borders `#D3E3F2`, text `#0B2545`, muted `#3B5A7A`.
+- Gold `#FEBA35` only for the 3px keyboard focus ring (as on Alberta.ca).
 - Orange `#D9480F` only for the hazard and evacuation-order alerts, red `#C62828` only for closed roads.
-- Font: **Public Sans** (Google Fonts, weights 400/500/600/700), fallback `system-ui, sans-serif`. Use `font-variant-numeric: tabular-nums` for ETA and distances.
-- Corners: 6–10px. Flat surfaces separated by 1px borders; one soft shadow only on the pop-up notification.
+- Font: **Public Sans** (Google Fonts, weights 400/500/600/700), fallback `system-ui, sans-serif`. Use `font-variant-numeric: tabular-nums` for ETA and distances. Type scale 14/16/18/20px (16 default, nothing under 14); no uppercase eyebrow labels.
+- Corners: 6px (8px for cards and the pop-up). No pills; use a segmented control for small option sets. Flat surfaces separated by 1px borders; one soft shadow only on the pop-up notification.
+- One solid button per area; others are navy outlines. Disabled controls get a flat style, never `opacity`. "Need help" is never disabled.
 - Phone width ~390px, mobile-first, touch targets ≥44px, contrast ≥4.5:1.
 - Must look right on a real phone on the same Wi-Fi.
 - Don't use the Government of Alberta logo or wordmark; this is Shepherd's own branding.
@@ -58,7 +61,7 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
 - Errors come back as `{ error, message }`.
 
 **Not in the contract yet: ask Harsit to add these, build on your own fixture meanwhile:**
-- Government notifications feed (`GET /notifications`: id, title, message, severity, time) for pop-ups and the Gov updates tab.
+- Government notifications feed (`GET /notifications`: id, title, message, severity `advisory`|`alert`|`evacuation`, time) for pop-ups and the Alerts tab. Built against `shared/fixtures/notifications.json`; a 404 is treated as "no notifications".
 - Predicted path (hazard features at T+30 / T+60).
 - Distance/direction to the hazard for the alert banner (or compute it client-side from `/hazards`).
 
