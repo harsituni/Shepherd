@@ -28,8 +28,11 @@ Usage:
     python engine/spread0.py 35 270 0.9           # wind_kmh wind_from_deg fuel_dryness
 """
 
+from __future__ import annotations
+
 import heapq
 import math
+from typing import Optional
 
 START_RADIUS_M = 300
 BASE_ROS_M_PER_MIN = 40
@@ -119,14 +122,8 @@ class WildfireSim:
         self.minutes += minutes
         self._burn_until(self.minutes)
 
-    def forecast(self, horizon_min: int = 120) -> list[dict]:
-        """Return predicted outline Features at 15-min steps up to horizon_min.
-
-        Each item includes top-level ``t_min`` plus a GeoJSON Feature with
-        ``zone: "predicted"`` (contract GET /forecast).
-        Does not change the live sim footprint.
-        """
-        steps = [t for t in range(15, horizon_min + 1, 15)]
+    def _arrival_map(self, horizon_min: int = 120) -> dict:
+        """Expand fire to horizon without changing the live footprint; return arrivals."""
         burned_snap = set(self.burning)
         arrival_snap = dict(self.arrival)
         frontier_snap = list(self._frontier)
@@ -138,6 +135,31 @@ class WildfireSim:
         self.arrival = arrival_snap
         self._frontier = frontier_snap
         heapq.heapify(self._frontier)
+        return arrival_full
+
+    def arrival_min(self, lat: float, lon: float, horizon_min: int = 120) -> Optional[int]:
+        """Sim minute fire reaches (lat, lon), or None if outside the horizon."""
+        north_m = (lat - self.lat) * M_PER_DEG_LAT
+        east_m = (lon - self.lon) * M_PER_DEG_LAT * math.cos(math.radians(self.lat))
+        col = int(round(east_m / CELL_M))
+        row = int(round(north_m / CELL_M))
+        if math.hypot(col, row) * CELL_M > MAX_RADIUS_M:
+            return None
+        at = self._arrival_map(horizon_min).get((col, row))
+        if at is None or at > horizon_min:
+            return None
+        return int(math.ceil(at))
+
+    def forecast(self, horizon_min: int = 120) -> list[dict]:
+        """Return predicted outline Features at 15-min steps up to horizon_min.
+
+        Each item includes top-level ``t_min`` plus a GeoJSON Feature with
+        ``zone: "predicted"`` (contract GET /forecast).
+        Does not change the live sim footprint.
+        """
+        steps = [t for t in range(15, horizon_min + 1, 15)]
+        burned_snap = set(self.burning)
+        arrival_full = self._arrival_map(horizon_min)
 
         outlines: list[dict] = []
         for t_min in steps:
