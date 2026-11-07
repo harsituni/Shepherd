@@ -1,26 +1,25 @@
-"""Step 0 straight-line prototype; no road or hazard analysis is performed.
+"""
+Finds the closest available shelter to the user.
 
-Inputs are lists of GeoJSON Features, as defined in shared/contract.md.
-Eligibility means open with occupancy below capacity. Distance is great-circle
-distance; ETA uses an illustrative 5 km/h and is not a travel-time prediction.
-These lines are not verified as safe, drivable, or hazard-free.
+For now, the route is just a straight line.
+Roads and hazards will be added later.
 """
 
 from math import asin, ceil, cos, radians, sin, sqrt
 
 
 class NoRouteError(Exception):
-    """Raised when no open shelter with spare capacity is available."""
+     """Used when no shelters are available."""
 
 
 def load_graph() -> None:
-    """Startup placeholder: Step 0 loads no graph and needs no routing libraries."""
+    """Will load road data later."""
     return None
 
 
 def _distance_km(lat: float, lon: float, shelter_lat: float,
                  shelter_lon: float) -> float:
-    """Haversine distance on a sphere with mean Earth radius 6371.0088 km."""
+    """Calculates the distance between two locations in km."""
     delta_lat = radians(shelter_lat - lat)
     delta_lon = radians(shelter_lon - lon)
     a = (sin(delta_lat / 2) ** 2
@@ -32,20 +31,28 @@ def _distance_km(lat: float, lon: float, shelter_lat: float,
 def find_route(lat: float, lon: float,
                hazards: list[dict],
                shelters: list[dict]) -> dict:
-    """Return the contract's GET /route body for the nearest eligible shelter.
+    """  Finds the closest open shelter with available space.
 
-    Hazards are accepted but deliberately ignored in Step 0. Ties select the
-    first shelter in input order. No road reachability is evaluated. The API
-    layer is responsible for translating NoRouteError into the contract's 404.
+    For now, hazards are ignored and the route is a straight line.
     """
     nearest = None
     distance = float("inf")
+
     for shelter in shelters:
         properties = shelter["properties"]
-        if not properties["open"] or properties["occupancy"] >= properties["capacity"]:
+
+        if properties["open"] == False:
             continue
+
+        if properties["occupancy"] >= properties["capacity"]:
+            continue
+
         shelter_lon, shelter_lat = shelter["geometry"]["coordinates"]
-        candidate_distance = _distance_km(lat, lon, shelter_lat, shelter_lon)
+
+        candidate_distance = _distance_km(
+            lat, lon, shelter_lat, shelter_lon
+        )
+
         if candidate_distance < distance:
             nearest = shelter
             distance = candidate_distance
@@ -70,5 +77,5 @@ def find_route(lat: float, lon: float,
 
 
 def closed_roads(hazards: list[dict]) -> list[dict]:
-    """Step 2 placeholder returning []; this does not establish roads are open."""
+    """Will check for closed roads latern."""
     return []
