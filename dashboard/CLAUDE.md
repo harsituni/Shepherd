@@ -29,7 +29,7 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 - Thin light-blue incident banner under it (current hazard + status).
 - Left panel: Simulate & predict controls.
 - Centre: full map, legend bottom-left, zoom top-right, history slider along the bottom.
-- Right panel: 4 stat tiles, then tabs: **Updates** (rerouting feed) · **Reports** (hazard reports) · **Priority** (high-priority residents) · **Notify** (send update + history).
+- Right panel: 4 stat tiles, then tabs: **Reports** (hazard reports; reports from high-priority residents are specially marked) · **Notify** (send update + history; severity colours: Alert deep yellow `#9A6B00`, Evacuation order deep red `#8A2F06`). No separate Updates or Priority tabs.
 - Fluid page layout; panels stack on narrow screens.
 
 ## Design
@@ -78,6 +78,7 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 - Stats: people at risk, active reroutes.
 - Relative humidity as a sim condition (e.g. `humidity_pct` 0–100 on `POST /sim/start`). The UI sends wind and humidity only; fuel dryness is left to the backend default. No temperature control.
 - A `tornado` scenario: `POST /sim/start { scenario: "tornado", lat, lon, wind_kmh, wind_from_deg }`, the storm travelling with the wind, and `kind: "tornado"` hazard features. The dashboard fixture fakes it meanwhile.
+- Changing wind speed mid-run: `POST /sim/wind { wind_kmh }` while the sim is running or paused. The dashboard already sends it (wind speed is the one condition that stays unlocked after start); until the backend has it, the call 404s and is only logged to the console.
 
 ## Rules
 - Build exactly to `shared/contract.md`. Never edit it; ask Harsit (backend/lead) for changes.
