@@ -36,6 +36,60 @@ once the packages are installed.
 
 ## Real Edmonton demo (run separately)
 
+### Import the BBBike extract offline
+
+The local file is `data/planet_-113.700,53.420_-113.430,53.580.osm.gz`
+(about 44 MB compressed). The large import has not been run by the coding agent.
+
+Close unused apps and stop running backend processes first. Open Task Manager
+to watch memory. From the repository root, run only one conversion:
+
+```powershell
+backend/routing/.venv/Scripts/python.exe -B -m backend.routing.import_osm
+```
+
+The script selects the single `.osm.gz` file in `data/`. If there are several,
+choose the source explicitly:
+
+```powershell
+backend/routing/.venv/Scripts/python.exe -B -m backend.routing.import_osm --source "backend/routing/data/planet_-113.700,53.420_-113.430,53.580.osm.gz"
+```
+
+It reads the compressed file twice, keeping only driving ways and their nodes.
+It writes a smaller temporary XML file before OSMnx builds the graph. Buildings,
+footpaths, bicycle-only paths, service roads, and roads marked as inaccessible
+to cars are excluded. The road allowlist is deliberately conservative; it may
+exclude roads with unusual tags or access exceptions. OSMnx preserves standard
+one-way directions and calculates lengths before simplifying road geometry.
+Turn restrictions and conditional access rules are not modeled.
+
+The original `.osm.gz` is read only. No Overpass calls are made. Temporary files
+are placed under the output folder and cleaned up on normal completion or
+Ctrl+C. Filtering stops above 250,000 road nodes or 100 MB of filtered XML.
+These guards reduce risk but are not a RAM limit: OSMnx still builds the graph
+in memory, and compressed size does not predict peak memory use. Stop with
+Ctrl+C if memory climbs too high; do not wait for the computer to freeze.
+If a guard stops the import, use a smaller extract rather than raising it blindly.
+
+The output is `data/edmonton_demo_drive.graphml`. An existing output is never
+overwritten: check it with `prepare_graph`, or choose a new name with `--path`.
+The graph is saved before the existing four-location checks run. If validation
+fails, the error identifies the saved file so it can be inspected offline.
+Only use it for the full demo after those checks pass. Data and temporary files
+under `data/` are already ignored by Git.
+
+After a successful import, select the graph before starting the backend:
+
+```powershell
+$env:SHEPHERD_GRAPH_PATH = "backend/routing/data/edmonton_demo_drive.graphml"
+```
+
+To repeat validation without converting or downloading:
+
+```powershell
+backend/routing/.venv/Scripts/python.exe -B -m backend.routing.prepare_graph
+```
+
 ### Prepare the larger graph manually
 
 From the repository root, explicitly allow the preparation script to download:
