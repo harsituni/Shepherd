@@ -14,6 +14,7 @@
   --on-navy-muted: #bfd7ee;
   --map-bg: #f3f7fb;
   --hazard: #d9480f;
+  --predicted: #c62828; /* dotted predicted-path outline (same red as closed roads, which are solid) */
   --hazard-high: #7a1f0a; /* wildfire's most intense area; darker than --closed so roads stay distinct */
   --closed: #c62828;
   --surface: #ffffff;
@@ -209,7 +210,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .swatch { display: inline-block; flex: 0 0 auto; }
 /* Orange edge, dark red centre: solid colours, no gradient. */
 .swatch-hazard { width: 12px; height: 12px; border-radius: 3px; background: var(--hazard-high); border: 3px solid var(--hazard); }
-.swatch-predicted { width: 12px; height: 12px; border-radius: 3px; border: 2px dotted var(--blue); }
+.swatch-predicted { width: 12px; height: 12px; border-radius: 3px; border: 2px dotted var(--predicted); }
 .swatch-closed { width: 14px; height: 3px; background: var(--closed); }
 .swatch-route { width: 14px; height: 3px; background: var(--blue); }
 .swatch-shelter { width: 12px; height: 12px; border-radius: 3px; background: var(--navy); }
@@ -269,7 +270,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .history-label { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
 .history-track { flex: 1 1 320px; display: flex; flex-direction: column; gap: 4px; }
 .history-track input { width: 100%; accent-color: var(--blue); }
-.history-ticks { display: flex; justify-content: space-between; font-size: var(--fs-sm); color: var(--muted-2); }
+/* Ticks sit at their real position (T+0, Now, end of forecast), not evenly spaced. */
+.history-ticks { position: relative; height: 20px; font-size: var(--fs-sm); color: var(--muted-2); }
+.history-tick { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.history-tick:first-child { transform: none; }
+.history-tick:last-child:not(:first-child) { transform: translateX(-100%); }
+.history-tick.is-now { color: var(--text); font-weight: 600; }
 .history-viewing { font-size: var(--fs-sm); }
 .history-viewing strong { font-weight: 600; }
 .btn-outline {

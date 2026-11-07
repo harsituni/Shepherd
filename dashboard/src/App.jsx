@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   deleteHazards,
+  getForecast,
   getHazards,
   getReports,
   getShelters,
@@ -13,6 +14,7 @@ import {
   startSim,
 } from './api.js'
 import { POLL_MS, USE_FIXTURES } from './config.js'
+import { forecastHorizon, hazardsForView, recordSnapshot } from './history.js'
 import MapView from './components/MapView.jsx'
 import Header from './components/Header.jsx'
 import IncidentBanner from './components/IncidentBanner.jsx'
@@ -39,6 +41,9 @@ export default function App() {
   const [focus, setFocus] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [connectionError, setConnectionError] = useState(false)
+  const [forecast, setForecast] = useState(null) // GET /forecast
+  const [viewing, setViewing] = useState(null) // history slider: null = live, else a sim minute
+  const snapshots = useRef(new Map()) // sim_time → hazard features, for the slider
   const inFlight = useRef(false)
 
   // Re-fetch everything the backend owns. Each result is applied on its own, so one
@@ -50,10 +55,14 @@ export default function App() {
     try {
       const results = await Promise.allSettled([getHazards(), getShelters(), getReports(), getSimState()])
       const [h, s, r, st] = results
+      // A failed forecast only hides the predicted path; it isn't a lost connection.
+      const fc = await getForecast().catch(() => null)
       if (h.status === 'fulfilled') setHazards(h.value)
       if (s.status === 'fulfilled') setShelters(s.value)
       if (r.status === 'fulfilled') setReports(r.value)
       if (st.status === 'fulfilled') setSim(st.value)
+      setForecast(fc)
+      if (h.status === 'fulfilled' && st.status === 'fulfilled') recordSnapshot(snapshots.current, h.value, st.value)
       if (results.some((x) => x.status === 'fulfilled')) setLastUpdated(new Date())
       setConnectionError(results.some((x) => x.status === 'rejected'))
     } finally {
@@ -94,6 +103,7 @@ export default function App() {
     (conditions, speed) =>
       run(async () => {
         if (sim?.state === 'running') return pauseSim()
+        setViewing(null) // resuming or starting goes back to live
         if (sim?.state === 'paused') return resumeSim()
         if (!startPoint) return
         const where = { lat: startPoint.lat, lon: startPoint.lng }
@@ -122,6 +132,8 @@ export default function App() {
         await resetSim()
         await deleteHazards()
         setStartPoint(null)
+        setViewing(null)
+        snapshots.current.clear()
       }),
     [run],
   )
@@ -131,6 +143,20 @@ export default function App() {
   const changeWind = useCallback(
     (windKmh, windFrom) => run(() => setSimWind(windKmh, windFrom)),
     [run],
+  )
+
+  // Dragging the history slider pauses the sim (spec), so "now" holds still.
+  const scrub = useCallback(
+    (t) => {
+      setViewing(t)
+      if (sim?.state === 'running') run(() => pauseSim())
+    },
+    [sim, run],
+  )
+  // Snapshots only change inside refresh(), which also sets `hazards`, so these deps cover them.
+  const shownHazards = useMemo(
+    () => hazardsForView(hazards, forecast, snapshots.current, viewing),
+    [hazards, forecast, viewing],
   )
 
   const focusReport = useCallback((feature) => {
@@ -174,7 +200,8 @@ export default function App() {
         />
         <main className="centre">
           <MapView
-            hazards={hazards}
+            hazards={shownHazards}
+            nowLabel={viewing == null ? 'Now' : `T+${viewing}`}
             shelters={shelters}
             reports={reports}
             focus={focus}
@@ -182,7 +209,13 @@ export default function App() {
             showPredicted={showPredicted}
             onMapClick={pickStart}
           />
-          <HistoryBar simTime={hazards?.sim_time} />
+          <HistoryBar
+            now={simIdle ? null : (hazards?.sim_time ?? null)}
+            horizon={forecastHorizon(forecast)}
+            viewing={viewing}
+            onScrub={scrub}
+            onLive={() => setViewing(null)}
+          />
         </main>
         <SidePanel shelters={shelters} reports={reports} onReportSelect={focusReport} />
       </div>

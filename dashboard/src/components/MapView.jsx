@@ -17,7 +17,7 @@ const cssVar = (name, fallback) =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 const HAZARD = cssVar('--hazard', '#D9480F')
 const HAZARD_HIGH = cssVar('--hazard-high', '#7A1F0A')
-const PREDICTED_COLOR = cssVar('--blue', '#0070C4')
+const PREDICTED_COLOR = cssVar('--predicted', '#C62828')
 const MAP_BG = cssVar('--map-bg', '#F3F7FB')
 const SURFACE = cssVar('--surface', '#FFFFFF')
 
@@ -110,7 +110,7 @@ function textElement(className, text) {
   return el
 }
 
-const nowElement = () => textElement('now-label', 'Now')
+const nowElement = () => textElement('now-label', '')
 
 function startElement() {
   const el = document.createElement('div')
@@ -165,7 +165,16 @@ function leadingEdge(feature, from) {
   return best
 }
 
-export default function MapView({ hazards, shelters, reports, focus, startPoint, showPredicted = true, onMapClick }) {
+export default function MapView({
+  hazards,
+  nowLabel = 'Now', // "T+42" while the history slider is off live
+  shelters,
+  reports,
+  focus,
+  startPoint,
+  showPredicted = true,
+  onMapClick,
+}) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const shelterMarkers = useRef(new Map())
@@ -287,7 +296,14 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
     const features = hazards?.features ?? []
     const current = features.filter((f) => !isPredicted(f) && f.properties?.zone === 'core')
     const items = current
-      .map((f) => ({ id: f.id, lngLat: ringCentroid(f), build: nowElement }))
+      .map((f) => ({
+        id: f.id,
+        lngLat: ringCentroid(f),
+        build: nowElement,
+        update: (el) => {
+          el.textContent = nowLabel
+        },
+      }))
       .filter((i) => i.lngLat)
     syncMarkers(map, nowMarkers.current, items)
 
@@ -303,7 +319,7 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
           .filter((i) => i.lngLat)
       : []
     syncMarkers(map, predictedMarkers.current, labels)
-  }, [hazards, showPredicted, loaded])
+  }, [hazards, nowLabel, showPredicted, loaded])
 
   // "Show predicted path" toggle.
   useEffect(() => {

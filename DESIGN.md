@@ -17,7 +17,9 @@ colors:
   map-bg: "#F3F7FB"
   surface: "#FFFFFF"
   hazard: "#D9480F"
+  hazard-high: "#7A1F0A"
   closed: "#C62828"
+  predicted: "#C62828"
   danger-bg: "#FFF3EC"
   danger-border: "#F6D2BE"
   danger-title: "#8A2F06"
@@ -170,7 +172,7 @@ The visual rejections are explicit and binding (see Do's and Don'ts): no gradien
 
 **Key Characteristics:**
 - White surfaces, navy chrome, blue as the single interactive and route colour.
-- Orange means hazard and red means closed road. Neither colour ever appears for any other purpose.
+- Orange means hazard now; red means danger ahead: a closed road, the predicted spread, or a call for help. Neither colour ever appears for any other purpose.
 - Flat. 1px borders separate surfaces; the tint belongs to the alert banner alone.
 - One solid button per area; everything else is a plain outline.
 - Public Sans throughout, with tabular numerals for every time, ETA, distance and stat.
@@ -181,13 +183,14 @@ The visual rejections are explicit and binding (see Do's and Don'ts): no gradien
 A cool, low-saturation blue-and-white civic palette, with one warm signal colour kept for danger.
 
 ### Primary
-- **Service Blue** (#0070C4): the one primary-action and route colour. Primary buttons, range accents, the tab underline, evacuation routes, and the dashed predicted-spread rings. On the phone it is also the "you" dot and the Advisory severity label. Hover deepens to **Pressed Blue** (#005A9E).
+- **Service Blue** (#0070C4): the one primary-action and route colour. Primary buttons, range accents, the tab underline and evacuation routes. On the phone it is also the "you" dot and the Advisory severity label. Hover deepens to **Pressed Blue** (#005A9E).
 - **Alberta Header Blue** (#005072): the header on both surfaces, matching Alberta's brand dark blue (`--goa-color-brand-dark` in the GoA design tokens). White text on it is 8.8:1.
 - **Masthead Navy** (#0B3D6E): shelter markers, selected-state fills (choice tiles and segmented controls), outline-button borders and labels, icon-button glyphs and the toast. **Deep Navy** (#0A3360) is a reserved token and currently unused.
 
 ### Signal
 - **Hazard Orange** (#D9480F): the active hazard only, used as fills, outlines, the incident-banner dot, the start marker and report-pin strokes.
-- **Closure Red** (#C62828): closed roads, the "Roads closed" stat, SOS reports, and the phone's "Need help" button (white text, 5.6:1). Nothing else.
+- **Fire Core** (#7A1F0A): the hottest part of a wildfire on the dashboard map (its centre, shading out to Hazard Orange at the edge), and the centre of the "Active hazard" legend swatch. Darker than Closure Red so the two never read as the same thing. Nothing else.
+- **Closure Red** (#C62828): closed roads (solid), the predicted spread (dotted rings, token `predicted`), the "Roads closed" stat, SOS reports, and the phone's "Need help" button (white text, 5.6:1). Nothing else.
 - **Focus Gold** (#FEBA35): the keyboard focus ring only, as on Alberta.ca: a 3px outline. Never decoration, never a fill. Gold on white is about 1.7:1, below WCAG 2.2's 3:1 guidance for focus indicators, so the 3px width is what carries it. If an accessibility review flags it, keep the gold and add a 1px navy ring inside it rather than switching back to blue.
 - **Evacuation Tint family**, shared by both surfaces for evacuation-order alerts and "no safe route" states: background **Ember Wash** (#FFF3EC), border **Ember Edge** (#F6D2BE), title **Ember Ink** (#8A2F06), body **Ember Text** (#6B3A1F) and icon **Ember Mark** (#B4400B). Ember Ink is also the fill of the selected "Evacuation" severity segment (white text, which passes 4.5:1 where Hazard Orange would not).
 
@@ -202,9 +205,9 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 - **On-Navy Muted** (#BFD7EE): secondary text on the header (5.9:1 on Alberta Header Blue).
 
 ### Named Rules
-**The Two Warnings Rule.** Orange is the hazard; red is a closed road or a call for help (SOS reports and the phone's "Need help" button). Neither may be used for decoration, emphasis, branding, or generic errors.
+**The Two Warnings Rule.** Orange is the hazard now (with Fire Core at a wildfire's centre); red is danger ahead: a closed road, the predicted spread, or a call for help (SOS reports and the phone's "Need help" button). Line style keeps the reds apart on the map: closed roads are solid lines (dashed when slowed), the predicted spread is dotted closed rings. Neither colour may be used for decoration, emphasis, branding, or generic errors.
 
-**The One Ink Rule.** Blue marks the primary action and the route. Anything blue is either the main thing to press or a route/prediction on the map. Selection is navy, not blue.
+**The One Ink Rule.** Blue marks the primary action and the route. Anything blue is either the main thing to press or a route on the map. Selection is navy, not blue.
 
 **The One Tint Rule.** Sky Tint means "this is the alert". If the banner and a hint look the same, the banner has lost its authority, so inline hints and notices are plain text with an icon.
 
@@ -311,8 +314,8 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 titl
 - **Toast:** a solid navy bar with 6px corners and white 500 14px text, floating just above the action bar.
 
 ### Map layers (signature)
-- **Hazard core:** Hazard Orange fill at 0.85 opacity with a 1.5px orange outline. **Buffer:** orange at 0.3 opacity.
-- **Predicted spread** (both surfaces): features with a `predicted_min` property. Service Blue fill at 0.06 with a 1.5px dashed line (`[3, 3]`; 0.6 opacity on the dashboard, 0.7 on the phone), labelled T+30 / T+60 at the leading edge in navy 600 14px with a halo. They are never drawn or counted as the current hazard.
+- **Hazard core:** Hazard Orange fill at 0.85 opacity with a 1.5px orange outline. **Buffer:** orange at 0.3 opacity. On the dashboard a wildfire core also gets three nested bands (the core shrunk to 75 / 50 / 25% toward its centre) stepping from orange to Fire Core at 0.9 opacity: solid colours, not a gradient.
+- **Predicted spread** (both surfaces): the 30 and 60 min outlines from `GET /forecast`, drawn as features with a `predicted_min` property. No fill; a 2px dotted Closure Red line (`line-dasharray [0, 2]`, round caps, 0.9 opacity), labelled T+30 / T+60 at the leading edge in navy 600 14px with a halo. The legend/key swatch is a 2px dotted red square. They are never drawn or counted as the current hazard.
 - **Route (phone):** a 5px Service Blue line over a 9px white casing, with round caps and joins, so it stays legible over grey tiles and orange hazards. Never cyan or any off-palette colour.
 - **Closed road:** Closure Red, solid when closed and dashed when slowed.
 - **Shelter:** a 20px navy square (4px corners, 2px white border) with a 600 14px label. On the phone only the route's destination is labelled, on whichever side of the square has more room.
@@ -338,7 +341,7 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 titl
 - **Don't** use gradients of any kind: backgrounds, buttons, text or glows.
 - **Don't** use emoji as icons.
 - **Don't** use glassmorphism or blur, neon glows, coloured left-border accent cards, oversized rounded "bubble" cards or bouncy animations.
-- **Don't** use orange or red for anything except the hazard, closed roads and calls for help (SOS, "Need help"), or Focus Gold for anything but the focus ring.
+- **Don't** use orange or red for anything except the hazard, closed roads, the predicted spread and calls for help (SOS, "Need help"), or Focus Gold for anything but the focus ring.
 - **Don't** use pill shapes (999px corners) or 10px "bubble" controls.
 - **Don't** fade disabled controls with `opacity`, and never disable "Need help".
 - **Don't** set text smaller than 14px, or use small uppercase tracked eyebrow labels.
