@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shepherd public app</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#0070C4}a:hover{color:#005A9E}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; font-family: Public Sans, system-ui, sans-serif; color: #0B2545; background: #FFFFFF; display: flex; flex-direction: column; position: relative">
+
+  <div role="status" style="position: absolute; top: 10px; left: 12px; right: 12px; z-index: 2; display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: #FFFFFF; border: 1px solid #D3E3F2; border-radius: 10px; box-shadow: 0 8px 24px rgba(11, 37, 69, 0.18)">
+    <div style="flex: 0 0 32px; height: 32px; border-radius: 6px; background: #0B3D6E; display: flex; align-items: center; justify-content: center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10 21h4"></path></svg>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 11px; font-weight: 600; color: #0070C4">Emergency update · now</span>
+      <strong style="font-size: 14px; font-weight: 600; color: #0B2545">Evacuation order expanded to 142 St</strong>
+      <span style="font-size: 12px; color: #3B5A7A">Your route has been updated.</span>
+    </div>
+    <button type="button" aria-label="Dismiss" style="width: 32px; height: 32px; border: 0; background: transparent; color: #3B5A7A; cursor: pointer; font: 500 18px Public Sans, sans-serif">×</button>
+  </div>
+
+  <header style="display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 12px; background: #0B3D6E; color: #FFFFFF">
+    <span style="font-size: 17px; font-weight: 700">Shepherd</span>
+    <span style="font-size: 12px; color: #BFD7EE">Edmonton</span>
+  </header>
+
+  <div role="alert" style="display: flex; gap: 12px; align-items: flex-start; padding: 14px 20px; background: #FFF3EC; border-bottom: 1px solid #F6D2BE">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B4400B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: 0 0 20px; margin-top: 2px" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"></path><path d="M12 10v4M12 17h.01"></path></svg>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <strong style="font-size: 15px; font-weight: 700; color: #8A2F06">Evacuation order: wildfire</strong>
+      <span style="font-size: 13px; color: #6B3A1F">Fire is 2.4 km west of you and moving east. Leave now.</span>
+    </div>
+  </div>
+
+  <nav role="tablist" aria-label="Sections" style="display: flex; border-bottom: 1px solid #E3ECF5">
+    <button type="button" role="tab" aria-selected="{{routeSel}}" onClick="{{showRoute}}" style="{{routeTab}}">Route</button>
+    <button type="button" role="tab" aria-selected="{{tipsSel}}" onClick="{{showTips}}" style="{{tipsTab}}">Survival tips</button>
+    <button type="button" role="tab" aria-selected="{{govSel}}" onClick="{{showGov}}" style="{{govTab}}">Gov updates</button>
+  </nav>
+
+  <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column">
+
+    <sc-if value="{{isRoute}}" hint-placeholder-val="{{ true }}">
+      <div style="position: relative; height: 290px; background: #F3F7FB; flex: 0 0 290px">
+        <svg viewBox="0 0 390 290" style="position: absolute; inset: 0; width: 100%; height: 100%" role="img" aria-label="Map showing your location, the fire to the west, the closed road and your route east to Kinsmen Sports Centre">
+          <rect width="390" height="290" fill="#F3F7FB"></rect>
+          <path d="M0 250 C 100 220, 180 270, 270 235 S 360 210, 390 225" fill="none" stroke="#B9D7F0" stroke-width="18"></path>
+          <g stroke="#DCE6F0" stroke-width="5" fill="none"><path d="M0 70 H390"></path><path d="M0 160 H390"></path><path d="M90 0 V290"></path><path d="M200 0 V290"></path><path d="M310 0 V290"></path></g>
+          <path d="M-20 40 C 10 130, 120 140, 130 90 C 110 30, 20 10, -20 40 Z" fill="#0070C4" fill-opacity="0.07" stroke="#0070C4" stroke-opacity="0.55" stroke-width="1.5" stroke-dasharray="5 5"></path>
+          <path d="M-10 60 C 10 110, 70 115, 80 85 C 70 50, 20 40, -10 60 Z" fill="#D9480F" fill-opacity="0.85"></path>
+          <path d="M0 160 H140" stroke="#C62828" stroke-width="5"></path>
+          <path d="M150 120 V200 H310 V150 H345" fill="none" stroke="#0070C4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <circle cx="150" cy="120" r="9" fill="#0070C4" stroke="#FFFFFF" stroke-width="3"></circle>
+          <rect x="336" y="140" width="20" height="20" rx="4" fill="#0B3D6E"></rect>
+          <text x="10" y="152" font-family="Public Sans, sans-serif" font-size="10" font-weight="600" fill="#C62828">Stony Plain Rd closed</text>
+          <text x="164" y="116" font-family="Public Sans, sans-serif" font-size="11" font-weight="600" fill="#0B3D6E">You</text>
+        </svg>
+      </div>
+
+      <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: #EAF3FB; border-radius: 8px; font-size: 13px; color: #0B3D6E">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h11a5 5 0 0 1 0 10H9"></path><path d="m8 3-4 4 4 4"></path></svg>
+          <span>Rerouted: Stony Plain Rd closed and fire heading toward 149 St</span>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: flex-end">
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 12px; color: #3B5A7A">Go to shelter</span>
+            <span style="font-size: 18px; font-weight: 700">Kinsmen Sports Centre</span>
+            <span style="font-size: 13px; color: #3B5A7A">8.4 km · 41% full</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end">
+            <span style="font-size: 28px; font-weight: 700; color: #0070C4">14</span>
+            <span style="font-size: 12px; color: #3B5A7A">min</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid #E3ECF5; border-bottom: 1px solid #E3ECF5">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B3D6E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V8h9"></path><path d="m14 4 4 4-4 4"></path></svg>
+          <div style="display: flex; flex-direction: column"><span style="font-size: 15px; font-weight: 600">Turn right onto 87 Ave</span><span style="font-size: 12px; color: #3B5A7A">in 400 m</span></div>
+        </div>
+
+        <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 10px; background: #0070C4; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none">Start navigation</a>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isTips}}" hint-placeholder-val="{{ false }}">
+      <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px">
+        <div role="group" aria-label="Hazard type" style="display: flex; gap: 8px">
+          <button type="button" aria-pressed="true" style="min-height: 40px; padding: 0 16px; border: 1.5px solid #0070C4; border-radius: 999px; background: #EAF3FB; color: #0B3D6E; font: 600 13px Public Sans, sans-serif">Wildfire</button>
+          <button type="button" style="min-height: 40px; padding: 0 16px; border: 1px solid #D3E3F2; border-radius: 999px; background: #FFFFFF; color: #0B2545; font: 500 13px Public Sans, sans-serif">Flood</button>
+        </div>
+        <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0">
+          <li style="padding: 14px 0; border-bottom: 1px solid #E3ECF5; display: flex; flex-direction: column; gap: 4px"><strong style="font-size: 15px">Leave as soon as you're told to</strong><span style="font-size: 13px; color: #3B5A7A">Don't wait to see flames. Roads close fast.</span></li>
+          <li style="padding: 14px 0; border-bottom: 1px solid #E3ECF5; display: flex; flex-direction: column; gap: 4px"><strong style="font-size: 15px">Grab your go-bag</strong><span style="font-size: 13px; color: #3B5A7A">ID, medications, phone charger, water, pet supplies.</span></li>
+          <li style="padding: 14px 0; border-bottom: 1px solid #E3ECF5; display: flex; flex-direction: column; gap: 4px"><strong style="font-size: 15px">Drive with lights on, windows up</strong><span style="font-size: 13px; color: #3B5A7A">Set air to recirculate to keep smoke out.</span></li>
+          <li style="padding: 14px 0; border-bottom: 1px solid #E3ECF5; display: flex; flex-direction: column; gap: 4px"><strong style="font-size: 15px">Follow the route, not the crowd</strong><span style="font-size: 13px; color: #3B5A7A">Your route avoids where the fire is heading.</span></li>
+          <li style="padding: 14px 0; display: flex; flex-direction: column; gap: 4px"><strong style="font-size: 15px">Smoke is thick? Stay low</strong><span style="font-size: 13px; color: #3B5A7A">Cover your nose and mouth with a damp cloth.</span></li>
+        </ol>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isGov}}" hint-placeholder-val="{{ false }}">
+      <div style="padding: 8px 20px 20px; display: flex; flex-direction: column">
+        <div style="padding: 14px 0; border-bottom: 1px solid #E3ECF5; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 12px; color: #0070C4; font-weight: 600">7:40 PM · Emergency management</span>
+          <strong style="font-size: 15px">Evacuation order expanded to 142 St</strong>
+          <span style="font-size: 13px; color: #3B5A7A">All residents west of 142 St must leave now.</span>
+        </div>
+        <div style="padding: 14px 0; border-bottom: 1px solid #E3ECF5; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 12px; color: #0070C4; font-weight: 600">7:31 PM · Roads</span>
+          <strong style="font-size: 15px">Stony Plain Rd closed westbound</strong>
+          <span style="font-size: 13px; color: #3B5A7A">Use 87 Ave or Whitemud Dr eastbound.</span>
+        </div>
+        <div style="padding: 14px 0; border-bottom: 1px solid #E3ECF5; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 12px; color: #0070C4; font-weight: 600">7:22 PM · Shelters</span>
+          <strong style="font-size: 15px">Mill Woods Rec Centre now open</strong>
+          <span style="font-size: 13px; color: #3B5A7A">Pets welcome. Bring medications.</span>
+        </div>
+        <div style="padding: 14px 0; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 12px; color: #0070C4; font-weight: 600">7:18 PM · Air quality</span>
+          <strong style="font-size: 15px">Smoke advisory for west Edmonton</strong>
+          <span style="font-size: 13px; color: #3B5A7A">Limit time outdoors.</span>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 12px 16px 20px; border-top: 1px solid #E3ECF5; background: #FFFFFF">
+    <button type="button" style="min-height: 48px; border: 1px solid #D3E3F2; border-radius: 10px; background: #FFFFFF; color: #0B3D6E; font: 600 13px Public Sans, sans-serif">Report hazard</button>
+    <button type="button" style="min-height: 48px; border: 1px solid #0070C4; border-radius: 10px; background: #EAF3FB; color: #0B3D6E; font: 600 13px Public Sans, sans-serif">I'm safe</button>
+    <button type="button" style="min-height: 48px; border: 0; border-radius: 10px; background: #0B3D6E; color: #FFFFFF; font: 600 13px Public Sans, sans-serif">Need help</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'route' };
+  }
+  renderVals() {
+    var t = this.state.tab;
+    var base = 'flex: 1; min-height: 48px; border: 0; background: #FFFFFF; font-family: Public Sans, sans-serif; font-size: 14px; cursor: pointer; ';
+    var on = base + 'font-weight: 600; color: #0B3D6E; box-shadow: inset 0 -3px 0 #0070C4;';
+    var off = base + 'font-weight: 500; color: #3B5A7A;';
+    var self = this;
+    return {
+      isRoute: t === 'route',
+      isTips: t === 'tips',
+      isGov: t === 'gov',
+      routeSel: t === 'route' ? 'true' : 'false',
+      tipsSel: t === 'tips' ? 'true' : 'false',
+      govSel: t === 'gov' ? 'true' : 'false',
+      routeTab: t === 'route' ? on : off,
+      tipsTab: t === 'tips' ? on : off,
+      govTab: t === 'gov' ? on : off,
+      showRoute: function () { self.setState({ tab: 'route' }); },
+      showTips: function () { self.setState({ tab: 'tips' }); },
+      showGov: function () { self.setState({ tab: 'gov' }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shepherd dashboard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#0070C4}a:hover{color:#005A9E}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 960px; box-sizing: border-box; font-family: Public Sans, system-ui, sans-serif; color: #0B2545; background: #FFFFFF; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 28px; background: #0B3D6E; color: #FFFFFF">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <div style="width: 32px; height: 32px; border-radius: 6px; background: #FFFFFF; display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0B3D6E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 21V9a5 5 0 0 1 10 0"></path><path d="M17 9v2"></path><path d="M4 21h16"></path></svg>
+      </div>
+      <div style="display: flex; flex-direction: column">
+        <span style="font-size: 18px; font-weight: 700">Shepherd</span>
+        <span style="font-size: 12px; color: #BFD7EE">Disaster monitoring · Alberta</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+      <div role="group" aria-label="Mode" style="display: flex; background: #0A3360; border-radius: 999px; padding: 3px">
+        <button type="button" style="border: 0; border-radius: 999px; padding: 8px 16px; font: 500 13px Public Sans, sans-serif; background: transparent; color: #BFD7EE; cursor: pointer">Live</button>
+        <button type="button" aria-pressed="true" style="border: 0; border-radius: 999px; padding: 8px 16px; font: 600 13px Public Sans, sans-serif; background: #FFFFFF; color: #0B3D6E; cursor: pointer">Drill</button>
+      </div>
+      <span style="font-size: 12px; color: #BFD7EE">Updated 7:42 PM · sample data</span>
+    </div>
+  </header>
+
+  <div style="display: flex; align-items: center; gap: 10px; padding: 10px 28px; background: #EAF3FB; border-bottom: 1px solid #D3E3F2; font-size: 14px; flex-wrap: wrap">
+    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #D9480F"></span>
+    <strong style="font-weight: 600">Wildfire drill: west Edmonton</strong>
+    <span style="color: #3B5A7A">Out of control · spreading east at 18 km/h wind</span>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1">
+
+    <aside style="flex: 1 1 260px; max-width: 300px; box-sizing: border-box; padding: 24px; border-right: 1px solid #E3ECF5; display: flex; flex-direction: column; gap: 24px">
+      <h2 style="margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #3B5A7A">Simulate &amp; predict</h2>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span style="font-size: 13px; color: #3B5A7A">Hazard</span>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+          <button type="button" aria-pressed="true" style="min-height: 44px; border: 1.5px solid #0070C4; border-radius: 6px; background: #EAF3FB; color: #0B3D6E; font: 600 14px Public Sans, sans-serif; cursor: pointer">Wildfire</button>
+          <button type="button" style="min-height: 44px; border: 1px solid #D3E3F2; border-radius: 6px; background: #FFFFFF; color: #0B2545; font: 500 14px Public Sans, sans-serif; cursor: pointer">Flood</button>
+        </div>
+        <span style="font-size: 12px; color: #5B7590">Click the map to place the start point.</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px">
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #3B5A7A">
+          <span style="display: flex; justify-content: space-between">Wind speed <strong style="color: #0B2545; font-weight: 600">18 km/h</strong></span>
+          <input type="range" min="0" max="60" value="18" style="accent-color: #0070C4">
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #3B5A7A">
+          <span>Wind direction</span>
+          <select style="min-height: 40px; border: 1px solid #D3E3F2; border-radius: 6px; padding: 0 10px; font: 500 14px Public Sans, sans-serif; color: #0B2545; background: #FFFFFF">
+            <option>From west (→ east)</option>
+            <option>From north</option>
+            <option>From south</option>
+          </select>
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #3B5A7A">
+          <span style="display: flex; justify-content: space-between">Fuel dryness <strong style="color: #0B2545; font-weight: 600">High</strong></span>
+          <input type="range" min="0" max="100" value="75" style="accent-color: #0070C4">
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #3B5A7A">
+          <span style="display: flex; justify-content: space-between">Relative humidity <strong style="color: #0B2545; font-weight: 600">22%</strong></span>
+          <input type="range" min="0" max="100" value="22" style="accent-color: #0070C4">
+        </label>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; gap: 8px">
+          <button type="button" aria-label="Pause" style="width: 44px; height: 44px; border: 0; border-radius: 6px; background: #0070C4; color: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg>
+          </button>
+          <button type="button" aria-label="Reset" style="width: 44px; height: 44px; border: 1px solid #D3E3F2; border-radius: 6px; background: #FFFFFF; color: #0B3D6E; cursor: pointer; display: flex; align-items: center; justify-content: center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>
+          </button>
+          <div role="group" aria-label="Speed" style="display: flex; flex: 1; border: 1px solid #D3E3F2; border-radius: 6px; overflow: hidden">
+            <button type="button" style="flex: 1; border: 0; background: #FFFFFF; font: 500 13px Public Sans, sans-serif; color: #0B2545; cursor: pointer">1×</button>
+            <button type="button" aria-pressed="true" style="flex: 1; border: 0; background: #EAF3FB; font: 600 13px Public Sans, sans-serif; color: #0B3D6E; cursor: pointer">4×</button>
+            <button type="button" style="flex: 1; border: 0; background: #FFFFFF; font: 500 13px Public Sans, sans-serif; color: #0B2545; cursor: pointer">16×</button>
+          </div>
+        </div>
+      </div>
+
+      <label style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid #D3E3F2; border-radius: 6px; font-size: 14px">
+        <span>Show predicted path</span>
+        <input type="checkbox" checked="checked" style="width: 20px; height: 20px; accent-color: #0070C4">
+      </label>
+      <label style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid #D3E3F2; border-radius: 6px; font-size: 14px">
+        <span>Show priority residents</span>
+        <input type="checkbox" checked="checked" style="width: 20px; height: 20px; accent-color: #0070C4">
+      </label>
+    </aside>
+
+    <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; background: #F3F7FB">
+      <div style="position: relative; flex: 1; min-height: 620px">
+        <svg viewBox="0 0 800 640" preserveAspectRatio="xMidYMid slice" style="position: absolute; inset: 0; width: 100%; height: 100%" role="img" aria-label="Map of Edmonton showing the wildfire, its predicted spread, a closed road, evacuation routes, shelters, priority residents and a hazard report">
+          <rect width="800" height="640" fill="#F3F7FB"></rect>
+          <path d="M0 470 C 140 420, 220 520, 360 470 S 560 360, 640 410 S 760 470, 800 440" fill="none" stroke="#B9D7F0" stroke-width="26" stroke-linecap="round"></path>
+          <g stroke="#DCE6F0" stroke-width="6" fill="none">
+            <path d="M0 140 H800"></path><path d="M0 300 H800"></path><path d="M0 560 H800"></path>
+            <path d="M120 0 V640"></path><path d="M300 0 V640"></path><path d="M480 0 V640"></path><path d="M660 0 V640"></path>
+          </g>
+          <g stroke="#E8EEF5" stroke-width="2.5" fill="none">
+            <path d="M0 220 H800"></path><path d="M0 380 H800"></path><path d="M210 0 V640"></path><path d="M390 0 V640"></path><path d="M570 0 V640"></path>
+          </g>
+          <path d="M60 160 C 60 330, 300 330, 330 230 C 300 120, 90 90, 60 160 Z" fill="#0070C4" fill-opacity="0.05" stroke="#0070C4" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="6 6"></path>
+          <path d="M70 180 C 80 300, 240 300, 260 230 C 240 150, 100 130, 70 180 Z" fill="#0070C4" fill-opacity="0.07" stroke="#0070C4" stroke-opacity="0.6" stroke-width="1.5" stroke-dasharray="6 6"></path>
+          <path d="M80 200 C 90 270, 180 280, 200 230 C 190 175, 110 165, 80 200 Z" fill="#D9480F" fill-opacity="0.82"></path>
+          <g font-family="Public Sans, sans-serif" font-size="12" font-weight="600">
+            <text x="300" y="168" fill="#0B3D6E">T+60</text>
+            <text x="236" y="190" fill="#0B3D6E">T+30</text>
+            <text x="96" y="236" fill="#FFFFFF">Now</text>
+          </g>
+          <path d="M120 300 H300" stroke="#C62828" stroke-width="6"></path>
+          <text x="132" y="292" font-family="Public Sans, sans-serif" font-size="11" font-weight="600" fill="#C62828">Stony Plain Rd · closed</text>
+          <path d="M210 330 V380 H480 V300 H570" fill="none" stroke="#0070C4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M300 250 V140 H480" fill="none" stroke="#0070C4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.55"></path>
+          <g font-family="Public Sans, sans-serif" font-size="11" font-weight="600">
+            <rect x="560" y="290" width="20" height="20" rx="4" fill="#0B3D6E"></rect>
+            <text x="586" y="304" fill="#0B2545">Kinsmen Sports Centre</text>
+            <rect x="470" y="130" width="20" height="20" rx="4" fill="#0B3D6E"></rect>
+            <text x="496" y="144" fill="#0B2545">Commonwealth Rec Centre</text>
+            <rect x="650" y="550" width="20" height="20" rx="4" fill="#0B3D6E"></rect>
+            <text x="560" y="590" fill="#0B2545">Mill Woods Rec Centre</text>
+          </g>
+          <g fill="#0070C4">
+            <circle cx="210" cy="330" r="5"></circle><circle cx="300" cy="250" r="5"></circle><circle cx="250" cy="380" r="5"></circle><circle cx="360" cy="380" r="5"></circle>
+          </g>
+          <g fill="#FFFFFF" stroke="#0B3D6E" stroke-width="2.5">
+            <rect x="225" y="205" width="12" height="12" transform="rotate(45 231 211)"></rect>
+            <rect x="340" y="320" width="12" height="12" transform="rotate(45 346 326)"></rect>
+            <rect x="155" y="345" width="12" height="12" transform="rotate(45 161 351)"></rect>
+          </g>
+          <circle cx="430" cy="210" r="8" fill="#FFFFFF" stroke="#D9480F" stroke-width="2.5"></circle>
+          <text x="444" y="214" font-family="Public Sans, sans-serif" font-size="11" font-weight="600" fill="#0B3D6E">Reported: smoke</text>
+        </svg>
+
+        <div style="position: absolute; left: 16px; bottom: 16px; background: #FFFFFF; border: 1px solid #D3E3F2; border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #0B2545">
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #D9480F"></span>Active hazard</span>
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 12px; height: 12px; border-radius: 3px; border: 1.5px dashed #0070C4"></span>Predicted spread</span>
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 14px; height: 3px; background: #C62828"></span>Closed road</span>
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 14px; height: 3px; background: #0070C4"></span>Evacuation route</span>
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #0B3D6E"></span>Shelter</span>
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 9px; height: 9px; margin: 0 1.5px; border: 2px solid #0B3D6E; transform: rotate(45deg); box-sizing: border-box"></span>Priority resident</span>
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid #D9480F; box-sizing: border-box"></span>Public report</span>
+        </div>
+
+        <div style="position: absolute; right: 16px; top: 16px; display: flex; flex-direction: column; gap: 8px">
+          <button type="button" aria-label="Zoom in" style="width: 44px; height: 44px; border: 1px solid #D3E3F2; border-radius: 6px; background: #FFFFFF; color: #0B3D6E; font: 600 18px Public Sans, sans-serif; cursor: pointer">+</button>
+          <button type="button" aria-label="Zoom out" style="width: 44px; height: 44px; border: 1px solid #D3E3F2; border-radius: 6px; background: #FFFFFF; color: #0B3D6E; font: 600 18px Public Sans, sans-serif; cursor: pointer">−</button>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 20px; background: #FFFFFF; border-top: 1px solid #E3ECF5">
+        <span style="font-size: 13px; font-weight: 600; color: #3B5A7A">History</span>
+        <label style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 4px">
+          <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Scrub disaster progression</span>
+          <input type="range" min="0" max="24" value="16" style="width: 100%; accent-color: #0070C4">
+          <span style="display: flex; justify-content: space-between; font-size: 11px; color: #5B7590"><span>T+0</span><span>T+6</span><span>T+12</span><span>T+18</span><span>T+24 now</span></span>
+        </label>
+        <span style="font-size: 13px; color: #0B2545">Viewing <strong style="font-weight: 600">T+16 min</strong></span>
+        <button type="button" style="min-height: 40px; padding: 0 14px; border: 1px solid #0070C4; border-radius: 6px; background: #FFFFFF; color: #0070C4; font: 600 13px Public Sans, sans-serif; cursor: pointer">Back to live</button>
+      </div>
+    </main>
+
+    <aside style="flex: 1 1 340px; max-width: 380px; box-sizing: border-box; padding: 24px; border-left: 1px solid #E3ECF5; display: flex; flex-direction: column; gap: 20px">
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div style="padding: 14px; border: 1px solid #D3E3F2; border-radius: 8px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 12px; color: #3B5A7A">People at risk</span>
+          <span style="font-size: 26px; font-weight: 700; color: #0B2545; font-variant-numeric: tabular-nums">2,140</span>
+        </div>
+        <div style="padding: 14px; border: 1px solid #D3E3F2; border-radius: 8px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 12px; color: #3B5A7A">Roads closed</span>
+          <span style="font-size: 26px; font-weight: 700; color: #C62828; font-variant-numeric: tabular-nums">7</span>
+        </div>
+        <div style="padding: 14px; border: 1px solid #D3E3F2; border-radius: 8px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 12px; color: #3B5A7A">Active reroutes</span>
+          <span style="font-size: 26px; font-weight: 700; color: #0070C4; font-variant-numeric: tabular-nums">318</span>
+        </div>
+        <div style="padding: 14px; border: 1px solid #D3E3F2; border-radius: 8px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 12px; color: #3B5A7A">Shelter capacity used</span>
+          <span style="font-size: 26px; font-weight: 700; color: #0B2545; font-variant-numeric: tabular-nums">46%</span>
+        </div>
+      </div>
+
+      <div role="tablist" aria-label="Panels" style="display: flex; border-bottom: 1px solid #E3ECF5">
+        <button type="button" role="tab" aria-selected="{{updSel}}" onClick="{{showUpd}}" style="{{updTab}}">Updates</button>
+        <button type="button" role="tab" aria-selected="{{repSel}}" onClick="{{showRep}}" style="{{repTab}}">Reports</button>
+        <button type="button" role="tab" aria-selected="{{priSel}}" onClick="{{showPri}}" style="{{priTab}}">Priority</button>
+        <button type="button" role="tab" aria-selected="{{notSel}}" onClick="{{showNot}}" style="{{notTab}}">Notify</button>
+      </div>
+
+      <sc-if value="{{isUpd}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-direction: column">
+          <div style="display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #E3ECF5">
+            <span style="flex: 0 0 44px; font-size: 12px; color: #5B7590">T+24</span>
+            <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Stony Plain Rd closed</span><span style="font-size: 13px; color: #3B5A7A">142 evacuees rerouted to Kinsmen Sports Centre</span></div>
+          </div>
+          <div style="display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #E3ECF5">
+            <span style="flex: 0 0 44px; font-size: 12px; color: #5B7590">T+21</span>
+            <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Predicted spread reaches 149 St by T+60</span><span style="font-size: 13px; color: #3B5A7A">96 routes moved off 149 St ahead of time</span></div>
+          </div>
+          <div style="display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #E3ECF5">
+            <span style="flex: 0 0 44px; font-size: 12px; color: #5B7590">T+12</span>
+            <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Commonwealth Rec Centre at 80%</span><span style="font-size: 13px; color: #3B5A7A">New arrivals split to Mill Woods</span></div>
+          </div>
+          <div style="display: flex; gap: 12px; padding: 12px 0">
+            <span style="flex: 0 0 44px; font-size: 12px; color: #5B7590">T+0</span>
+            <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Wildfire placed · west Edmonton</span><span style="font-size: 13px; color: #3B5A7A">Evacuation alert sent to 2,140 phones</span></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isRep}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column">
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #E3ECF5">
+            <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Smoke</span><span style="font-size: 13px; color: #3B5A7A">near 127 St &amp; 107 Ave · 7:41 PM</span></div>
+            <span style="align-self: flex-start; font-size: 12px; font-weight: 600; color: #0B3D6E; background: #EAF3FB; border-radius: 999px; padding: 3px 10px">New</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #E3ECF5">
+            <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Need help · no vehicle</span><span style="font-size: 13px; color: #3B5A7A">near 142 St · 7:36 PM</span></div>
+            <span style="align-self: flex-start; font-size: 12px; font-weight: 600; color: #FFFFFF; background: #0B3D6E; border-radius: 999px; padding: 3px 10px">Verified</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #E3ECF5">
+            <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Blocked road</span><span style="font-size: 13px; color: #3B5A7A">87 Ave at 156 St · 7:29 PM</span></div>
+            <span style="align-self: flex-start; font-size: 12px; font-weight: 600; color: #FFFFFF; background: #0B3D6E; border-radius: 999px; padding: 3px 10px">Verified</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 0">
+            <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Fire</span><span style="font-size: 13px; color: #3B5A7A">near Whitemud Dr · 7:20 PM</span></div>
+            <span style="align-self: flex-start; font-size: 12px; font-weight: 600; color: #3B5A7A; background: #F1F4F7; border-radius: 999px; padding: 3px 10px">Dismissed</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isPri}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <span style="font-size: 13px; color: #3B5A7A"><strong style="color: #0B2545; font-weight: 600">38</strong> priority residents in the zone · <strong style="color: #0B2545; font-weight: 600">12</strong> not yet moved</span>
+          <div style="display: flex; flex-direction: column">
+            <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #E3ECF5">
+              <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Resident #1042</span><span style="font-size: 13px; color: #3B5A7A">Wheelchair user · 1.1 km from fire</span></div>
+              <span style="align-self: flex-start; font-size: 12px; font-weight: 600; color: #FFFFFF; background: #D9480F; border-radius: 999px; padding: 3px 10px">Needs pickup</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #E3ECF5">
+              <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Resident #0877</span><span style="font-size: 13px; color: #3B5A7A">Oxygen-dependent · 1.8 km</span></div>
+              <span style="align-self: flex-start; font-size: 12px; font-weight: 600; color: #0B3D6E; background: #EAF3FB; border-radius: 999px; padding: 3px 10px">Not started</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #E3ECF5">
+              <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Resident #1310</span><span style="font-size: 13px; color: #3B5A7A">Visual impairment · 2.3 km</span></div>
+              <span style="align-self: flex-start; font-size: 12px; font-weight: 600; color: #FFFFFF; background: #0070C4; border-radius: 999px; padding: 3px 10px">En route</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #E3ECF5">
+              <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">Resident #0563</span><span style="font-size: 13px; color: #3B5A7A">Mobility aid · 3.0 km</span></div>
+              <span style="align-self: flex-start; font-size: 12px; font-weight: 600; color: #FFFFFF; background: #0B3D6E; border-radius: 999px; padding: 3px 10px">Safe</span>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isNot}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 14px">
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #3B5A7A">
+            <span>Title</span>
+            <input type="text" value="Evacuation order expanded to 142 St" style="min-height: 40px; border: 1px solid #D3E3F2; border-radius: 6px; padding: 0 10px; font: 500 14px Public Sans, sans-serif; color: #0B2545">
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #3B5A7A">
+            <span>Message</span>
+            <textarea rows="3" style="border: 1px solid #D3E3F2; border-radius: 6px; padding: 10px; font: 400 14px Public Sans, sans-serif; color: #0B2545; resize: vertical">All residents west of 142 St must leave now. Follow the route in Shepherd.</textarea>
+          </label>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="font-size: 13px; color: #3B5A7A">Severity</span>
+            <div role="group" aria-label="Severity" style="display: flex; border: 1px solid #D3E3F2; border-radius: 6px; overflow: hidden">
+              <button type="button" style="flex: 1; min-height: 40px; border: 0; background: #FFFFFF; font: 500 13px Public Sans, sans-serif; color: #0B2545">Advisory</button>
+              <button type="button" style="flex: 1; min-height: 40px; border: 0; background: #FFFFFF; font: 500 13px Public Sans, sans-serif; color: #0B2545">Alert</button>
+              <button type="button" aria-pressed="true" style="flex: 1; min-height: 40px; border: 0; background: #FFF3EC; font: 600 13px Public Sans, sans-serif; color: #8A2F06">Evacuation</button>
+            </div>
+          </div>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #3B5A7A">
+            <span>Send to</span>
+            <select style="min-height: 40px; border: 1px solid #D3E3F2; border-radius: 6px; padding: 0 10px; font: 500 14px Public Sans, sans-serif; color: #0B2545; background: #FFFFFF">
+              <option>Residents inside hazard zone (2,140)</option>
+              <option>Everyone in Edmonton</option>
+            </select>
+          </label>
+          <button type="button" style="min-height: 48px; border: 0; border-radius: 6px; background: #0070C4; color: #FFFFFF; font: 600 15px Public Sans, sans-serif; cursor: pointer">Send update</button>
+          <div style="display: flex; flex-direction: column; gap: 2px; padding-top: 6px">
+            <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #3B5A7A">Sent</span>
+            <span style="font-size: 13px; padding: 8px 0; border-bottom: 1px solid #E3ECF5">7:31 PM · Stony Plain Rd closed westbound</span>
+            <span style="font-size: 13px; padding: 8px 0">7:22 PM · Mill Woods Rec Centre now open</span>
+          </div>
+        </div>
+      </sc-if>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'upd' };
+  }
+  renderVals() {
+    var t = this.state.tab;
+    var self = this;
+    var base = 'flex: 1; min-height: 44px; border: 0; background: #FFFFFF; font-family: Public Sans, sans-serif; font-size: 13px; cursor: pointer; ';
+    var on = base + 'font-weight: 600; color: #0B3D6E; box-shadow: inset 0 -3px 0 #0070C4;';
+    var off = base + 'font-weight: 500; color: #3B5A7A;';
+    function pick(k) { return function () { self.setState({ tab: k }); }; }
+    return {
+      isUpd: t === 'upd', isRep: t === 'rep', isPri: t === 'pri', isNot: t === 'not',
+      updSel: t === 'upd' ? 'true' : 'false', repSel: t === 'rep' ? 'true' : 'false',
+      priSel: t === 'pri' ? 'true' : 'false', notSel: t === 'not' ? 'true' : 'false',
+      updTab: t === 'upd' ? on : off, repTab: t === 'rep' ? on : off,
+      priTab: t === 'pri' ? on : off, notTab: t === 'not' ? on : off,
+      showUpd: pick('upd'), showRep: pick('rep'), showPri: pick('pri'), showNot: pick('not')
+    };
+  }
+}
+</script>
+</body>
+</html>

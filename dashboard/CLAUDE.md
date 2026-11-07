@@ -1,0 +1,95 @@
+# Shepherd dashboard: CLAUDE.md
+
+Owner: TechShriyaz (also owns `phone/`). Only edit files in `dashboard/` unless told otherwise.
+
+## What this is
+The Shepherd command dashboard for the Government of Alberta. Officials use it to simulate and monitor natural disasters around Edmonton/Alberta, see who's at risk, reroute evacuees and push updates to residents. Part of the natHacks 2026 project (Defense & Security theme). The public side is the phone web app in `phone/`.
+
+## Features (in priority order)
+1. **Disaster simulation + conditions.** Wildfire is the main priority; flood second.
+   - Pick hazard type, click the map to place the start point.
+   - Conditions: wind speed, wind direction, fuel dryness, relative humidity (fire); river rise rate (flood). No temperature control.
+   - Play / pause / reset, speed 1× / 4× / 16×, elapsed time (T+min).
+   - Live / Drill mode switch: Live = real data feeds, Drill = simulation.
+2. **Rerouting map with predicted path.**
+   - Current hazard (solid orange) plus predicted spread as dashed rings labelled T+30 / T+60 min; toggle "Show predicted path".
+   - Closed roads in red, evacuation routes in blue, shelters as navy squares, all redrawn when the hazard changes.
+   - **Rerouting updates feed** in the right panel: timestamped events, e.g. "T+24 · Stony Plain Rd closed · 142 evacuees rerouted to Kinsmen Sports Centre".
+3. **Historical progression slider.** A timeline slider under the map that scrubs from T+0 to now, redrawing the hazard, closed roads and routes as they were at that step. Dragging it pauses the sim; a "Back to live" button returns to the current step.
+4. **High-priority residents.** Map layer + list of residents who need extra help evacuating (e.g. disabled, no vehicle). Show only what responders need: location pin, needs category, evacuation status (not started / en route / safe / needs pickup). Toggleable layer. Demo uses fake, generated residents only; never real personal data.
+5. **Notify all residents.** A "Send update" panel: title, message, severity (Advisory / Alert / Evacuation order), target area (whole region or inside the hazard zone). Sends to the backend, which pushes it to every phone as a top-of-screen notification. Show a sent-history list.
+6. **Reported hazards.** A list/tab of everything phones have reported (fire, flooded road, blocked road, SOS, I'm safe), newest first, with type, time, location and status (New / Verified / Dismissed). Each report also appears as a pin on the map; clicking a list item centres the map on it.
+
+## Key numbers (only these 4 tiles)
+People at risk · Roads closed · Active reroutes · Shelter capacity used.
+
+## Layout (matches the approved mockup)
+- Mockup: `design/dashboard-mockup.html` (screenshot `design/dashboardpic.png`). Visual reference only; rebuild as React components with MapLibre in place of the sketched SVG map.
+- Navy header: Shepherd name, "Disaster monitoring · Alberta", Live/Drill switch, last-updated time.
+- Thin light-blue incident banner under it (current hazard + status).
+- Left panel: Simulate & predict controls.
+- Centre: full map, legend bottom-left, zoom top-right, history slider along the bottom.
+- Right panel: 4 stat tiles, then tabs: **Updates** (rerouting feed) · **Reports** (hazard reports) · **Priority** (high-priority residents) · **Notify** (send update + history).
+- Fluid page layout; panels stack on narrow screens.
+
+## Design
+- Minimalist, inspired by Alberta.ca's wildfire pages: plain blue and white, lots of whitespace, no decorative charts.
+- Colours: navy `#0B3D6E` (header, shelters), blue `#0070C4` (primary, routes, predicted path), tint `#EAF3FB`, borders `#D3E3F2`, text `#0B2545`, muted text `#3B5A7A`.
+- Orange `#D9480F` only for the active hazard, red `#C62828` only for closed roads.
+- Font: **Public Sans** (Google Fonts, weights 400/500/600/700), fallback `system-ui, sans-serif`. Use `font-variant-numeric: tabular-nums` for stats and times.
+- Corners: 6px on controls, 8px on cards. Flat surfaces separated by 1px borders, not shadows (one soft shadow only on floating pop-ups).
+- Touch targets ≥44px, text contrast ≥4.5:1.
+- Don't use the Government of Alberta logo or wordmark; this is Shepherd's own branding.
+
+## Don't (looks AI-generated)
+- No Inter, Roboto, Poppins, Montserrat, DM Sans, Manrope, Space Grotesk, Plus Jakarta Sans, Geist, Outfit or any other default "AI website" font. Public Sans only.
+- No gradients of any kind: no gradient backgrounds, buttons, text or glows. Solid colours only.
+- No emoji as icons; use simple inline stroke SVG icons.
+- No glassmorphism/blur, neon glows, coloured left-border accent cards, oversized rounded "bubble" cards or bouncy animations.
+- No filler stats, decorative charts or lorem ipsum; every number on screen comes from the backend or a fixture.
+- Keep it looking like a clean government service page: white background, navy/blue accents, plain hierarchy.
+
+## Stack
+- Vite + React + `maplibre-gl`, OpenStreetMap basemap, our data drawn as GeoJSON layers.
+- Own `package.json` inside `dashboard/`.
+- `src/config.js` exports `API_URL` (default `http://localhost:8000`) and `USE_FIXTURES` (true until the backend is ready).
+- Map starts centred on Edmonton.
+
+## API this app uses (from `shared/contract.md` v1)
+- Backend `http://localhost:8000` · this app runs on port **5173** · map starts at `[-113.4938, 53.5461]`, zoom `11`.
+- `GET /hazards`: FeatureCollection with `sim_time`; each feature has `kind` (`wildfire`|`flood`), `zone` (`core` = draw solid, roads closed · `buffer` = draw lighter, roads slowed), `source` (`sim`|`live`|`report`).
+- `POST /hazards` `{ kind, lat, lon, radius_m }` on map click (201 → the new Feature). `DELETE /hazards` for Reset.
+- `GET /shelters`: Points with `name`, `capacity`, `occupancy`, `open` (shelter capacity tile = sum occupancy / sum capacity).
+- `GET /reports`: Points with `kind` (`fire`|`flooded_road`|`blocked_road`|`safe`|`sos`), `note`, `sim_time`. Feeds the Reports tab and map pins.
+- `GET /roads/closed` (Step 2, fixture until then): LineStrings with `name`, `status` (`closed` = solid red, `slowed` = dashed red), `reason`. Feeds "Roads closed" and the Updates feed.
+- Sim control (Step 2): `POST /sim/start` `{ scenario, lat, lon, wind_kmh, wind_from_deg, fuel_dryness }` (`fuel_dryness` 0–1, `wind_from_deg` compass degrees); flood: `{ scenario: "flood", river_rise_m_per_hr }`. `POST /sim/pause|resume|reset`, `POST /sim/speed { multiplier }`, `GET /sim/state` → `{ state: idle|running|paused, scenario, sim_time, speed }`.
+- Live updates: poll `/hazards` + `/reports` every 2 s; later WebSocket `ws://localhost:8000/ws` sends `{ type: tick|report|reset, changed: [hazards|roads|shelters|reports] }` → re-fetch only what's listed.
+- Errors come back as `{ error, message }`.
+
+**Not in the contract yet: ask Harsit to add these, build on your own fixture meanwhile:**
+- Predicted path (hazard features at T+30 / T+60), e.g. a `predicted_min` property on hazard features.
+- History snapshots for the slider (hazards/roads at a past `sim_time`).
+- Priority residents list (fake generated data).
+- Send notification (`POST /notifications`) + sent history.
+- Report status (New / Verified / Dismissed) and updating it.
+- Stats: people at risk, active reroutes.
+- Relative humidity as a sim condition (e.g. `humidity_pct` 0–100 on `POST /sim/start`). The model uses wind, fuel dryness and humidity only; no temperature control.
+
+## Rules
+- Build exactly to `shared/contract.md`. Never edit it; ask Harsit (backend/lead) for changes.
+- Features that need endpoints not in the contract yet (history snapshots, priority residents, notifications, report status): ask Harsit to add them, and build against a fixture in `shared/fixtures/` meanwhile.
+- When `USE_FIXTURES` is true, load sample JSON from `shared/fixtures/` instead of calling the API.
+- GeoJSON coordinates are always `[lon, lat]`.
+- Updates: poll every 2 s for now; switch to the `/ws` WebSocket later (it signals "something changed", then re-fetch).
+- Don't add dependencies without a reason; keep changes small.
+- All code must be written during the event (natHacks rule).
+
+## Step 0 (first PR)
+Map of Edmonton, fetch `/hazards` and `/shelters` every 2 s and draw them, click the map to `POST /hazards`. Done when the growing fake fire circle shows up.
+
+## Team
+- Harsit: FastAPI backend, WebSocket, contract, merging PRs, pitch, live feed
+- Azer: routing (road graph, closures, A*, shelter choice)
+- Dviviz: wildfire model, then flood
+- TechShriyaz: dashboard + phone web app
+- Aarya: role TBD
