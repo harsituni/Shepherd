@@ -179,6 +179,22 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .shelter-label { left: 24px; color: var(--text); display: none; }
 .shelter-marker.is-target .shelter-label { display: block; }
 .shelter-marker.label-left .shelter-label { left: auto; right: 24px; }
+/* Invisible padding grows the 20px square to a 44px tap target. */
+.shelter-marker { cursor: pointer; }
+.shelter-marker::before { content: ''; position: absolute; inset: -12px; }
+.shelter-marker.is-open { z-index: 5; }
+/* Shelter pop-up (opened by a tap): white card, blue text, one soft shadow. */
+.shelter-popup {
+  display: none; position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(11, 37, 69, 0.12);
+  white-space: nowrap; font: 400 var(--fs-sm) var(--font); color: var(--blue);
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.shelter-marker.is-open .shelter-popup { display: block; }
+.shelter-marker.popup-start .shelter-popup { left: -2px; transform: none; }
+.shelter-marker.popup-end .shelter-popup { left: auto; right: -2px; transform: none; }
+.shelter-popup-title { font-weight: 600; }
 
 /* One-row key under the map, listing only what is drawn. */
 .map-key {

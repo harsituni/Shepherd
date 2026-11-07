@@ -64,25 +64,62 @@ function youElement() {
 }
 
 // Every shelter is a navy square; only the one the route goes to shows its name,
-// so the map stays readable at phone size.
-function shelterElement(name) {
+// so the map stays readable at phone size. Tapping a square opens a small pop-up
+// with how full it is (same content as the dashboard's hover pop-up).
+function shelterElement(id, name, onToggle) {
   const el = document.createElement('div')
   el.className = 'shelter-marker'
-  el.title = name
+  el.dataset.id = id
+  el.tabIndex = 0
+  el.setAttribute('role', 'button')
+  el.setAttribute('aria-expanded', 'false')
   const label = document.createElement('span')
   label.className = 'map-label shelter-label'
   label.textContent = name
-  el.appendChild(label)
+  const popup = document.createElement('div')
+  popup.className = 'shelter-popup'
+  el.append(label, popup)
+  // Stop the tap reaching the map, where it would set "You" here.
+  el.addEventListener('click', (e) => {
+    e.stopPropagation()
+    onToggle(id)
+  })
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    onToggle(id)
+  })
   return el
 }
 
-// Put the destination's name on whichever side of its square has more room,
-// so it isn't cut off at the map edge.
+const fmt = (n) => Number(n ?? 0).toLocaleString('en-CA')
+
+// e.g. "312/2,000 (16%)", plus "Closed" if the shelter is shut.
+function updateShelter(el, { name, capacity, occupancy, open }) {
+  const pct = capacity ? Math.round(((occupancy ?? 0) / capacity) * 100) : 0
+  const lines = [['shelter-popup-title', `${fmt(occupancy)}/${fmt(capacity)} (${pct}%)`]]
+  if (open === false) lines.push(['shelter-popup-detail', 'Closed'])
+  el.querySelector('.shelter-popup').replaceChildren(
+    ...lines.map(([cls, text]) => {
+      const line = document.createElement('div')
+      line.className = cls
+      line.textContent = text
+      return line
+    }),
+  )
+  el.setAttribute('aria-label', `${name}. ${lines.map(([, t]) => t).join('. ')}`)
+}
+
+// Put the destination's name on whichever side of its square has more room, and
+// keep an open pop-up from running off the map's left or right edge.
 function placeShelterLabels(map, store) {
-  const half = map.getContainer().clientWidth / 2
+  const width = map.getContainer().clientWidth
   for (const m of store.values()) {
     const el = m.getElement()
-    if (el.classList.contains('is-target')) el.classList.toggle('label-left', map.project(m.getLngLat()).x > half)
+    const x = map.project(m.getLngLat()).x
+    if (el.classList.contains('is-target')) el.classList.toggle('label-left', x > width / 2)
+    el.classList.toggle('popup-start', x < 90)
+    el.classList.toggle('popup-end', x > width - 90)
   }
 }
 
@@ -117,7 +154,20 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
   const tapRef = useRef(onTap)
   const framed = useRef(false)
   const lastFocus = useRef(null)
+  const openShelter = useRef(null) // id of the shelter whose pop-up is open
   const [loaded, setLoaded] = useState(false)
+
+  // Open one shelter's pop-up (or none), closing any other.
+  const showShelterPopup = useRef((id) => {
+    openShelter.current = id
+    for (const m of shelterMarkers.current.values()) {
+      const el = m.getElement()
+      const isOpen = el.dataset.id === id
+      el.classList.toggle('is-open', isOpen)
+      el.setAttribute('aria-expanded', String(isOpen))
+    }
+  }).current
+  const toggleShelterPopup = useRef((id) => showShelterPopup(openShelter.current === id ? null : id)).current
 
   const viewRef = useRef(onViewChange)
 
@@ -204,7 +254,11 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
       setLoaded(true)
     })
 
-    map.on('click', (e) => tapRef.current?.([e.lngLat.lng, e.lngLat.lat]))
+    // A tap on the map closes an open shelter pop-up; only otherwise does it set "You".
+    map.on('click', (e) => {
+      if (openShelter.current != null) return showShelterPopup(null)
+      tapRef.current?.([e.lngLat.lng, e.lngLat.lat])
+    })
     map.on('move', () => placeShelterLabels(map, shelterMarkers.current))
     const reportView = () => {
       const c = map.getCenter()
@@ -217,6 +271,7 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
     return () => {
       stores.forEach((s) => s.clear())
       youMarker.current = null
+      openShelter.current = null
       framed.current = false
       lastFocus.current = null
       map.remove()
@@ -280,14 +335,19 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
       else
         store.set(
           f.id,
-          new Marker({ element: shelterElement(f.properties.name) }).setLngLat(f.geometry.coordinates).addTo(map),
+          new Marker({ element: shelterElement(f.id, f.properties.name, toggleShelterPopup) })
+            .setLngLat(f.geometry.coordinates)
+            .addTo(map),
         )
-      store.get(f.id).getElement().classList.toggle('is-target', f.id === route?.shelter_id)
+      const el = store.get(f.id).getElement()
+      el.classList.toggle('is-target', f.id === route?.shelter_id)
+      updateShelter(el, f.properties) // refreshes occupancy on every poll, even while open
     }
     for (const [id, m] of store) {
       if (!seen.has(id)) {
         m.remove()
         store.delete(id)
+        if (openShelter.current === id) openShelter.current = null
       }
     }
     placeShelterLabels(map, store)
