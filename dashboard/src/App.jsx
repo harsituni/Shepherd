@@ -9,6 +9,7 @@ import {
   resetSim,
   resumeSim,
   setSimSpeed,
+  setSimWind,
   startSim,
 } from './api.js'
 import { POLL_MS, USE_FIXTURES } from './config.js'
@@ -115,6 +116,11 @@ export default function App() {
 
   const changeSpeed = useCallback((multiplier) => run(() => setSimSpeed(multiplier)), [run])
 
+  const changeWind = useCallback(
+    (windKmh, windFrom) => run(() => setSimWind(windKmh, windFrom)),
+    [run],
+  )
+
   const focusReport = useCallback((feature) => {
     setFocus({ id: feature.id, lngLat: feature.geometry.coordinates, at: Date.now() })
   }, [])
@@ -149,6 +155,7 @@ export default function App() {
           onPlay={play}
           onReset={reset}
           onSpeedChange={changeSpeed}
+          onWindChange={changeWind}
           showPredicted={showPredicted}
           onShowPredictedChange={setShowPredicted}
         />
