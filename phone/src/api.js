@@ -194,12 +194,7 @@ export async function getSimState() {
 // 15, 30 … 120 minutes from now. The map draws the 30 and 60 min ones as
 // `predicted_min` features, like the dashboard; all eight would crowd a phone map.
 const FORECAST_MIN_SHOWN = [30, 60]
-async function getForecastFeatures() {
-  const { outlines = [] } = await request('/forecast')
-  return outlines
-    .filter((o) => FORECAST_MIN_SHOWN.includes(o.t_min) && o.geometry)
-    .map((o) => ({ type: 'Feature', id: o.id, properties: { ...o.properties, predicted_min: o.t_min }, geometry: o.geometry }))
-}
+const toPredicted = (o) => ({ type: 'Feature', id: o.id, properties: { ...o.properties, predicted_min: o.t_min }, geometry: o.geometry })
 
 // Fixture stand-in for the predicted spread (`predicted_min` features): the
 // current shape, larger and drifted east.
@@ -222,12 +217,15 @@ function predictedFeatures(grown, center) {
   })
 }
 
-// The hazard now (/hazards) plus the predicted path (/forecast). If the forecast
-// fails, the hazard still draws, just without predicted rings.
+// The hazard now (/hazards) plus the predicted path (/forecast). All forecast
+// outlines also ride along as `forecast` (not GeoJSON) for the unsafe-shelter
+// check. If the forecast fails, the hazard still draws, just without predictions.
 export async function getHazards() {
   if (!USE_FIXTURES) {
-    const [hazards, predicted] = await Promise.all([request('/hazards'), getForecastFeatures().catch(() => [])])
-    return { ...hazards, features: [...predicted, ...(hazards.features ?? [])] }
+    const [hazards, fc] = await Promise.all([request('/hazards'), request('/forecast').catch(() => null)])
+    const outlines = (fc?.outlines ?? []).filter((o) => o.geometry)
+    const predicted = outlines.filter((o) => FORECAST_MIN_SHOWN.includes(o.t_min)).map(toPredicted)
+    return { ...hazards, features: [...predicted, ...(hazards.features ?? [])], forecast: outlines }
   }
   fakeSimTime += 1
   fakeHazards.forEach((h) => (h.ticks += 1))

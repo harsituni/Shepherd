@@ -20,6 +20,8 @@ colors:
   hazard-high: "#7A1F0A"
   closed: "#C62828"
   predicted: "#C62828"
+  evac-stripe: "#FFD400"
+  evac-edge: "#9A6B00"
   danger-bg: "#FFF3EC"
   danger-border: "#F6D2BE"
   danger-title: "#8A2F06"
@@ -190,7 +192,8 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 ### Signal
 - **Hazard Orange** (#D9480F): the active hazard only, used as fills, outlines, the incident-banner dot, the start marker and report-pin strokes.
 - **Fire Core** (#7A1F0A): the hottest part of a wildfire on the dashboard map (its centre, shading out to Hazard Orange at the edge), and the centre of the "Active hazard" legend swatch. Darker than Closure Red so the two never read as the same thing. Nothing else.
-- **Closure Red** (#C62828): closed roads (solid), the predicted spread (dotted rings, token `predicted`), the "Roads closed" stat, SOS reports, and the phone's "Need help" button (white text, 5.6:1). Nothing else.
+- **Closure Red** (#C62828): closed roads (solid), the predicted spread (dotted rings, token `predicted`), unsafe shelters (the square and its pop-up text, 5.6:1 on white), the "Roads closed" stat, SOS reports, and the phone's "Need help" button (white text, 5.6:1). Nothing else.
+- **Evacuation Yellow** (#FFD400, token `evac-stripe`) and **Evacuation Edge** (#9A6B00, token `evac-edge`): the evacuation zone around each wildfire only. Diagonal stripes of Evacuation Yellow on a transparent fill, inside a solid 2px Evacuation Edge border. Evacuation Edge is the same deep yellow as the dashboard's selected "Alert" severity segment. Nothing else.
 - **Focus Gold** (#FEBA35): the keyboard focus ring only, as on Alberta.ca: a 3px outline. Never decoration, never a fill. Gold on white is about 1.7:1, below WCAG 2.2's 3:1 guidance for focus indicators, so the 3px width is what carries it. If an accessibility review flags it, keep the gold and add a 1px navy ring inside it rather than switching back to blue.
 - **Evacuation Tint family**, shared by both surfaces for evacuation-order alerts and "no safe route" states: background **Ember Wash** (#FFF3EC), border **Ember Edge** (#F6D2BE), title **Ember Ink** (#8A2F06), body **Ember Text** (#6B3A1F) and icon **Ember Mark** (#B4400B). Ember Ink is also the fill of the selected "Evacuation" severity segment (white text, which passes 4.5:1 where Hazard Orange would not).
 
@@ -316,6 +319,8 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 titl
 ### Map layers (signature)
 - **Hazard core:** Hazard Orange fill at 0.85 opacity with a 1.5px orange outline. **Buffer:** orange at 0.3 opacity. On the dashboard a wildfire core also gets three nested bands (the core shrunk to 75 / 50 / 25% toward its centre) stepping from orange to Fire Core at 0.9 opacity: solid colours, not a gradient.
 - **Predicted spread** (both surfaces): the 30 and 60 min outlines from `GET /forecast`, drawn as features with a `predicted_min` property. No fill; a 2px dotted Closure Red line (`line-dasharray [0, 2]`, round caps, 0.9 opacity), labelled T+30 / T+60 at the leading edge in navy 600 14px with a halo. The legend/key swatch is a 2px dotted red square. They are never drawn or counted as the current hazard.
+- **Evacuation zone** (both surfaces): a perfect circle around each wildfire as it is now (never the predicted path), centred on the fire with radius = its farthest edge + 1 km (`EVAC_BUFFER_M` in each app's `src/evacuation.js`), so it always covers the whole fire and grows only as the fire grows, drawn under everything else: a `fill-pattern` of dense 1px (2 device px) diagonal Evacuation Yellow stripes on a 4px tile (canvas-drawn, full opacity) and a solid 2px Evacuation Edge line. It is built from whichever fire shape is drawn, so on the dashboard it follows the history slider. Legend/key swatch: a striped square with a 2px Evacuation Edge border (an inline SVG, not a gradient).
+- **Unsafe shelter** (both surfaces): a shelter inside the evacuation circle of the fire now, or of the circle any `/forecast` outline (up to +120 min) would have. Its square turns Closure Red, and its pop-up (hover on the dashboard, tap on the phone) turns red: the capacity line, then one 600-weight line "Unsafe: Find another shelter". Judged from the live fire and forecast, not the slider.
 - **Route (phone):** a 5px Service Blue line over a 9px white casing, with round caps and joins, so it stays legible over grey tiles and orange hazards. Never cyan or any off-palette colour.
 - **Closed road:** Closure Red, solid when closed and dashed when slowed.
 - **Shelter:** a 20px navy square (4px corners, 2px white border) with a 600 14px label. On the phone only the route's destination is labelled, on whichever side of the square has more room.
@@ -341,7 +346,7 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 titl
 - **Don't** use gradients of any kind: backgrounds, buttons, text or glows.
 - **Don't** use emoji as icons.
 - **Don't** use glassmorphism or blur, neon glows, coloured left-border accent cards, oversized rounded "bubble" cards or bouncy animations.
-- **Don't** use orange or red for anything except the hazard, closed roads, the predicted spread and calls for help (SOS, "Need help"), or Focus Gold for anything but the focus ring.
+- **Don't** use orange or red for anything except the hazard, closed roads, the predicted spread, unsafe shelters and calls for help (SOS, "Need help"), Evacuation Yellow for anything but the evacuation zone, or Focus Gold for anything but the focus ring.
 - **Don't** use pill shapes (999px corners) or 10px "bubble" controls.
 - **Don't** fade disabled controls with `opacity`, and never disable "Need help".
 - **Don't** set text smaller than 14px, or use small uppercase tracked eyebrow labels.

@@ -15,6 +15,7 @@ import {
 } from './api.js'
 import { POLL_MS, USE_FIXTURES } from './config.js'
 import { forecastHorizon, hazardsForView, recordSnapshot } from './history.js'
+import { dangerRings, unsafeShelterIds } from './evacuation.js'
 import MapView from './components/MapView.jsx'
 import Header from './components/Header.jsx'
 import IncidentBanner from './components/IncidentBanner.jsx'
@@ -158,6 +159,13 @@ export default function App() {
     () => hazardsForView(hazards, forecast, snapshots.current, viewing),
     [hazards, forecast, viewing],
   )
+  // Shelters the fire is in, or is forecast to come within the evacuation buffer of.
+  // From the live fire + forecast, not the slider, so a warning doesn't come and go
+  // while scrubbing.
+  const unsafeShelters = useMemo(
+    () => unsafeShelterIds(shelters, dangerRings(hazards, forecast?.outlines)),
+    [shelters, hazards, forecast],
+  )
 
   const focusReport = useCallback((feature) => {
     setFocus({ id: feature.id, lngLat: feature.geometry.coordinates, at: Date.now() })
@@ -203,6 +211,7 @@ export default function App() {
             hazards={shownHazards}
             nowLabel={viewing == null ? 'Now' : `T+${viewing}`}
             shelters={shelters}
+            unsafeShelters={unsafeShelters}
             reports={reports}
             focus={focus}
             startPoint={startPoint}

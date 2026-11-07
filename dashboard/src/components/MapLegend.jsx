@@ -1,9 +1,11 @@
 const ITEMS = [
   ['Active hazard', 'swatch-hazard'],
+  ['Evacuation zone', 'swatch-evac'],
   ['Predicted spread', 'swatch-predicted'],
   ['Closed road', 'swatch-closed'],
   ['Evacuation route', 'swatch-route'],
   ['Shelter', 'swatch-shelter'],
+  ['Unsafe shelter', 'swatch-shelter-unsafe'],
   ['Priority resident', 'swatch-priority'],
   ['Public report', 'swatch-report'],
 ]
