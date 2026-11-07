@@ -73,6 +73,9 @@ class WildfireSim:
                  wind_from_deg: float = 315, fuel_dryness: float = 0.7):
         self.lat = lat
         self.lon = lon
+        self.wind_kmh = wind_kmh
+        self.wind_from_deg = wind_from_deg
+        self.fuel_dryness = fuel_dryness
         self.model = PlaceholderSpread(wind_kmh, wind_from_deg, fuel_dryness)
         self.minutes = 0
         self.burning = set()
@@ -85,6 +88,32 @@ class WildfireSim:
                     self.arrival[(col, row)] = 0
                     heapq.heappush(self._frontier, (0, (col, row)))
         self._burn_until(0)
+
+    def set_wind(self, wind_kmh: float, wind_from_deg: float) -> None:
+        """Update wind and recompute unburned arrival times from the current fire front."""
+        self.wind_kmh = max(float(wind_kmh), 0)
+        self.wind_from_deg = float(wind_from_deg) % 360
+        self.model = PlaceholderSpread(self.wind_kmh, self.wind_from_deg, self.fuel_dryness)
+
+        burned = set(self.burning)
+        self.arrival = {cell: self.arrival.get(cell, 0.0) for cell in burned}
+        self._frontier = []
+        t0 = float(self.minutes)
+        for cell in burned:
+            head_ros, lb, head_bearing = self.model.rates(*cell)
+            for dc, dr in NEIGHBOURS:
+                nxt = (cell[0] + dc, cell[1] + dr)
+                if nxt in burned or math.hypot(*nxt) * CELL_M > MAX_RADIUS_M:
+                    continue
+                bearing = math.degrees(math.atan2(dc, dr))
+                ros = directional_ros(head_ros, lb, head_bearing, bearing)
+                if ros <= 0:
+                    continue
+                reach = t0 + math.hypot(dc, dr) * CELL_M / ros
+                if reach < self.arrival.get(nxt, math.inf):
+                    self.arrival[nxt] = reach
+                    heapq.heappush(self._frontier, (reach, nxt))
+        self._burn_until(self.minutes)
 
     def step(self, minutes: int) -> None:
         self.minutes += minutes

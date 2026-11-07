@@ -88,6 +88,14 @@ class SimController:
             self.speed = min(ALLOWED_SPEEDS, key=lambda s: abs(s - int(multiplier)))
         return self.status()
 
+    def set_wind(self, wind_kmh: float, wind_from_deg: float) -> dict[str, Any]:
+        """Apply new wind; recompute forecast/spread when a sim is active."""
+        self.wind_kmh = float(wind_kmh)
+        self.wind_from_deg = float(wind_from_deg) % 360
+        if self.sim is not None:
+            self.sim.set_wind(self.wind_kmh, self.wind_from_deg)
+        return self.status()
+
     def tick(self) -> None:
         """Advance the sim when running. Call once per ~2s real time."""
         if self.state != "running" or self.sim is None:
