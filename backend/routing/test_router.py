@@ -3,6 +3,7 @@
 import inspect
 import json
 import tempfile
+
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -75,6 +76,41 @@ class RoutingTests(unittest.TestCase):
         ) 
         download_patch.start()
         self.addCleanup(download_patch.stop)
+
+    def test_fire_uses_longer_road(self):
+        # Find the shortest route without fire.
+        shelters = [shelter("sh_a", 3)]
+        normal = self.route(shelters)
+
+        # Put a fire on the shorter curved road.
+        fire = {
+            "type": "Feature",
+            "properties": {
+                "kind": "wildfire",
+                "zone": "core"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[
+                    [-113.496, 53.5415],
+                    [-113.494, 53.5415],
+                    [-113.494, 53.5425],
+                    [-113.496, 53.5425],
+                    [-113.496, 53.5415]
+                ]]
+            }
+        }
+
+        # Find another route around the fire.
+        original_edges = self.graph.number_of_edges()
+        detour = find_route(53.54, -113.50, [fire], shelters)
+
+        # The new route should be longer.
+        self.assertEqual(normal["distance_km"], 0.7)
+        self.assertEqual(detour["distance_km"], 1.3)
+
+        # Make sure the original roads were not changed.
+        self.assertEqual(self.graph.number_of_edges(), original_edges)
 
     def route(self, shelters):
         return find_route(53.54, -113.50, [], shelters)
@@ -160,7 +196,7 @@ class RoutingTests(unittest.TestCase):
         result = self.route([shelter("sh_a", 3), shelter("sh_b", 3)])
         self.assertEqual(result["shelter_id"], "sh_a")
 
-    def test_hazards_are_ignored_for_now(self):
+    def test_no_route_when_fire_blocks_roads(self):
         hazards = [{
             "type": "Feature",
             "id": "hz_1",
@@ -172,10 +208,10 @@ class RoutingTests(unittest.TestCase):
             }]
         shelters = [shelter("sh_a", 3)]
         original = deepcopy((hazards, shelters))
-        self.assertEqual(
-            find_route(53.54, -113.50, hazards, shelters),
-            self.route(shelters),
-        )
+        # The fire blocks all roads, so there is no route.
+        with self.assertRaises(NoRouteError):
+            find_route(53.54, -113.50, hazards, shelters)
+
         self.assertEqual(closed_roads(hazards), [])
         self.assertEqual((hazards, shelters), original)
 

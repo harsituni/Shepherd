@@ -10,6 +10,8 @@ from pathlib import Path
 import networkx as nx
 import osmnx as ox
 
+from shapely.geometry import LineString, shape
+
 
 ROUTING_DIR = Path(__file__).resolve().parent
 GRAPH_PATH = ROUTING_DIR / "data" / "edmonton_drive.graphml"
@@ -94,6 +96,34 @@ def _route_details(graph, path):
         coordinates = [point, point.copy()]
     return distance_m / 1000.0, coordinates
 
+def _blocked_edges(graph, hazards):
+    """Find roads that cross a danger zone."""
+    blocked = []
+
+    for hazard in hazards:
+        if hazard["properties"].get("zone") != "core":
+            continue
+
+        danger_area = shape(hazard["geometry"])
+
+        for start, end, key, road in graph.edges(keys=True, data=True):
+            # Use the road's shape if it exists.
+            line = road.get("geometry")
+
+            # Otherwise, draw a line between its two nodes.
+            if line is None:
+                a = graph.nodes[start]
+                b = graph.nodes[end]
+                line = LineString([
+                    (a["x"], a["y"]),
+                    (b["x"], b["y"])
+                ])
+
+            # Check if the road touches the danger area.
+            if line.intersects(danger_area):
+                blocked.append((start, end, key))
+
+    return blocked
 
 def find_route(lat: float, lon: float,
                hazards: list[dict],
@@ -108,8 +138,15 @@ def find_route(lat: float, lon: float,
     if len(_graph) == 0 or not _inside_demo(lat, lon):
         raise NoRouteError("No route in the Edmonton demo area")
 
+    # Copy the roads so the original map stays the same.
+    safe_graph = _graph.copy()
+
+    # Remove roads that cross the fire.
+    blocked = _blocked_edges(_graph, hazards)
+    safe_graph.remove_edges_from(blocked)
+
     # Find nearby road nodes
-    start = ox.distance.nearest_nodes(_graph, X=lon, Y=lat)
+    start = ox.distance.nearest_nodes(safe_graph, X=lon, Y=lat)
     nearest = None
     best_distance = float("inf")
     best_coordinates = None
@@ -123,14 +160,14 @@ def find_route(lat: float, lon: float,
         shelter_lon, shelter_lat = shelter["geometry"]["coordinates"]
         if not _inside_demo(shelter_lat, shelter_lon):
             continue
-        end = ox.distance.nearest_nodes(_graph, X=shelter_lon, Y=shelter_lat)
+        end = ox.distance.nearest_nodes(safe_graph, X=shelter_lon, Y=shelter_lat)
 
         # Find the shortest route
         try:
-            path = nx.shortest_path(_graph, start, end, weight="length")
+            path = nx.shortest_path(safe_graph, start, end, weight="length")
         except nx.NetworkXNoPath:
             continue
-        distance, coordinates = _route_details(_graph, path)
+        distance, coordinates = _route_details(safe_graph, path)
         if distance < best_distance:
             nearest = shelter
             best_distance = distance
