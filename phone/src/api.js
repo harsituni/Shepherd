@@ -2,6 +2,7 @@ import { API_URL, USE_FIXTURES } from './config.js'
 import { distanceKm, ringCentroid } from './geo.js'
 import hazardsFixture from '../../shared/fixtures/hazards.json'
 import sheltersFixture from '../../shared/fixtures/shelters.json'
+import notificationsFixture from '../../shared/fixtures/notifications.json'
 
 // ---------- real backend ----------
 
@@ -74,16 +75,55 @@ export async function getRoute(lat, lon) {
   return fakeRoute(lat, lon)
 }
 
+// Fixture stand-in for the predicted spread the backend adds to /hazards
+// (`predicted_min` features): the current shape, larger and drifted east.
+const PREDICTED_STEPS = [
+  { minutes: 30, scale: 1.5, eastKm: 1.2 },
+  { minutes: 60, scale: 2.1, eastKm: 2.6 },
+]
+function predictedFeatures(grown, center) {
+  const [cx, cy] = center
+  const kmPerDegLon = 111.32 * Math.cos((cy * Math.PI) / 180)
+  return PREDICTED_STEPS.map(({ minutes, scale, eastKm }) => {
+    const dx = eastKm / kmPerDegLon
+    const ring = grown.geometry.coordinates[0].map(([x, y]) => [cx + dx + (x - cx) * scale, cy + (y - cy) * scale])
+    return {
+      ...grown,
+      id: `${grown.id}_p${minutes}`,
+      properties: { ...grown.properties, predicted_min: minutes },
+      geometry: { type: 'Polygon', coordinates: [ring] },
+    }
+  })
+}
+
 export async function getHazards() {
   if (!USE_FIXTURES) return request('/hazards')
   fakeSimTime += 1
   fakeHazards.forEach((h) => (h.ticks += 1))
-  return { type: 'FeatureCollection', sim_time: fakeSimTime, features: fakeHazards.map(grownFeature) }
+  const features = fakeHazards.flatMap((h) => {
+    const grown = grownFeature(h)
+    return grown.properties.zone === 'core' ? [...predictedFeatures(grown, h.center), grown] : [grown]
+  })
+  return { type: 'FeatureCollection', sim_time: fakeSimTime, features }
 }
 
 export async function getShelters() {
   if (!USE_FIXTURES) return request('/shelters')
   return structuredClone(sheltersFixture)
+}
+
+// Government notifications: [{ id, title, message, severity: advisory|alert|evacuation, time }].
+// Not in contract v1 yet (asked for GET /notifications), so a missing endpoint
+// just means "no notifications" rather than an error.
+export async function getNotifications() {
+  if (USE_FIXTURES) return structuredClone(notificationsFixture.notifications)
+  try {
+    const body = await request('/notifications')
+    return Array.isArray(body) ? body : (body?.notifications ?? [])
+  } catch (err) {
+    if (err.status === 404) return []
+    throw err
+  }
 }
 
 // kind: fire | flooded_road | blocked_road | safe | sos

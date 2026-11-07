@@ -19,6 +19,8 @@
   --danger-title: #8a2f06;
   --danger-text: #6b3a1f;
   --danger-icon: #b4400b;
+  /* Gold focus ring, as on Alberta.ca. Focus only; never decoration. */
+  --focus: #feba35;
 
   --radius-control: 6px;
   --radius-card: 8px;
@@ -44,9 +46,11 @@ body { margin: 0; background: #ffffff; }
 button, input, select, textarea { font-family: inherit; color: inherit; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
+/* Joined segments and tabs would clip an outside ring; draw it inside. */
+.tabs button:focus-visible, .segmented button:focus-visible, .mode-switch button:focus-visible { outline-offset: -3px; }
 
 .num { font-variant-numeric: tabular-nums; }
 .sr-only {

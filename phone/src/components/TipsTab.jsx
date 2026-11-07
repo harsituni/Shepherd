@@ -31,7 +31,7 @@ export default function TipsTab() {
           </button>
         ))}
       </div>
-      <ol className="list">
+      <ol className="list list-numbered">
         {TIPS[kind].map(([title, body]) => (
           <li key={title}>
             <strong>{title}</strong>
