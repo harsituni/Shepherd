@@ -25,6 +25,8 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     host: true, // reachable from real phones on the same Wi-Fi
+    // Cloudflare Tunnel / ngrok hostnames (otherwise: "This host is not allowed")
+    allowedHosts: true,
     // Allow importing ../shared/fixtures from outside the phone root.
     fs: { allow: ['..'] },
   },

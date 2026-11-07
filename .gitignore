@@ -28,3 +28,7 @@ Thumbs.db
 
 # Impeccable per-developer config (hook consent, local overrides)
 .impeccable/config.local.json
+
+# Generated judge-join QR page / tunnel logs (see scripts/demo_phone.sh)
+demo-join.html
+.demo/

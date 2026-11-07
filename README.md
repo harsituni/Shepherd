@@ -42,6 +42,17 @@ Dashboard: `cd dashboard && npm install && npm run dev` → http://localhost:517
 
 Phone: `cd phone && npm install && npm run dev` → http://localhost:5174
 
+## Demo / QR (judges + teammates on phones)
+
+See **[demo.md](demo.md)**. One command (stack + Cloudflare tunnels + QR):
+
+```bash
+brew install cloudflared   # once
+./demo.sh                  # share the printed join URL / QR page
+```
+
+Laptop-only (no tunnels): `./dev.sh`
+
 ## How we work
 - Read `AGENT_CONTEXT.md` and `shared/contract.md` first.
 - Only edit your own folder. One branch per task (`phone/report-button`), small PR, squash merge into `main`.
