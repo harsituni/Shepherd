@@ -150,6 +150,48 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .map-wrap { position: relative; flex: 1; min-height: 620px; }
 .map { position: absolute; inset: 0; }
 
+.legend {
+  position: absolute; left: 16px; bottom: 16px; z-index: 1; margin: 0;
+  list-style: none; background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius-control); padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text);
+}
+.legend li { display: flex; align-items: center; gap: 8px; }
+.swatch { display: inline-block; flex: 0 0 auto; }
+.swatch-hazard { width: 12px; height: 12px; border-radius: 3px; background: var(--hazard); }
+.swatch-predicted { width: 12px; height: 12px; border-radius: 3px; border: 1.5px dashed var(--blue); }
+.swatch-closed { width: 14px; height: 3px; background: var(--closed); }
+.swatch-route { width: 14px; height: 3px; background: var(--blue); }
+.swatch-shelter { width: 12px; height: 12px; border-radius: 3px; background: var(--navy); }
+.swatch-priority {
+  width: 9px; height: 9px; margin: 0 1.5px; border: 2px solid var(--navy); transform: rotate(45deg);
+}
+.swatch-report { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--hazard); }
+
+.zoom {
+  position: absolute; right: 16px; top: 16px; z-index: 1;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.zoom button {
+  width: 44px; height: 44px; border: 1px solid var(--border); border-radius: var(--radius-control);
+  background: #fff; color: var(--navy); display: flex; align-items: center; justify-content: center;
+}
+.zoom button:hover { background: var(--tint); }
+
+/* Map markers (HTML, so labels use Public Sans) */
+.shelter-marker {
+  position: relative; width: 20px; height: 20px; border-radius: 4px;
+  background: var(--navy); border: 2px solid #fff;
+}
+.shelter-label {
+  position: absolute; left: 26px; top: 50%; transform: translateY(-50%);
+  white-space: nowrap; font: 600 11px var(--font); color: var(--text);
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff;
+  pointer-events: none;
+}
+.now-label { font: 600 12px var(--font); color: #fff; pointer-events: none; }
+.maplibregl-ctrl-attrib { font-family: var(--font); font-size: 11px; }
+
 .history {
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   padding: 14px 20px; background: #fff; border-top: 1px solid var(--divider);

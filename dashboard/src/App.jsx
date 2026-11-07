@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getHazards, getShelters } from './api.js'
-import { POLL_MS, USE_FIXTURES } from './config.js'
+import { getHazards, getShelters, postHazard } from './api.js'
+import { DEFAULT_RADIUS_M, POLL_MS, USE_FIXTURES } from './config.js'
+import MapView from './components/MapView.jsx'
 import Header from './components/Header.jsx'
 import IncidentBanner from './components/IncidentBanner.jsx'
 import ControlsPanel from './components/ControlsPanel.jsx'
@@ -27,6 +28,19 @@ export default function App() {
     }
   }, [])
 
+  // Map click -> POST /hazards, then redraw straight away instead of waiting for the next poll.
+  const placeHazard = useCallback(
+    async ({ lng, lat }) => {
+      try {
+        await postHazard({ kind: hazardKind, lat, lon: lng, radius_m: DEFAULT_RADIUS_M })
+        await refresh()
+      } catch {
+        setConnectionError(true)
+      }
+    },
+    [hazardKind, refresh],
+  )
+
   useEffect(() => {
     // Kick off the first poll, then keep polling every POLL_MS.
     const first = setTimeout(refresh, 0)
@@ -50,7 +64,7 @@ export default function App() {
       <div className="layout">
         <ControlsPanel hazardKind={hazardKind} onHazardKindChange={setHazardKind} />
         <main className="centre">
-          <div className="map-wrap" />
+          <MapView hazards={hazards} shelters={shelters} onMapClick={placeHazard} />
           <HistoryBar simTime={hazards?.sim_time} />
         </main>
         <SidePanel shelters={shelters} />
