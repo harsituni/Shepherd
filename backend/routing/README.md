@@ -130,6 +130,63 @@ not load the large Edmonton graph. No internet is needed once packages are insta
 
 ## Real Edmonton demo (run separately)
 
+### Greater Edmonton: keep the old map as backup
+
+Use the BBBike **OSM XML gzip** extract for west/south/east/north bounds
+`(-114.007, 53.336, -112.998, 53.728)`. The local source is
+`data/planet_-114.007,53.336_-112.998,53.728.osm.gz`
+(100,525,904 bytes, about 96 MiB). This import has not been run by the agent.
+Keep that exact extract for teammates: OSM changes over time, so a new download
+of the same bounds may produce a different network.
+
+From the repository root, teammates can prepare the routing environment with
+`python -m venv backend/routing/.venv`, then
+`backend/routing/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt`.
+These are the existing project dependencies; no new packages are needed.
+Alternatively, use `python` from the activated shared backend environment.
+For matching results, share the same extract, Git commit, and installed package
+versions (`python -m pip freeze` in the chosen environment). The shared
+requirements specify version ranges, not a fully pinned environment.
+
+Stop the backend and other map processes, close unused apps, and monitor RAM.
+Run only one import process:
+
+```powershell
+backend/routing/.venv/Scripts/python.exe -B -m backend.routing.import_osm --source "backend/routing/data/planet_-114.007,53.336_-112.998,53.728.osm.gz" --path "backend/routing/data/greater_edmonton_drive.graphml"
+```
+
+The explicit source avoids ambiguity when both extracts are present. The new
+output is separate from `edmonton_demo_drive.graphml`, which stays unchanged.
+The importer refuses to overwrite any existing output. It saves the new graph
+before validating the four demonstration locations and their directed routes.
+Validation failure keeps the new file for inspection. These checks do not prove
+coverage or connectivity everywhere in Greater Edmonton.
+
+The importer still streams XML twice, retains all selected road components,
+preserves OSMnx one-way handling, and calculates lengths before simplification.
+It builds one graph and validates that same graph without reloading the saved
+file or the old map. OSMnx may allocate temporary copies during construction,
+simplification, and GraphML saving. Peak RAM can be many times the compressed
+size, potentially several GB; the actual peak has not been measured. Leave
+disk space for the temporary XML and new GraphML too. Stop with Ctrl+C before
+RAM becomes critically full; cleanup may take time during a library operation.
+
+Default guards remain **250,000 road nodes and 100 MB filtered XML**, not 100 MB
+of compressed input and not a RAM cap. If filtering exceeds either limit, it
+stops before graph construction and removes the temporary files. The error
+prints the measured count/size. Use a smaller extract or a machine with more
+RAM first. `--max-road-nodes` and `--max-xml-mb` allow explicit positive limits
+after reviewing available memory; they are never raised automatically.
+
+After successful validation, set `SHEPHERD_GRAPH_PATH` to
+`backend/routing/data/greater_edmonton_drive.graphml` before starting the backend.
+Clear it to restore the old default map. Routing behavior from Issues #43 and
+#44 is unchanged, including its existing demo-area restrictions. Importing a
+larger graph does not automatically expand accepted start/shelter coordinates.
+All files under `backend/routing/data/`, including both extracts, both GraphML
+files and temporary import files, are already ignored by Git. Teammates need
+their own copy of the extract or generated map; it will not arrive via Git.
+
 ### Import the BBBike extract offline
 
 The local file is `data/planet_-113.700,53.420_-113.430,53.580.osm.gz`
@@ -164,6 +221,7 @@ These guards reduce risk but are not a RAM limit: OSMnx still builds the graph
 in memory, and compressed size does not predict peak memory use. Stop with
 Ctrl+C if memory climbs too high; do not wait for the computer to freeze.
 If a guard stops the import, use a smaller extract rather than raising it blindly.
+Explicit guard options are described in the Greater Edmonton section above.
 
 The output is `data/edmonton_demo_drive.graphml`. An existing output is never
 overwritten: check it with `prepare_graph`, or choose a new name with `--path`.
