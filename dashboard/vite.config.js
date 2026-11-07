@@ -4,4 +4,10 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    port: 5173,
+    strictPort: true,
+    // Allow importing ../shared/fixtures from outside the dashboard root.
+    fs: { allow: ['..'] },
+  },
 })
