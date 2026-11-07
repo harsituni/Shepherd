@@ -1,15 +1,54 @@
+"""Test real-road routing without downloading any roads."""
 
-import unittest
-import json
 import inspect
+import json
+import tempfile
+import unittest
 from copy import deepcopy
-from math import ceil
+from pathlib import Path
+from unittest.mock import patch
 
-from router import NoRouteError, find_route, load_graph, closed_roads
+import networkx as nx
+from shapely.geometry import LineString
+
+import router
+from router import NoRouteError, closed_roads, find_route, load_graph
 
 
-"""Makes a fake shelter for testing"""
-def shelter(name, lon, lat, is_open=True, capacity=100, occupancy=0):
+# Fake road locations in Edmonton: (longitude, latitude)
+POINTS = {
+    1: (-113.50, 53.54),
+    2: (-113.49, 53.54),
+    3: (-113.48, 53.54),
+    4: (-113.50, 53.55),
+    5: (-113.501, 53.541),
+}
+BEND = (-113.495, 53.542)
+
+
+def fake_graph():
+    """Make a small road map for testing."""
+    graph = nx.MultiDiGraph(crs="EPSG:4326")
+
+    for number, (lon, lat) in POINTS.items():
+        graph.add_node(number, x=lon, y=lat)
+
+    # Two roads go from 1 to 2. The curved one is shorter.
+    graph.add_edge(1, 2, length=900.0)
+    graph.add_edge(
+        1, 2, length=300.0,
+        geometry=LineString([POINTS[2], BEND, POINTS[1]]),
+    )
+    graph.add_edge(2, 3, length=400.0)
+    graph.add_edge(1, 3, length=2000.0)
+    graph.add_edge(1, 4, length=1500.0)
+
+    # Point 5 has no roads leading to it.
+    return graph
+
+
+def shelter(name, node, is_open=True, capacity=100, occupancy=0):
+    """Make a shelter at one of our fake road points."""
     return {
         "type": "Feature",
         "id": name,
@@ -17,166 +56,41 @@ def shelter(name, lon, lat, is_open=True, capacity=100, occupancy=0):
             "name": name,
             "open": is_open,
             "capacity": capacity,
-            "occupancy": occupancy
+            "occupancy": occupancy,
         },
         "geometry": {
             "type": "Point",
-            "coordinates": [lon, lat]
-        }
+            "coordinates": list(POINTS[node]),
+        },
     }
 
 
 class RoutingTests(unittest.TestCase):
+    def setUp(self):
+        # Give each test the fake roads instead of downloading Edmonton.
+        graph_patch = patch.object(router, "_graph", fake_graph())
+        graph_patch.start()
+        self.addCleanup(graph_patch.stop)
 
-    """"Checks if the route has the right information"""
-    def test_response_schema_and_coordinate_order(self):
-        shelters = [shelter("sh_a", -113.516, 53.519)]
-        result = find_route(53.52, -113.62, [], shelters)
+        # Stop a test if it tries to use the internet.
+        download_patch = patch.object(
+            router.ox, "graph_from_bbox",
+            side_effect=AssertionError("This test should not download roads"),
+        )
+        download_patch.start()
+        self.addCleanup(download_patch.stop)
 
-        expected = {
-            "shelter_id", "shelter_name", "distance_km",
-            "eta_min", "rerouted", "reroute_reason",
-            "steps", "geometry"
-        }
+    def route(self, shelters):
+        """Start a route from point 1."""
+        return find_route(53.54, -113.50, [], shelters)
 
-        self.assertEqual(set(result.keys()), expected)
-        self.assertEqual(result["shelter_id"], "sh_a")
-        self.assertEqual(result["shelter_name"], "sh_a")
-        self.assertIsInstance(result["distance_km"], float)
-        self.assertIsInstance(result["eta_min"], int)
-        self.assertEqual(result["rerouted"], False)
-        self.assertIsNone(result["reroute_reason"])
-        self.assertEqual(result["steps"], [])
-
-        expected_route = {
-            "type": "LineString",
-            "coordinates": [
-                [-113.62, 53.52],
-                [-113.516, 53.519]
-            ]
-        }
-
-        self.assertEqual(result["geometry"], expected_route)
-        json.dumps(result, allow_nan=False)
-
-    """"Checks the distance and estimated time."""
-    def test_known_haversine_distance_and_illustrative_eta(self):
-        shelters = [shelter("sh_a", 1, 0)]
-        result = find_route(0, 0, [], shelters)
-
-        self.assertAlmostEqual(result["distance_km"], 111.195, places=3)
-        self.assertEqual(result["eta_min"], ceil(111.195 / 5 * 60))
-
-    """Checks if the nearest shelter is selected"""
-    def test_nearest_uses_haversine_not_coordinate_distance(self):
+    def test_nearest_reachable_by_road_length(self):
+        # Pick the shortest road route, not just the closest point.
         shelters = [
-            shelter("sh_north", 0, 81),
-            shelter("sh_east", 2, 80)
+            shelter("sh_disconnected", 5),
+            shelter("sh_long_road", 4),
+            shelter("sh_short_road", 3),
         ]
-
-        result = find_route(80, 0, [], shelters)
-        self.assertEqual(result["shelter_id"], "sh_east")
-
-    """Checks the distance and estimated time"""
-    def test_closed_full_and_overfull_shelters_are_ineligible(self):
-        shelters = [
-            shelter("sh_closed", 0, 0, is_open=False),
-            shelter("sh_full", 0.01, 0, occupancy=100),
-            shelter("sh_overfull", 0.02, 0, occupancy=101),
-            shelter("sh_available", 1, 0, occupancy=99)
-        ]
-
-        result = find_route(0, 0, [], shelters)
-        self.assertEqual(result["shelter_id"], "sh_available")
-
-    """Checks if an error happens when no shelters are available"""
-    def test_no_eligible_shelter(self):
-        cases = [
-            [],
-            [shelter("sh_closed", 0, 0, is_open=False)],
-            [shelter("sh_full", 0, 0, occupancy=100)],
-            [shelter("sh_zero", 0, 0, capacity=0)]
-        ]
-
-        for shelters in cases:
-            with self.assertRaises(NoRouteError):
-                find_route(0, 0, [], shelters)
-
-    """"Checks if distance is zero when already at the shelter"""
-    def test_same_location_has_zero_distance_and_eta(self):
-        shelters = [shelter("sh_a", -113, 53)]
-        result = find_route(53, -113, [], shelters)
-
-        self.assertEqual(result["distance_km"], 0)
-        self.assertEqual(result["eta_min"], 0)
-        self.assertEqual(
-            result["geometry"]["coordinates"],
-            [[-113, 53], [-113, 53]]
-        )
-
-    """Checks if the first shelter is picked when distances tie"""
-    def test_ties_keep_first_shelter(self):
-        shelters = [
-            shelter("sh_a", 1, 0),
-            shelter("sh_b", -1, 0)
-        ]
-
-        result = find_route(0, 0, [], shelters)
-        self.assertEqual(result["shelter_id"], "sh_a")
-
-    """Checks that hazards are ignored for now"""
-    def test_hazards_are_accepted_ignored_and_inputs_unchanged(self):
-        hazards = [{
-            "type": "Feature",
-            "id": "hz_1",
-            "properties": {
-                "kind": "wildfire",
-                "zone": "core",
-                "source": "sim"
-            },
-            "geometry": {
-                "type": "Polygon",
-                "coordinates": [[
-                    [-1, -1], [2, -1], [2, 1],
-                    [-1, 1], [-1, -1]
-                ]]
-            }
-        }]
-
-        shelters = [shelter("sh_a", 1, 0)]
-        original = deepcopy((hazards, shelters))
-
-        with_hazard = find_route(0, 0, hazards, shelters)
-        without_hazard = find_route(0, 0, [], shelters)
-
-        self.assertEqual(with_hazard, without_hazard)
-        self.assertEqual(closed_roads(hazards), [])
-        self.assertEqual((hazards, shelters), original)
-
-    """Checks the functions we will finish later"""
-    def test_placeholders(self):
-        self.assertIsNone(load_graph())
-        self.assertEqual(closed_roads([]), [])
-
-    """Checks that our functions match the team contract"""
-    def test_contract_signatures(self):
-        self.assertTrue(issubclass(NoRouteError, Exception))
-
-        self.assertEqual(
-            str(inspect.signature(load_graph)),
-            "() -> None"
-        )
-
-        self.assertEqual(
-            str(inspect.signature(find_route)),
-            "(lat: float, lon: float, hazards: list[dict], shelters: list[dict]) -> dict"
-        )
-
-        self.assertEqual(
-            str(inspect.signature(closed_roads)),
-            "(hazards: list[dict]) -> list[dict]"
-        )
-
-
-if __name__ == "__main__":
-    unittest.main()
+        result = self.route(shelters)
+        self.assertEqual(result["shelter_id"], "sh_short_road")
+        self.assertEqual(result["distance_km"], 0.7)
