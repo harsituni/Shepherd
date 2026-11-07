@@ -1,6 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
-import { getHazards, getShelters, postHazard } from './api.js'
-import { DEFAULT_RADIUS_M, POLL_MS, USE_FIXTURES } from './config.js'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  deleteHazards,
+  getHazards,
+  getReports,
+  getShelters,
+  getSimState,
+  pauseSim,
+  resetSim,
+  resumeSim,
+  setSimSpeed,
+  startSim,
+} from './api.js'
+import { POLL_MS, USE_FIXTURES } from './config.js'
 import MapView from './components/MapView.jsx'
 import Header from './components/Header.jsx'
 import IncidentBanner from './components/IncidentBanner.jsx'
@@ -11,35 +22,100 @@ import SidePanel from './components/SidePanel.jsx'
 export default function App() {
   const [mode, setMode] = useState('drill')
   const [hazardKind, setHazardKind] = useState('wildfire')
+  const [startPoint, setStartPoint] = useState(null) // { lng, lat } picked on the map
+  const [showPredicted, setShowPredicted] = useState(true)
   const [hazards, setHazards] = useState(null)
   const [shelters, setShelters] = useState(null)
+  const [reports, setReports] = useState(null)
+  const [sim, setSim] = useState(null) // GET /sim/state
+  const [focus, setFocus] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [connectionError, setConnectionError] = useState(false)
+  const inFlight = useRef(false)
 
+  // Re-fetch everything the backend owns. Each result is applied on its own, so one
+  // failing endpoint (e.g. /reports or /sim/state before the backend has it) doesn't
+  // freeze the others. A tick is skipped if the previous one is still in flight.
   const refresh = useCallback(async () => {
+    if (inFlight.current) return
+    inFlight.current = true
     try {
-      const [h, s] = await Promise.all([getHazards(), getShelters()])
-      setHazards(h)
-      setShelters(s)
-      setLastUpdated(new Date())
-      setConnectionError(false)
-    } catch {
-      setConnectionError(true)
+      const results = await Promise.allSettled([getHazards(), getShelters(), getReports(), getSimState()])
+      const [h, s, r, st] = results
+      if (h.status === 'fulfilled') setHazards(h.value)
+      if (s.status === 'fulfilled') setShelters(s.value)
+      if (r.status === 'fulfilled') setReports(r.value)
+      if (st.status === 'fulfilled') setSim(st.value)
+      if (results.some((x) => x.status === 'fulfilled')) setLastUpdated(new Date())
+      setConnectionError(results.some((x) => x.status === 'rejected'))
+    } finally {
+      inFlight.current = false
     }
   }, [])
 
-  // Map click -> POST /hazards, then redraw straight away instead of waiting for the next poll.
-  const placeHazard = useCallback(
-    async ({ lng, lat }) => {
+  // Run a sim command, then redraw straight away instead of waiting for the next poll.
+  const run = useCallback(
+    async (fn) => {
       try {
-        await postHazard({ kind: hazardKind, lat, lon: lng, radius_m: DEFAULT_RADIUS_M })
-        await refresh()
+        await fn()
       } catch {
         setConnectionError(true)
       }
+      await refresh()
     },
-    [hazardKind, refresh],
+    [refresh],
   )
+
+  const simIdle = !sim || sim.state === 'idle'
+  const canSimulate = mode === 'drill'
+
+  // Map click picks where the hazard starts. It can only move before the drill starts.
+  const pickStart = useCallback(
+    ({ lng, lat }) => {
+      if (canSimulate && simIdle) setStartPoint({ lng, lat })
+    },
+    [canSimulate, simIdle],
+  )
+
+  const play = useCallback(
+    (conditions, speed) =>
+      run(async () => {
+        if (sim?.state === 'running') return pauseSim()
+        if (sim?.state === 'paused') return resumeSim()
+        if (!startPoint) return
+        const where = { lat: startPoint.lat, lon: startPoint.lng }
+        await startSim(
+          hazardKind === 'flood'
+            ? { scenario: 'flood', ...where, river_rise_m_per_hr: conditions.riverRise }
+            : {
+                scenario: 'wildfire',
+                ...where,
+                wind_kmh: conditions.windKmh,
+                wind_from_deg: conditions.windFrom,
+                fuel_dryness: conditions.fuel / 100,
+                humidity_pct: conditions.humidity,
+              },
+        )
+        await setSimSpeed(speed)
+      }),
+    [run, sim, startPoint, hazardKind],
+  )
+
+  const reset = useCallback(
+    () =>
+      run(async () => {
+        await resetSim()
+        await deleteHazards()
+        setStartPoint(null)
+      }),
+    [run],
+  )
+
+  const changeSpeed = useCallback((multiplier) => run(() => setSimSpeed(multiplier)), [run])
+
+  const focusReport = useCallback((feature) => {
+    setFocus({ id: feature.id, lngLat: feature.geometry.coordinates, at: Date.now() })
+  }, [])
 
   useEffect(() => {
     // Kick off the first poll, then keep polling every POLL_MS.
@@ -62,12 +138,31 @@ export default function App() {
       />
       <IncidentBanner hazards={hazards} mode={mode} />
       <div className="layout">
-        <ControlsPanel hazardKind={hazardKind} onHazardKindChange={setHazardKind} />
+        <ControlsPanel
+          canSimulate={canSimulate}
+          hazardKind={hazardKind}
+          onHazardKindChange={setHazardKind}
+          sim={sim}
+          startPoint={startPoint}
+          onPlay={play}
+          onReset={reset}
+          onSpeedChange={changeSpeed}
+          showPredicted={showPredicted}
+          onShowPredictedChange={setShowPredicted}
+        />
         <main className="centre">
-          <MapView hazards={hazards} shelters={shelters} onMapClick={placeHazard} />
+          <MapView
+            hazards={hazards}
+            shelters={shelters}
+            reports={reports}
+            focus={focus}
+            startPoint={startPoint}
+            showPredicted={showPredicted}
+            onMapClick={pickStart}
+          />
           <HistoryBar simTime={hazards?.sim_time} />
         </main>
-        <SidePanel shelters={shelters} />
+        <SidePanel shelters={shelters} reports={reports} onReportSelect={focusReport} />
       </div>
     </div>
   )

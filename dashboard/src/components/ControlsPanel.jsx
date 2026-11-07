@@ -19,18 +19,46 @@ function dryness(pct) {
   return 'High'
 }
 
-// Step 0: only the hazard type is used (it sets `kind` for map-click POST /hazards).
-// The other controls hold local state until /sim/* is wired in Step 2.
-export default function ControlsPanel({ hazardKind, onHazardKindChange }) {
+function startHint({ canSimulate, idle, startPoint }) {
+  if (!canSimulate) return 'Live mode shows real data feeds. Switch to Drill to run a simulation.'
+  if (!idle) return 'Reset to pick a new hazard or start point.'
+  if (!startPoint) return 'Click the map to place the start point.'
+  return `Start point ${startPoint.lat.toFixed(3)}, ${startPoint.lng.toFixed(3)}. Press play to start.`
+}
+
+// The simulation itself runs on the backend (/sim/*). This panel picks the scenario
+// and conditions, sends them on play, and drives pause / resume / reset / speed.
+export default function ControlsPanel({
+  canSimulate,
+  hazardKind,
+  onHazardKindChange,
+  sim,
+  startPoint,
+  onPlay,
+  onReset,
+  onSpeedChange,
+  showPredicted,
+  onShowPredictedChange,
+}) {
   const [windKmh, setWindKmh] = useState(18)
   const [windFrom, setWindFrom] = useState(270)
   const [fuel, setFuel] = useState(75)
   const [humidity, setHumidity] = useState(22)
   const [riverRise, setRiverRise] = useState(0.5)
-  const [playing, setPlaying] = useState(true)
   const [speed, setSpeed] = useState(4)
-  const [showPredicted, setShowPredicted] = useState(true)
   const [showPriority, setShowPriority] = useState(true)
+
+  const idle = !sim || sim.state === 'idle'
+  const running = sim?.state === 'running'
+  // Scenario and conditions are sent once on start, so they lock until Reset.
+  const locked = !canSimulate || !idle
+  const canPlay = canSimulate && (!idle || startPoint != null)
+  const currentSpeed = idle ? speed : (sim.speed ?? speed)
+
+  const pickSpeed = (s) => {
+    setSpeed(s)
+    if (!idle) onSpeedChange(s)
+  }
 
   return (
     <aside className="controls" aria-labelledby="controls-title">
@@ -50,48 +78,56 @@ export default function ControlsPanel({ hazardKind, onHazardKindChange }) {
               type="button"
               className="choice"
               aria-pressed={hazardKind === value}
+              disabled={locked}
               onClick={() => onHazardKindChange(value)}
             >
               {label}
             </button>
           ))}
         </div>
-        <span className="hint">Click the map to place the start point.</span>
+        <span className="hint num">{startHint({ canSimulate, idle, startPoint })}</span>
       </div>
 
-      {hazardKind === 'wildfire' ? (
-        <div className="stack-14">
-          <label className="field">
-            <span className="field-row">
-              Wind speed <strong className="num">{windKmh} km/h</strong>
-            </span>
-            <input type="range" min="0" max="60" value={windKmh} onChange={(e) => setWindKmh(+e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Wind direction</span>
-            <select className="select" value={windFrom} onChange={(e) => setWindFrom(+e.target.value)}>
-              {WIND_DIRECTIONS.map((d) => (
-                <option key={d.deg} value={d.deg}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-row">
-              Fuel dryness <strong>{dryness(fuel)}</strong>
-            </span>
-            <input type="range" min="0" max="100" value={fuel} onChange={(e) => setFuel(+e.target.value)} />
-          </label>
-          <label className="field">
-            <span className="field-row">
-              Relative humidity <strong className="num">{humidity}%</strong>
-            </span>
-            <input type="range" min="0" max="100" value={humidity} onChange={(e) => setHumidity(+e.target.value)} />
-          </label>
-        </div>
-      ) : (
-        <div className="stack-14">
+      <fieldset className="stack-14 conditions" disabled={locked}>
+        <legend className="sr-only">Conditions</legend>
+        {hazardKind === 'wildfire' ? (
+          <>
+            <label className="field">
+              <span className="field-row">
+                Wind speed <strong className="num">{windKmh} km/h</strong>
+              </span>
+              <input type="range" min="0" max="60" value={windKmh} onChange={(e) => setWindKmh(+e.target.value)} />
+            </label>
+            <label className="field">
+              <span>Wind direction</span>
+              <select className="select" value={windFrom} onChange={(e) => setWindFrom(+e.target.value)}>
+                {WIND_DIRECTIONS.map((d) => (
+                  <option key={d.deg} value={d.deg}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-row">
+                Fuel dryness <strong>{dryness(fuel)}</strong>
+              </span>
+              <input type="range" min="0" max="100" value={fuel} onChange={(e) => setFuel(+e.target.value)} />
+            </label>
+            <label className="field">
+              <span className="field-row">
+                Relative humidity <strong className="num">{humidity}%</strong>
+              </span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={humidity}
+                onChange={(e) => setHumidity(+e.target.value)}
+              />
+            </label>
+          </>
+        ) : (
           <label className="field">
             <span className="field-row">
               River rise rate <strong className="num">{riverRise.toFixed(1)} m/hr</strong>
@@ -105,33 +141,45 @@ export default function ControlsPanel({ hazardKind, onHazardKindChange }) {
               onChange={(e) => setRiverRise(+e.target.value)}
             />
           </label>
-        </div>
-      )}
+        )}
+      </fieldset>
 
-      <div className="playback">
-        <button
-          type="button"
-          className="icon-btn primary"
-          aria-label={playing ? 'Pause' : 'Play'}
-          onClick={() => setPlaying((p) => !p)}
-        >
-          {playing ? <PauseIcon /> : <PlayIcon />}
-        </button>
-        <button type="button" className="icon-btn" aria-label="Reset">
-          <ResetIcon />
-        </button>
-        <div className="segmented" role="group" aria-label="Speed">
-          {[1, 4, 16].map((s) => (
-            <button key={s} type="button" aria-pressed={speed === s} onClick={() => setSpeed(s)}>
-              {s}×
-            </button>
-          ))}
+      <div className="stack-8">
+        <div className="playback">
+          <button
+            type="button"
+            className="icon-btn primary"
+            aria-label={running ? 'Pause' : idle ? 'Start simulation' : 'Resume'}
+            disabled={!canPlay}
+            onClick={() => onPlay({ windKmh, windFrom, fuel, humidity, riverRise }, speed)}
+          >
+            {running ? <PauseIcon /> : <PlayIcon />}
+          </button>
+          <button type="button" className="icon-btn" aria-label="Reset" disabled={!canSimulate} onClick={onReset}>
+            <ResetIcon />
+          </button>
+          <div className="segmented" role="group" aria-label="Speed">
+            {[1, 4, 16].map((s) => (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={currentSpeed === s}
+                disabled={!canSimulate}
+                onClick={() => pickSpeed(s)}
+              >
+                {s}×
+              </button>
+            ))}
+          </div>
         </div>
+        <span className="elapsed num" aria-live="polite">
+          {idle ? 'Not started' : `${sim.state === 'paused' ? 'Paused' : 'Running'} · T+${sim.sim_time ?? 0} min`}
+        </span>
       </div>
 
       <label className="toggle-row">
         <span>Show predicted path</span>
-        <input type="checkbox" checked={showPredicted} onChange={(e) => setShowPredicted(e.target.checked)} />
+        <input type="checkbox" checked={showPredicted} onChange={(e) => onShowPredictedChange(e.target.checked)} />
       </label>
       <label className="toggle-row">
         <span>Show priority residents</span>

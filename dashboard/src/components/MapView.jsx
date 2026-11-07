@@ -12,6 +12,7 @@ import { MinusIcon, PlusIcon } from './icons.jsx'
 
 const EMPTY = { type: 'FeatureCollection', features: [] }
 const HAZARD = '#D9480F'
+const PREDICTED_COLOR = '#0070C4'
 
 // OSM raster tiles, muted so our orange/blue layers stand out (as in the mockup).
 const BASE_STYLE = {
@@ -73,18 +74,49 @@ function shelterElement(name) {
   return el
 }
 
-function nowElement() {
+function textElement(className, text) {
   const el = document.createElement('div')
-  el.className = 'now-label'
-  el.textContent = 'Now'
+  el.className = className
+  el.textContent = text
   return el
 }
 
-export default function MapView({ hazards, shelters, onMapClick }) {
+const nowElement = () => textElement('now-label', 'Now')
+
+function startElement() {
+  const el = document.createElement('div')
+  el.className = 'start-marker'
+  el.title = 'Start point'
+  return el
+}
+
+// Predicted-spread features from the backend carry `predicted_min` (e.g. 30, 60).
+const isPredicted = (f) => f.properties?.predicted_min != null
+const PREDICTED = ['has', 'predicted_min']
+const CURRENT = ['!', PREDICTED]
+
+// Where to put a "T+30" label: the ring vertex farthest from the current hazard,
+// i.e. the leading edge of the predicted spread.
+function leadingEdge(feature, from) {
+  const ring = feature.geometry?.coordinates?.[0]
+  if (!ring?.length) return null
+  if (!from) return ringCentroid(feature)
+  let best = ring[0]
+  let bestD = -1
+  for (const p of ring) {
+    const d = (p[0] - from[0]) ** 2 + (p[1] - from[1]) ** 2
+    if (d > bestD) [best, bestD] = [p, d]
+  }
+  return best
+}
+
+export default function MapView({ hazards, shelters, reports, focus, startPoint, showPredicted = true, onMapClick }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const shelterMarkers = useRef(new Map())
   const nowMarkers = useRef(new Map())
+  const predictedMarkers = useRef(new Map())
+  const startMarkers = useRef(new Map())
   const clickRef = useRef(onMapClick)
   const framed = useRef(false)
   const [loaded, setLoaded] = useState(false)
@@ -107,36 +139,63 @@ export default function MapView({ hazards, shelters, onMapClick }) {
 
     map.on('load', () => {
       map.addSource('hazards', { type: 'geojson', data: EMPTY })
+      // Predicted spread first, so the current hazard draws on top of it.
+      map.addLayer({
+        id: 'hazard-predicted',
+        type: 'fill',
+        source: 'hazards',
+        filter: PREDICTED,
+        paint: { 'fill-color': PREDICTED_COLOR, 'fill-opacity': 0.06 },
+      })
+      map.addLayer({
+        id: 'hazard-predicted-outline',
+        type: 'line',
+        source: 'hazards',
+        filter: PREDICTED,
+        paint: { 'line-color': PREDICTED_COLOR, 'line-opacity': 0.6, 'line-width': 1.5, 'line-dasharray': [3, 3] },
+      })
       map.addLayer({
         id: 'hazard-buffer',
         type: 'fill',
         source: 'hazards',
-        filter: ['==', ['get', 'zone'], 'buffer'],
+        filter: ['all', CURRENT, ['==', ['get', 'zone'], 'buffer']],
         paint: { 'fill-color': HAZARD, 'fill-opacity': 0.3 },
       })
       map.addLayer({
         id: 'hazard-core',
         type: 'fill',
         source: 'hazards',
-        filter: ['==', ['get', 'zone'], 'core'],
+        filter: ['all', CURRENT, ['==', ['get', 'zone'], 'core']],
         paint: { 'fill-color': HAZARD, 'fill-opacity': 0.82 },
       })
       map.addLayer({
         id: 'hazard-outline',
         type: 'line',
         source: 'hazards',
+        filter: CURRENT,
         paint: { 'line-color': HAZARD, 'line-width': 1.5 },
+      })
+      // Phone reports: white dot with an orange ring (matches the legend swatch).
+      map.addSource('reports', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'report-pins',
+        type: 'circle',
+        source: 'reports',
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#FFFFFF',
+          'circle-stroke-color': HAZARD,
+          'circle-stroke-width': 2.5,
+        },
       })
       setLoaded(true)
     })
 
     map.on('click', (e) => clickRef.current?.(e.lngLat))
 
-    const shelterStore = shelterMarkers.current
-    const nowStore = nowMarkers.current
+    const stores = [shelterMarkers, nowMarkers, predictedMarkers, startMarkers].map((r) => r.current)
     return () => {
-      shelterStore.clear()
-      nowStore.clear()
+      stores.forEach((s) => s.clear())
       map.remove()
       mapRef.current = null
       framed.current = false
@@ -164,12 +223,42 @@ export default function MapView({ hazards, shelters, onMapClick }) {
     const map = mapRef.current
     if (!loaded || !map) return
     map.getSource('hazards')?.setData(hazards ?? EMPTY)
-    const items = (hazards?.features ?? [])
-      .filter((f) => f.properties?.zone === 'core')
+    const features = hazards?.features ?? []
+    const current = features.filter((f) => !isPredicted(f) && f.properties?.zone === 'core')
+    const items = current
       .map((f) => ({ id: f.id, lngLat: ringCentroid(f), build: nowElement }))
       .filter((i) => i.lngLat)
     syncMarkers(map, nowMarkers.current, items)
-  }, [hazards, loaded])
+
+    const from = current.length ? ringCentroid(current[0]) : null
+    const labels = showPredicted
+      ? features
+          .filter(isPredicted)
+          .map((f) => ({
+            id: `${f.id}:${f.properties.predicted_min}`,
+            lngLat: leadingEdge(f, from),
+            build: () => textElement('predicted-label', `T+${f.properties.predicted_min}`),
+          }))
+          .filter((i) => i.lngLat)
+      : []
+    syncMarkers(map, predictedMarkers.current, labels)
+  }, [hazards, showPredicted, loaded])
+
+  // "Show predicted path" toggle.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map) return
+    const visibility = showPredicted ? 'visible' : 'none'
+    for (const id of ['hazard-predicted', 'hazard-predicted-outline']) map.setLayoutProperty(id, 'visibility', visibility)
+  }, [showPredicted, loaded])
+
+  // Start point picked on the map, before the drill is started.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map) return
+    const items = startPoint ? [{ id: 'start', lngLat: [startPoint.lng, startPoint.lat], build: startElement }] : []
+    syncMarkers(map, startMarkers.current, items)
+  }, [startPoint, loaded])
 
   // Shelters: navy squares with Public Sans name labels.
   useEffect(() => {
@@ -183,13 +272,27 @@ export default function MapView({ hazards, shelters, onMapClick }) {
     syncMarkers(map, shelterMarkers.current, items)
   }, [shelters, loaded])
 
+  // Reports: pins redrawn on every poll.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map) return
+    map.getSource('reports')?.setData(reports ?? EMPTY)
+  }, [reports, loaded])
+
+  // Centre on a report picked from the side panel.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map || !focus) return
+    map.flyTo({ center: focus.lngLat, zoom: Math.max(map.getZoom(), 14), duration: 800 })
+  }, [focus, loaded])
+
   return (
     <div className="map-wrap">
       <div
         ref={containerRef}
         className="map"
         role="region"
-        aria-label="Map of Edmonton. Click to place a hazard."
+        aria-label="Map of Edmonton. Click to place the hazard start point."
       />
       <MapLegend />
       <div className="zoom">

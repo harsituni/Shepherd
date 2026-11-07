@@ -1,6 +1,11 @@
 import { API_URL, USE_FIXTURES } from './config.js'
 import hazardsFixture from '../../shared/fixtures/hazards.json'
 import sheltersFixture from '../../shared/fixtures/shelters.json'
+import reportsFixture from '../../shared/fixtures/reports.json'
+
+// The disaster simulation runs on the backend (shared/contract.md "Simulation
+// control"). The dashboard only sends the scenario + conditions and draws what
+// /hazards returns, including predicted-spread features (`predicted_min`).
 
 // ---------- real backend ----------
 
@@ -18,56 +23,105 @@ async function request(path, options = {}) {
   return body
 }
 
+const post = (path, body) =>
+  request(path, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
+
 // ---------- fixture mode: a tiny in-memory stand-in for the backend ----------
-// Mimics the contract's Step 0 behaviour: every hazard grows a little on each poll,
-// and POST /hazards adds a circle.
+// NOT the hazard model. It only returns contract-shaped data so the dashboard can
+// be built and demoed before /sim/* exists: a shape that grows over sim time
+// (pushed downwind for fire) plus the same shape at T+30 / T+60 as the "prediction".
 
-const GROWTH_PER_TICK = 0.04 // +4% size per poll
-const MAX_SCALE = 3.5
+const SIM_MIN_PER_SECOND = 1 // at 1×, one sim minute per real second
 
-let fakeSimTime = hazardsFixture.sim_time
+let sampleHazards = structuredClone(hazardsFixture.features) // shown until a drill starts
 let nextHazardId = hazardsFixture.features.length + 1
-const fakeHazards = hazardsFixture.features.map((f) => track(structuredClone(f)))
+const fake = { state: 'idle', scenario: null, params: null, minutes: 0, speed: 1, lastTs: 0 }
 
-function track(feature) {
-  const ring = feature.geometry.coordinates[0]
-  const pts = ring.slice(0, -1) // drop the closing point
-  const center = [
-    pts.reduce((s, p) => s + p[0], 0) / pts.length,
-    pts.reduce((s, p) => s + p[1], 0) / pts.length,
-  ]
-  return { feature, center, baseRing: ring, ticks: 0 }
+function advanceFake() {
+  const now = Date.now()
+  if (fake.state === 'running') fake.minutes += ((now - fake.lastTs) / 1000) * SIM_MIN_PER_SECOND * fake.speed
+  fake.lastTs = now
 }
 
-function grownFeature(h) {
-  const scale = Math.min(1 + GROWTH_PER_TICK * h.ticks, MAX_SCALE)
-  const [cx, cy] = h.center
-  const ring = h.baseRing.map(([x, y]) => [cx + (x - cx) * scale, cy + (y - cy) * scale])
-  return { ...h.feature, geometry: { type: 'Polygon', coordinates: [ring] } }
-}
-
-function circlePolygon(lon, lat, radiusM, steps = 32) {
-  const dLat = radiusM / 111320
-  const dLon = radiusM / (111320 * Math.cos((lat * Math.PI) / 180))
-  const ring = []
-  for (let i = 0; i < steps; i++) {
-    const a = (i / steps) * 2 * Math.PI
-    ring.push([lon + dLon * Math.cos(a), lat + dLat * Math.sin(a)])
+function fakeState() {
+  advanceFake()
+  return {
+    state: fake.state,
+    scenario: fake.scenario,
+    sim_time: fake.state === 'idle' ? null : Math.floor(fake.minutes),
+    speed: fake.speed,
   }
-  ring.push(ring[0]) // closed polygon
-  return { type: 'Polygon', coordinates: [ring] }
+}
+
+// Offset a point by metres east/north.
+function offset([lon, lat], eastM, northM) {
+  return [lon + eastM / (111320 * Math.cos((lat * Math.PI) / 180)), lat + northM / 111320]
+}
+
+function ring(points) {
+  return { type: 'Polygon', coordinates: [[...points, points[0]]] }
+}
+
+function fakeShape(minutes) {
+  const p = fake.params
+  const origin = [p.lon, p.lat]
+  const steps = 48
+  if (fake.scenario === 'flood') {
+    const r = 150 + 6 * p.river_rise_m_per_hr * minutes
+    return ring(
+      Array.from({ length: steps }, (_, i) => {
+        const a = (i / steps) * 2 * Math.PI
+        const rr = r * (1 + 0.12 * Math.sin(3 * a))
+        return offset(origin, rr * Math.cos(a), rr * Math.sin(a))
+      }),
+    )
+  }
+  // Wildfire: an ellipse stretched downwind; faster with wind and dry fuel, slower when humid.
+  const rate = (2 + 0.9 * p.wind_kmh) * (0.3 + 1.2 * p.fuel_dryness) * (1.4 - p.humidity_pct / 100) // m/min
+  const head = 120 + rate * minutes
+  const back = 120 + (rate * minutes) / (1 + p.wind_kmh / 10)
+  const half = (head + back) / (2 * (1 + p.wind_kmh / 40))
+  const toward = ((p.wind_from_deg + 180) * Math.PI) / 180 // compass bearing it blows toward
+  const shift = (head - back) / 2
+  return ring(
+    Array.from({ length: steps }, (_, i) => {
+      const a = (i / steps) * 2 * Math.PI
+      const along = shift + ((head + back) / 2) * Math.cos(a)
+      const across = half * Math.sin(a)
+      const east = along * Math.sin(toward) + across * Math.cos(toward)
+      const north = along * Math.cos(toward) - across * Math.sin(toward)
+      return offset(origin, east, north)
+    }),
+  )
+}
+
+function fakeHazards() {
+  if (fake.state === 'idle') return sampleHazards
+  const kind = fake.scenario
+  const t = fake.minutes
+  const feature = (id, props, minutes) => ({
+    type: 'Feature',
+    id,
+    properties: { kind, source: 'sim', ...props },
+    geometry: fakeShape(minutes),
+  })
+  return [
+    feature('hz_sim_p60', { zone: 'core', predicted_min: 60 }, t + 60),
+    feature('hz_sim_p30', { zone: 'core', predicted_min: 30 }, t + 30),
+    feature('hz_sim_buffer', { zone: 'buffer' }, t + 10),
+    feature('hz_sim_core', { zone: 'core' }, t),
+  ]
 }
 
 // ---------- public API ----------
 
 export async function getHazards() {
   if (!USE_FIXTURES) return request('/hazards')
-  fakeSimTime += 1
-  fakeHazards.forEach((h) => (h.ticks += 1))
+  const { sim_time } = fakeState()
   return {
     type: 'FeatureCollection',
-    sim_time: fakeSimTime,
-    features: fakeHazards.map(grownFeature),
+    sim_time: sim_time ?? hazardsFixture.sim_time,
+    features: fakeHazards(),
   }
 }
 
@@ -76,19 +130,73 @@ export async function getShelters() {
   return structuredClone(sheltersFixture)
 }
 
+export async function getReports() {
+  if (!USE_FIXTURES) return request('/reports')
+  return structuredClone(reportsFixture)
+}
+
 export async function postHazard({ kind, lat, lon, radius_m }) {
-  if (!USE_FIXTURES) {
-    return request('/hazards', {
-      method: 'POST',
-      body: JSON.stringify({ kind, lat, lon, radius_m }),
-    })
-  }
+  if (!USE_FIXTURES) return post('/hazards', { kind, lat, lon, radius_m })
   const feature = {
     type: 'Feature',
     id: `hz_${nextHazardId++}`,
     properties: { kind, zone: 'core', source: 'sim' },
-    geometry: circlePolygon(lon, lat, radius_m),
+    geometry: ring(
+      Array.from({ length: 32 }, (_, i) => {
+        const a = (i / 32) * 2 * Math.PI
+        return offset([lon, lat], radius_m * Math.cos(a), radius_m * Math.sin(a))
+      }),
+    ),
   }
-  fakeHazards.push(track(feature))
+  sampleHazards.push(feature)
   return feature
+}
+
+export async function deleteHazards() {
+  if (!USE_FIXTURES) return request('/hazards', { method: 'DELETE' })
+  sampleHazards = []
+  return { ok: true }
+}
+
+// ---------- simulation control (runs on the backend) ----------
+
+export async function getSimState() {
+  if (!USE_FIXTURES) return request('/sim/state')
+  return fakeState()
+}
+
+// Wildfire: { scenario: 'wildfire', lat, lon, wind_kmh, wind_from_deg, fuel_dryness, humidity_pct }
+// Flood:    { scenario: 'flood', lat, lon, river_rise_m_per_hr }
+// humidity_pct and the flood lat/lon are not in contract v1 yet (asked for in dashboard/CLAUDE.md).
+export async function startSim(body) {
+  if (!USE_FIXTURES) return post('/sim/start', body)
+  Object.assign(fake, { state: 'running', scenario: body.scenario, params: body, minutes: 0, lastTs: Date.now() })
+  return fakeState()
+}
+
+export async function pauseSim() {
+  if (!USE_FIXTURES) return post('/sim/pause')
+  advanceFake()
+  if (fake.state === 'running') fake.state = 'paused'
+  return fakeState()
+}
+
+export async function resumeSim() {
+  if (!USE_FIXTURES) return post('/sim/resume')
+  advanceFake()
+  if (fake.state === 'paused') fake.state = 'running'
+  return fakeState()
+}
+
+export async function resetSim() {
+  if (!USE_FIXTURES) return post('/sim/reset')
+  Object.assign(fake, { state: 'idle', scenario: null, params: null, minutes: 0 })
+  return fakeState()
+}
+
+export async function setSimSpeed(multiplier) {
+  if (!USE_FIXTURES) return post('/sim/speed', { multiplier })
+  advanceFake()
+  fake.speed = multiplier
+  return fakeState()
 }
