@@ -28,8 +28,8 @@ shepherd/
 │   ├── api/       → Harsit
 │   ├── routing/   → Azer
 │   └── sim/       → Dviviz
-├── dashboard/     → Aarya
-├── phone/         → Shriyaz
+├── dashboard/     → Shriyaz
+├── phone/         → Aarya
 └── shared/
     ├── contract.md
     └── fixtures/  → Harsit
@@ -100,7 +100,7 @@ def find_route(lat: float, lon: float,
 
 ---
 
-## Folder: `dashboard/` (Aarya)
+## Folder: `dashboard/` (Shriyaz)
 **Stack:** Vite + React + `maplibre-gl`. Dev server on port **5173**. Own `package.json` in this folder.
 **Delivers:**
 - `src/config.js`: `export const API_URL = "http://localhost:8000"; export const USE_FIXTURES = false;`
@@ -119,7 +119,7 @@ def find_route(lat: float, lon: float,
 
 ---
 
-## Folder: `phone/` (Shriyaz)
+## Folder: `phone/` (Aarya)
 **Stack:** Vite + React + `maplibre-gl`. Dev server on port **5174**. Own `package.json` in this folder.
 **Delivers:**
 - `src/config.js`: same two exports as the dashboard.

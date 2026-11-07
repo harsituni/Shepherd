@@ -12,8 +12,8 @@ Live evacuation routing for Edmonton. Simulates wildfires and floods, closes roa
 | Harsit | `backend/api`, `shared/`, integration, pitch |
 | Azer | `backend/routing` |
 | Dviviz | `backend/sim` |
-| Aarya | `dashboard/` |
-| Shriyaz | `phone/` |
+| Shriyaz | `dashboard/` |
+| Aarya | `phone/` |
 
 ## Run it
 
