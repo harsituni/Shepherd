@@ -69,7 +69,8 @@ export default function ControlsPanel({
     setWindKmh(kmh)
     if (idle) return
     clearTimeout(windTimer.current)
-    windTimer.current = setTimeout(() => onWindChange(kmh), 300)
+    // /sim/wind needs the direction too; it's locked mid-run, so send the one in use.
+    windTimer.current = setTimeout(() => onWindChange(kmh, windFrom), 300)
   }
 
   return (

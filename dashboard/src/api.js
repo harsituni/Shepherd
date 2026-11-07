@@ -198,12 +198,12 @@ export async function resetSim() {
   return fakeState()
 }
 
-// Change wind speed while a simulation is running or paused: { wind_kmh }.
-// Not in contract v1 or the backend yet (asked for in dashboard/CLAUDE.md).
-export async function setSimWind(wind_kmh) {
-  if (!USE_FIXTURES) return post('/sim/wind', { wind_kmh })
+// Change wind while a simulation is running or paused (contract v2):
+// { wind_kmh, wind_from_deg }, both required. Returns the /sim/state shape.
+export async function setSimWind(wind_kmh, wind_from_deg) {
+  if (!USE_FIXTURES) return post('/sim/wind', { wind_kmh, wind_from_deg })
   advanceFake()
-  if (fake.params) fake.params = { ...fake.params, wind_kmh }
+  if (fake.params) fake.params = { ...fake.params, wind_kmh, wind_from_deg }
   return fakeState()
 }
 
