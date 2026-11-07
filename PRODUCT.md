@@ -10,13 +10,13 @@ Both surfaces are web. The phone app is a web page laid out at ~390px that behav
 
 ## Users
 
-- **Emergency managers / Government of Alberta officials** (dashboard, `dashboard/`). They sit at a desk during an incident, or run a drill, around Edmonton. Their job: simulate or monitor a wildfire or flood, see who is at risk, watch roads close and evacuees get rerouted, track high-priority residents, triage reports from the public, and push updates to every resident.
+- **Emergency managers / Government of Alberta officials** (dashboard, `dashboard/`). They sit at a desk during an incident, or run a simulation, around Edmonton. Their job: simulate or monitor a wildfire or tornado, see who is at risk, watch roads close and evacuees get rerouted, track high-priority residents, triage reports from the public, and push updates to every resident.
 - **Residents of the affected area** (phone app, `phone/`). They are on a phone, possibly under stress, possibly already moving. Their job: get the safest route to an open shelter, understand why it changed, receive government updates, and report hazards or their own status (safe / need help).
 - **Hackathon judges** (natHacks 2026, Defense & Security theme). They assess both surfaces in a short demo and on their own phones.
 
 ## Product Purpose
 
-Shepherd is live evacuation routing for Edmonton. It simulates wildfires (main priority) and floods, closes roads in real time, and guides people to shelters on routes the hazard won't reach. The dashboard is the command view; the phone app is the public view; a FastAPI backend holds the shared state, runs the hazard sim and computes routes.
+Shepherd is live evacuation routing for Edmonton. It simulates wildfires (main priority) and tornadoes, closes roads in real time, and guides people to shelters on routes the hazard won't reach. The dashboard is the command view; the phone app is the public view; a FastAPI backend holds the shared state, runs the hazard sim and computes routes.
 
 Success: it wins the demo, and every screen stays credible as something a real official or resident could actually use. A demo-only shortcut that would look fake to an emergency manager counts as a failure.
 
@@ -26,7 +26,7 @@ Routes are recalculated live around both the hazard's current extent and its *pr
 
 ## Operating Context
 
-- Live mode (real data feeds) vs Drill mode (simulation), switchable on the dashboard.
+- Live mode (real data feeds) vs Simulation mode, switchable on the dashboard.
 - The sim ticks every 2 s real time; both frontends poll the backend every 2 s, with a WebSocket "something changed" signal planned.
 - The dashboard is used on a laptop or desktop; it must also stack cleanly on narrow screens. The phone app runs on judges' real phones on the same Wi-Fi as the backend laptop.
 - Time is expressed as `sim_time` / T+minutes from scenario start.
@@ -34,7 +34,7 @@ Routes are recalculated live around both the hazard's current extent and its *pr
 
 ## Capabilities and Constraints
 
-- **Dashboard** (priority order): disaster simulation with conditions (wind speed, wind direction, fuel dryness, relative humidity; river rise rate for flood; no temperature control), play/pause/reset, speed 1×/4×/16×; rerouting map with predicted path, closed roads, evacuation routes and shelters; a rerouting updates feed; a historical progression slider; high-priority residents (needs category, evacuation status); a "Notify all residents" composer with severity (Advisory / Alert / Evacuation order) and target area; reported hazards with status (New / Verified / Dismissed).
+- **Dashboard** (priority order): disaster simulation of a wildfire or tornado with conditions (wind speed, wind/path direction; relative humidity for wildfire; no fuel dryness or temperature control), play/pause/reset, speed 1×/4×/16×; rerouting map with predicted path, closed roads, evacuation routes and shelters; a rerouting updates feed; a historical progression slider; high-priority residents (needs category, evacuation status); a "Notify all residents" composer with severity (Advisory / Alert / Evacuation order) and target area; reported hazards with status (New / Verified / Dismissed).
 - **Dashboard key numbers, only these four:** people at risk, roads closed, active reroutes, shelter capacity used.
 - **Phone** (priority order): best route from real-time data with auto-reroute and the reason for it; government notifications as a top banner plus an Alerts tab; report hazard (fire, flooded road, blocked road), I'm safe, Need help; predicted hazard path on the map with a distance/direction line.
 - Stack: Vite + React + `maplibre-gl` with an OpenStreetMap basemap; FastAPI backend; no database, auth or Docker; no new dependencies without a reason.

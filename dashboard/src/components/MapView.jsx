@@ -258,7 +258,7 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
     for (const id of ['hazard-predicted', 'hazard-predicted-outline']) map.setLayoutProperty(id, 'visibility', visibility)
   }, [showPredicted, loaded])
 
-  // Start point picked on the map, before the drill is started.
+  // Start point picked on the map, before the simulation is started.
   useEffect(() => {
     const map = mapRef.current
     if (!loaded || !map) return

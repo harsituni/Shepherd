@@ -2,8 +2,8 @@ import { isCurrentCore, nearestHazard } from '../geo.js'
 import { InfoIcon, WarningIcon } from './icons.jsx'
 import { mostSevere, SEVERITY } from './Notifications.jsx'
 
-const KIND_LABEL = { wildfire: 'Wildfire', flood: 'Flood' }
-const KIND_NOUN = { wildfire: 'Fire', flood: 'Flooding' }
+const KIND_LABEL = { wildfire: 'Wildfire', tornado: 'Tornado', flood: 'Flood' }
+const KIND_NOUN = { wildfire: 'Fire', tornado: 'Tornado', flood: 'Flooding' }
 
 // "Fire is 2.4 km west of you, moving east." from /hazards + the user's location.
 function hazardLine(near) {

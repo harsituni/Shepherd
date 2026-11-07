@@ -33,7 +33,7 @@ const post = (path, body) =>
 
 const SIM_MIN_PER_SECOND = 1 // at 1×, one sim minute per real second
 
-let sampleHazards = structuredClone(hazardsFixture.features) // shown until a drill starts
+let sampleHazards = structuredClone(hazardsFixture.features) // shown until a simulation starts
 let nextHazardId = hazardsFixture.features.length + 1
 const fake = { state: 'idle', scenario: null, params: null, minutes: 0, speed: 1, lastTs: 0 }
 
@@ -66,22 +66,25 @@ function fakeShape(minutes) {
   const p = fake.params
   const origin = [p.lon, p.lat]
   const steps = 48
-  if (fake.scenario === 'flood') {
-    const r = 150 + 6 * p.river_rise_m_per_hr * minutes
+  const toward = ((p.wind_from_deg + 180) * Math.PI) / 180 // compass bearing it blows toward
+  if (fake.scenario === 'tornado') {
+    // Tornado: a compact damage circle that travels downwind and widens slowly.
+    const travel = (p.wind_kmh * 1000 * 0.6 * minutes) / 60 // metres moved
+    const centre = offset(origin, travel * Math.sin(toward), travel * Math.cos(toward))
+    const r = 200 + 2 * minutes
     return ring(
       Array.from({ length: steps }, (_, i) => {
         const a = (i / steps) * 2 * Math.PI
-        const rr = r * (1 + 0.12 * Math.sin(3 * a))
-        return offset(origin, rr * Math.cos(a), rr * Math.sin(a))
+        return offset(centre, r * Math.cos(a), r * Math.sin(a))
       }),
     )
   }
   // Wildfire: an ellipse stretched downwind; faster with wind and dry fuel, slower when humid.
-  const rate = (2 + 0.9 * p.wind_kmh) * (0.3 + 1.2 * p.fuel_dryness) * (1.4 - p.humidity_pct / 100) // m/min
+  const fuel = p.fuel_dryness ?? 0.7 // the UI no longer sends it; contract default
+  const rate = (2 + 0.9 * p.wind_kmh) * (0.3 + 1.2 * fuel) * (1.4 - p.humidity_pct / 100) // m/min
   const head = 120 + rate * minutes
   const back = 120 + (rate * minutes) / (1 + p.wind_kmh / 10)
   const half = (head + back) / (2 * (1 + p.wind_kmh / 40))
-  const toward = ((p.wind_from_deg + 180) * Math.PI) / 180 // compass bearing it blows toward
   const shift = (head - back) / 2
   return ring(
     Array.from({ length: steps }, (_, i) => {
@@ -165,9 +168,10 @@ export async function getSimState() {
   return fakeState()
 }
 
-// Wildfire: { scenario: 'wildfire', lat, lon, wind_kmh, wind_from_deg, fuel_dryness, humidity_pct }
-// Flood:    { scenario: 'flood', lat, lon, river_rise_m_per_hr }
-// humidity_pct and the flood lat/lon are not in contract v1 yet (asked for in dashboard/CLAUDE.md).
+// Wildfire: { scenario: 'wildfire', lat, lon, wind_kmh, wind_from_deg, humidity_pct }
+// Tornado:  { scenario: 'tornado', lat, lon, wind_kmh, wind_from_deg }
+// fuel_dryness is left to the backend default. humidity_pct and the tornado scenario
+// are not in contract v1 yet (asked for in dashboard/CLAUDE.md).
 export async function startSim(body) {
   if (!USE_FIXTURES) return post('/sim/start', body)
   Object.assign(fake, { state: 'running', scenario: body.scenario, params: body, minutes: 0, lastTs: Date.now() })
