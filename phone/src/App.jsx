@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getHazards, getNotifications, getRoute, getShelters, postReport } from './api.js'
 import { POLL_MS } from './config.js'
+import { placeName } from './placeName.js'
 import AlertBanner from './components/AlertBanner.jsx'
 import MapView from './components/MapView.jsx'
 import { AlertsTab, mostSevere, NotificationPopup } from './components/Notifications.jsx'
@@ -42,10 +43,38 @@ export default function App() {
   const seenNotes = useRef(new Set())
   const toastTimer = useRef(null)
   const locationRef = useRef(location)
+  const [areaName, setAreaName] = useState('Edmonton')
+  const areaTimer = useRef(null)
+  const areaAbort = useRef(null)
 
   useEffect(() => {
     locationRef.current = location
   }, [location])
+
+  // Header place name follows the map. Wait until panning/zooming settles,
+  // then look it up; keep the previous name if the lookup fails.
+  const onViewChange = useCallback((center, zoom) => {
+    clearTimeout(areaTimer.current)
+    areaTimer.current = setTimeout(async () => {
+      areaAbort.current?.abort()
+      const ctrl = new AbortController()
+      areaAbort.current = ctrl
+      try {
+        const name = await placeName(center, zoom, ctrl.signal)
+        if (name && !ctrl.signal.aborted) setAreaName(name)
+      } catch {
+        // offline or rate-limited: leave the current name
+      }
+    }, 600)
+  }, [])
+
+  useEffect(
+    () => () => {
+      clearTimeout(areaTimer.current)
+      areaAbort.current?.abort()
+    },
+    [],
+  )
 
   const showToast = useCallback((text) => {
     clearTimeout(toastTimer.current)
@@ -147,7 +176,9 @@ export default function App() {
           </span>
           Shepherd
         </span>
-        <span className="city">Edmonton</span>
+        <span className="city" aria-live="polite" title={areaName}>
+          {areaName}
+        </span>
       </header>
 
       {popup && <NotificationPopup key={popup.id} notification={popup} onDismiss={() => setPopup(null)} />}
@@ -181,6 +212,7 @@ export default function App() {
                 route={route}
                 location={location}
                 onTap={setLocationAndRoute}
+                onViewChange={onViewChange}
                 focusKey={focusKey}
                 tall={!location}
               />
