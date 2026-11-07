@@ -22,6 +22,7 @@
   --danger-title: #8a2f06;
   --danger-text: #6b3a1f;
   --danger-icon: #b4400b;
+  --alert-title: #9a6b00; /* Notify severity "Alert" */
   /* Gold focus ring, as on Alberta.ca. Focus only; never decoration. */
   --focus: #feba35;
 
@@ -158,6 +159,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .segmented button + button { border-left: 1px solid var(--border); }
 .segmented button[aria-pressed='true'] { background: var(--navy); color: #fff; font-weight: 600; }
 .segmented button.severity-evac[aria-pressed='true'] { background: var(--danger-title); color: #fff; }
+/* Deep yellow, same weight as the evacuation red; white text passes 4.5:1. */
+.segmented button.severity-alert[aria-pressed='true'] { background: var(--alert-title); color: #fff; }
 
 /* Disabled: a distinct flat style rather than fading with opacity. */
 .choice:disabled, .icon-btn:disabled, .segmented button:disabled {
@@ -171,9 +174,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .icon-btn.primary:disabled { background: var(--divider); color: var(--muted-2); }
 
 .conditions { margin: 0; padding: 0; border: 0; min-width: 0; }
-.conditions:disabled .field, .conditions:disabled .field-row strong { color: var(--muted-2); }
-.conditions:disabled input[type='range'] { accent-color: var(--muted-2); }
-.conditions:disabled .select { background: var(--map-bg); color: var(--muted-2); }
+/* Locked as a whole (Live mode) or one control at a time (direction, humidity mid-run). */
+.conditions:disabled .field, .conditions:disabled .field-row strong,
+.conditions .field:has(:disabled), .conditions .field:has(:disabled) .field-row strong { color: var(--muted-2); }
+.conditions input[type='range']:disabled { accent-color: var(--muted-2); }
+.conditions .select:disabled { background: var(--map-bg); color: var(--muted-2); }
 .elapsed { font-size: var(--fs-sm); color: var(--muted); }
 
 .toggle-row {

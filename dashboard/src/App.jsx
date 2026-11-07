@@ -9,6 +9,7 @@ import {
   resetSim,
   resumeSim,
   setSimSpeed,
+  setSimWind,
   startSim,
 } from './api.js'
 import { POLL_MS, USE_FIXTURES } from './config.js'
@@ -115,6 +116,20 @@ export default function App() {
 
   const changeSpeed = useCallback((multiplier) => run(() => setSimSpeed(multiplier)), [run])
 
+  // POST /sim/wind isn't on the backend yet, so a failure is logged rather than
+  // shown as a lost connection.
+  const changeWind = useCallback(
+    async (windKmh) => {
+      try {
+        await setSimWind(windKmh)
+      } catch (err) {
+        console.warn('POST /sim/wind failed:', err.message)
+      }
+      await refresh()
+    },
+    [refresh],
+  )
+
   const focusReport = useCallback((feature) => {
     setFocus({ id: feature.id, lngLat: feature.geometry.coordinates, at: Date.now() })
   }, [])
@@ -149,6 +164,7 @@ export default function App() {
           onPlay={play}
           onReset={reset}
           onSpeedChange={changeSpeed}
+          onWindChange={changeWind}
           showPredicted={showPredicted}
           onShowPredictedChange={setShowPredicted}
         />

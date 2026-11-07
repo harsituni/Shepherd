@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PauseIcon, PlayIcon, ResetIcon } from './icons.jsx'
 
 // Compass degrees the wind blows FROM (matches wind_from_deg in the contract).
@@ -39,9 +39,12 @@ export default function ControlsPanel({
   onPlay,
   onReset,
   onSpeedChange,
+  onWindChange,
   showPredicted,
   onShowPredictedChange,
 }) {
+  const windTimer = useRef(null)
+  useEffect(() => () => clearTimeout(windTimer.current), [])
   const [windKmh, setWindKmh] = useState(18)
   const [windFrom, setWindFrom] = useState(270)
   const [humidity, setHumidity] = useState(22)
@@ -51,6 +54,7 @@ export default function ControlsPanel({
   const idle = !sim || sim.state === 'idle'
   const running = sim?.state === 'running'
   // Scenario and conditions are sent once on start, so they lock until Reset.
+  // Wind speed is the exception: it can change mid-run via POST /sim/wind.
   const locked = !canSimulate || !idle
   const canPlay = canSimulate && (!idle || startPoint != null)
   const currentSpeed = idle ? speed : (sim.speed ?? speed)
@@ -58,6 +62,14 @@ export default function ControlsPanel({
   const pickSpeed = (s) => {
     setSpeed(s)
     if (!idle) onSpeedChange(s)
+  }
+
+  // While a simulation runs, send the new wind speed once the slider settles.
+  const pickWind = (kmh) => {
+    setWindKmh(kmh)
+    if (idle) return
+    clearTimeout(windTimer.current)
+    windTimer.current = setTimeout(() => onWindChange(kmh), 300)
   }
 
   return (
@@ -85,17 +97,17 @@ export default function ControlsPanel({
         <span className="hint num">{startHint({ canSimulate, idle, startPoint })}</span>
       </div>
 
-      <fieldset className="stack-14 conditions" disabled={locked}>
+      <fieldset className="stack-14 conditions" disabled={!canSimulate}>
         <legend className="sr-only">Conditions</legend>
         <label className="field">
           <span className="field-row">
             Wind speed <strong className="num">{windKmh} km/h</strong>
           </span>
-          <input type="range" min="0" max="60" value={windKmh} onChange={(e) => setWindKmh(+e.target.value)} />
+          <input type="range" min="0" max="60" value={windKmh} onChange={(e) => pickWind(+e.target.value)} />
         </label>
         <label className="field">
           <span>{hazardKind === 'tornado' ? 'Path direction' : 'Wind direction'}</span>
-          <select className="select" value={windFrom} onChange={(e) => setWindFrom(+e.target.value)}>
+          <select className="select" value={windFrom} disabled={locked} onChange={(e) => setWindFrom(+e.target.value)}>
             {WIND_DIRECTIONS.map((d) => (
               <option key={d.deg} value={d.deg}>
                 {d.label}
@@ -108,7 +120,14 @@ export default function ControlsPanel({
             <span className="field-row">
               Relative humidity <strong className="num">{humidity}%</strong>
             </span>
-            <input type="range" min="0" max="100" value={humidity} onChange={(e) => setHumidity(+e.target.value)} />
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={humidity}
+              disabled={locked}
+              onChange={(e) => setHumidity(+e.target.value)}
+            />
           </label>
         )}
       </fieldset>
