@@ -107,12 +107,12 @@ html = f"""<!DOCTYPE html>
 </head>
 <body>
   <h1>Shepherd phone</h1>
-  <p class="muted">Scan the QR, or type the join URL on a phone on the <strong>same Wi‑Fi / VPN</strong> as this laptop.</p>
+  <p class="muted">{"Share this page or the join URL — teammates and judges open it on any phone (cellular OK)." if api else "Same Wi‑Fi / VPN as this laptop required for LAN mode."}</p>
   <div id="qr">{qr_img}</div>
   <p class="big">Join URL</p>
   <p><code>{json.dumps(join)[1:-1]}</code></p>
   <p class="muted">API: <code>{json.dumps(api_label)[1:-1]}</code></p>
-  <p class="muted">If the phone cannot connect, the laptop IP may be on a VPN (e.g. 172.x) that phones do not share — use Cloudflare Tunnel (see demo.md Option B).</p>
+  <p class="muted">{"Keep ./scripts/demo_phone.sh (or both cloudflared terminals) running while people use the link." if api else "If the phone cannot connect, the laptop IP may be on a VPN (172.x) phones do not share — run ./scripts/demo_phone.sh instead."}</p>
 </body>
 </html>
 """

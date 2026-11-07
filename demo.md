@@ -1,75 +1,59 @@
-# Shepherd demo — judge phones via QR
+# Shepherd demo — phones via QR
 
-Goal: judges scan a QR, open the **phone** app, and talk to the **same** API as the dashboard.
+Judges and teammates open the **phone** app and hit the **same** API as your dashboard.
 
-## Option A — same Wi‑Fi (fastest)
+## One command (recommended)
 
-1. On the laptop, start the stack:
-   ```bash
-   ./dev.sh
-   ```
-2. Find **your** laptop LAN IP (do not copy an example from docs):
-   ```bash
-   ipconfig getifaddr en0
-   ```
-   Right now on many campus/VPN networks this looks like `172.x.x.x`, not `192.168.x.x`.
-3. Confirm that IP works **from the laptop** before involving a phone:
-   ```bash
-   curl -s http://YOUR_IP:8000/health    # {"ok":true}
-   open http://YOUR_IP:5174              # phone UI in the browser
-   ```
-4. Build the join page + QR (script checks reachability, embeds the QR as a PNG):
-   ```bash
-   ./scripts/demo_join.sh
-   ```
-   Or:
-   ```bash
-   ./scripts/demo_join.sh --lan YOUR_IP
-   ```
-   Open `demo-join.html` if it does not pop up. You should see a QR image and the join URL.
-5. On a phone on the **same network as the laptop**, scan the QR or type that exact join URL.
+On the host laptop:
 
-**Requirements:** phone and laptop on the same Wi‑Fi/VPN; no guest-network client isolation; macOS Firewall allows incoming for Python/Node (or turn firewall off briefly).
+```bash
+./dev.sh                 # terminal 1 — API + dashboard + phone
+./scripts/demo_phone.sh  # terminal 2 — Cloudflare tunnels + QR
+```
 
-**If the phone browser spins forever:** your laptop IP is often on a VPN (`172.x`) that phones are not on. Use Option B (tunnel) instead.
+`demo_phone.sh` will:
+
+1. Wait for `:8000` and `:5174` (or start `./dev.sh` if they’re down)
+2. Open two Cloudflare quick tunnels (phone UI + API)
+3. Write `demo-join.html` with an **embedded QR** (`?api=` baked in)
+4. Open that page and print a join URL to paste in chat
+
+**Share the join URL / QR.** Anyone’s phone (Wi‑Fi or cellular) can use it.  
+**Ctrl+C** in the `demo_phone.sh` terminal stops the tunnels.
+
+Needs once: `brew install cloudflared`
+
+If you see **“Blocked request. This host is not allowed”**, you’re on an old phone Vite config — pull this branch (`allowedHosts: true`) and restart `./dev.sh`.
 
 ---
 
-## Option B — public HTTPS (Cloudflare Tunnel)
+## LAN only (same Wi‑Fi, no tunnel)
 
-Use this when phones are on cellular or a locked-down venue Wi‑Fi.
-
-1. Install once: `brew install cloudflared`
-2. Start Shepherd: `./dev.sh`
-3. In **two** extra terminals:
-   ```bash
-   cloudflared tunnel --url http://127.0.0.1:5174
-   # copy the https://….trycloudflare.com URL → PHONE_URL
-
-   cloudflared tunnel --url http://127.0.0.1:8000
-   # copy the https://….trycloudflare.com URL → API_URL
-   ```
-4. Make the QR (embeds `?api=` so the phone hits the API tunnel):
-   ```bash
-   ./scripts/demo_join.sh --tunnel "$PHONE_URL" "$API_URL"
-   ```
-5. Judges scan → phone UI over HTTPS, API over the second HTTPS tunnel.
-
-If the phone shows **“Blocked request. This host is not allowed”**, restart `./dev.sh` after pulling — `phone/vite.config.js` must have `server.allowedHosts: true`.
-
-### ngrok (alternative)
+Only works when the phone can route to your laptop IP (often fails on VPN `172.x`):
 
 ```bash
-ngrok http 5174   # phone
-ngrok http 8000   # API
-./scripts/demo_join.sh --tunnel "$PHONE_URL" "$API_URL"
+./dev.sh
+./scripts/demo_join.sh          # or: --lan YOUR_IP
+```
+
+Find your IP: `ipconfig getifaddr en0` — use **yours**, not a docs example.
+
+---
+
+## Manual tunnels (if you prefer)
+
+```bash
+./dev.sh
+cloudflared tunnel --url http://127.0.0.1:5174   # → PHONE
+cloudflared tunnel --url http://127.0.0.1:8000   # → API
+./scripts/demo_join.sh --tunnel "$PHONE" "$API"
 ```
 
 ---
 
 ## How the phone picks the API
 
-See `phone/src/config.js`:
+`phone/src/config.js`:
 
 | How you open the phone | API used |
 |---|---|
@@ -77,12 +61,6 @@ See `phone/src/config.js`:
 | `http://<LAN-IP>:5174` | `http://<LAN-IP>:8000` |
 | Tunnel URL with `?api=https://…` | that `api` value (saved in `localStorage`) |
 
-Dashboard stays on the laptop (`http://localhost:5173` → `http://localhost:8000`).
+Dashboard stays on the laptop: http://localhost:5173 → http://localhost:8000
 
----
-
-## Sanity check
-
-- Laptop: http://localhost:8000/health → `{"ok":true}`
-- Phone: leave-by / route cards load; after “start evacuating”, dashboard can poll `GET /evacuees`
-- Clear a stuck API override: DevTools → Application → Local Storage → delete `shepherd_api_url`
+Stuck on a bad API override: clear `localStorage` key `shepherd_api_url` for that origin.

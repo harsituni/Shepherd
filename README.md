@@ -42,20 +42,16 @@ Dashboard: `cd dashboard && npm install && npm run dev` → http://localhost:517
 
 Phone: `cd phone && npm install && npm run dev` → http://localhost:5174
 
-## Demo / QR (judges on phones)
+## Demo / QR (judges + teammates on phones)
 
-See **[demo.md](demo.md)**. Short version on the same Wi‑Fi:
-
-```bash
-./dev.sh
-./scripts/demo_join.sh          # opens a page with a QR → http://<LAN-IP>:5174
-```
-
-For cellular / locked Wi‑Fi, use Cloudflare Tunnel or ngrok (two tunnels: phone + API) and:
+See **[demo.md](demo.md)**. Recommended (works on cellular / VPN):
 
 ```bash
-./scripts/demo_join.sh --tunnel "$PHONE_URL" "$API_URL"
+./dev.sh                  # terminal 1
+./scripts/demo_phone.sh   # terminal 2 — tunnels + QR; share the join URL
 ```
+
+Needs once: `brew install cloudflared`
 
 ## How we work
 - Read `AGENT_CONTEXT.md` and `shared/contract.md` first.
