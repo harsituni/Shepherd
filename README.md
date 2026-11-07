@@ -23,7 +23,7 @@ Live evacuation routing for Edmonton. Simulates wildfires and floods, closes roa
 ```
 Then open http://localhost:8000/health · http://localhost:5173 · http://localhost:5174
 
-First time only: create the Python venv (script runs `npm install` for frontends if missing):
+First time only: create the Python venv. `./dev.sh` and `./demo.sh` also run `pip install -r backend/requirements.txt` if routing deps (networkx/osmnx) are missing after a pull:
 ```bash
 python3 -m venv backend/.venv
 source backend/.venv/bin/activate

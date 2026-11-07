@@ -1,2 +1,6 @@
 fastapi
 uvicorn[standard]
+# Edmonton road routing (Azer) — needed by backend.routing.router
+osmnx>=2,<3
+networkx>=3,<4
+scikit-learn>=1.5,<2

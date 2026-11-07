@@ -86,28 +86,25 @@ instead. Importing/downloading roads remains a separate manual step below.
 
 ## Setup
 
-Run these PowerShell commands from the repository root:
+Use the **shared** backend venv (same as the API). From the repository root:
 
-```powershell
-python -m venv backend/routing/.venv
-backend/routing/.venv/Scripts/python.exe -m pip install "osmnx>=2,<3" "networkx>=3,<4" "scikit-learn>=1.5,<2"
+```bash
+python3 -m venv backend/.venv
+source backend/.venv/bin/activate          # Windows: backend\.venv\Scripts\activate
+pip install -r backend/requirements.txt
 ```
 
-Harsit should add these dependencies to the shared requirements file:
-
-```text
-osmnx>=2,<3
-networkx>=3,<4
-scikit-learn>=1.5,<2
-```
+`backend/requirements.txt` already includes `osmnx`, `networkx`, and `scikit-learn`.
+`./dev.sh` / `./demo.sh` install that file automatically if imports are missing.
 
 OSMnx installs Shapely as a dependency. Scikit-learn supports nearest-node
-lookups on the unprojected longitude/latitude graph. No shared files were edited.
+lookups on the unprojected longitude/latitude graph.
 
 ## Offline tests
 
-```powershell
-backend/routing/.venv/Scripts/python.exe -B -m unittest discover -s backend/routing -v
+```bash
+source backend/.venv/bin/activate
+python -B -m unittest discover -s backend/routing -v
 ```
 
 The tests use tiny NetworkX/XML fixtures, real OSMnx nearest-node lookups,
