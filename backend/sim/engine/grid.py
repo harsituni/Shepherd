@@ -50,13 +50,13 @@ class Grid:
 def build_grid(bbox, cell_m=DEFAULT_CELL_M) -> Grid:
     """Grid covering bbox [min_lon, min_lat, max_lon, max_lat], snapped outward to cell_m."""
     min_lon, min_lat, max_lon, max_lat = bbox
-    xs, ys = TO_UTM.transform(
-        [min_lon, max_lon, max_lon, min_lon], [min_lat, min_lat, max_lat, max_lat]
-    )
-    min_e = math.floor(min(xs) / cell_m) * cell_m
-    max_e = math.ceil(max(xs) / cell_m) * cell_m
-    min_n = math.floor(min(ys) / cell_m) * cell_m
-    max_n = math.ceil(max(ys) / cell_m) * cell_m
+    if not isinstance(cell_m, int) or cell_m <= 0:
+        raise ValueError("cell_m must be a positive integer")
+    left, bottom, right, top = TO_UTM.transform_bounds(*bbox, densify_pts=21)
+    min_e = math.floor(left / cell_m) * cell_m
+    max_e = math.ceil(right / cell_m) * cell_m
+    min_n = math.floor(bottom / cell_m) * cell_m
+    max_n = math.ceil(top / cell_m) * cell_m
     return Grid(
         origin_x=float(min_e),
         origin_y=float(max_n),
@@ -88,7 +88,12 @@ def seed_mask(perimeter_utm, grid) -> np.ndarray:
         dtype="uint8",
     ).astype(bool)
     if not mask.any():
-        row, col = grid.cell_of(perimeter_utm.centroid.x, perimeter_utm.centroid.y)
+        x, y = perimeter_utm.centroid.x, perimeter_utm.centroid.y
+        row, col = grid.cell_of(x, y)
+        # The declared geographic domain is closed, including outer grid edges.
+        if (grid.origin_x <= x <= grid.origin_x + grid.cols * grid.cell_m
+                and grid.origin_y - grid.rows * grid.cell_m <= y <= grid.origin_y):
+            row, col = min(row, grid.rows - 1), min(col, grid.cols - 1)
         if not (0 <= row < grid.rows and 0 <= col < grid.cols):
             raise ValueError("initial_perimeter lies outside the grid")
         mask[row, col] = True

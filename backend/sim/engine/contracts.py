@@ -1,8 +1,7 @@
 """Contract A (scenario in) models, plus writers and loaders for B1 and B2 (out).
 
 Validation fails loudly: a missing or malformed field raises a pydantic
-ValidationError whose message names the field. Unknown extra fields are
-ignored, so producers can add optional fields without breaking the engine.
+ValidationError whose message names the field. Unknown fields and non-finite numerical values are rejected.
 """
 
 import json
@@ -12,6 +11,7 @@ from typing import Literal
 import numpy as np
 from pydantic import (
     AwareDatetime,
+    ConfigDict,
     BaseModel,
     Field,
     field_validator,
@@ -25,9 +25,13 @@ FRAMES = "frames.geojson"
 LAYERS = {"arrival_p50": "arrival_p50.npy", "arrival_p10": "arrival_p10.npy"}
 
 
-class WeatherEntry(BaseModel):
+class ValidatedModel(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+
+
+class WeatherEntry(ValidatedModel):
     t_min: int = Field(ge=0)
-    wind_speed_ms: float = Field(ge=0)
+    wind_speed_ms: float = Field(ge=0, le=60)
     wind_dir_deg: float = Field(ge=0, le=360)
     # Validated but unused by the v1 spread model (fuel moisture is fixed via FFMC/BUI).
     temp_c: float = Field(ge=-60, le=60)
@@ -35,14 +39,14 @@ class WeatherEntry(BaseModel):
     precip_mm: float = Field(ge=0)
 
 
-class FbpParams(BaseModel):
+class FbpParams(ValidatedModel):
     fuel_type: Literal["M-1", "M-2"] = "M-1"
     pc: float = Field(default=50, ge=0, le=100)
     ffmc: float = Field(default=92, ge=0, le=101)
     bui: float = Field(default=90, ge=0)
 
 
-class PerimeterGeometry(BaseModel):
+class PerimeterGeometry(ValidatedModel):
     type: Literal["Polygon", "MultiPolygon"]
     coordinates: list
 
@@ -60,7 +64,12 @@ class PerimeterGeometry(BaseModel):
         return shape(self.model_dump())
 
 
-class Scenario(BaseModel):
+class IgnitionPoint(ValidatedModel):
+    lat: float = Field(ge=0, le=84)
+    lon: float = Field(ge=-114, le=-108)
+
+
+class Scenario(ValidatedModel):
     schema_: Literal["v1"] = Field(alias="schema")
     scenario_id: str = Field(min_length=1)
     run_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -68,9 +77,17 @@ class Scenario(BaseModel):
     horizon_min: int = Field(gt=0)
     step_min: int = Field(gt=0)
     bbox: tuple[float, float, float, float]
-    initial_perimeter: PerimeterGeometry
+    initial_perimeter: PerimeterGeometry | None = None
+    ignition: IgnitionPoint | None = None
     weather: list[WeatherEntry] = Field(min_length=1)
-    n_ensemble: int = Field(ge=1)
+    n_ensemble: int = Field(default=1, ge=1, le=100)
+    cell_m: int = Field(default=100, ge=1)
+    integration_step_min: float = Field(default=0.25, ge=0.001, le=60)
+    ensemble_seed: int = Field(default=0, ge=0)
+    weather_end_policy: Literal["error", "hold"] = "error"
+    weather_source: dict = Field(default_factory=dict)
+    execution_mode: Literal["recompute"] = "recompute"
+    revision_of: str | None = None
     fbp: FbpParams = Field(default_factory=FbpParams)
 
     @field_validator("t0")
@@ -86,6 +103,8 @@ class Scenario(BaseModel):
         min_lon, min_lat, max_lon, max_lat = bbox
         if not (-180 <= min_lon < max_lon <= 180 and -90 <= min_lat < max_lat <= 90):
             raise ValueError("bbox must be [min_lon, min_lat, max_lon, max_lat]")
+        if not (-114 <= min_lon < max_lon <= -108 and 0 <= min_lat < max_lat <= 84):
+            raise ValueError("domain must be within UTM zone 12N (-114..-108 lon, 0..84 lat)")
         return bbox
 
     @field_validator("weather")
@@ -102,15 +121,22 @@ class Scenario(BaseModel):
     def _perimeter_in_bbox(self):
         if self.step_min > self.horizon_min:
             raise ValueError("step_min must not exceed horizon_min")
-        if not box(*self.bbox).contains(self.initial_perimeter.to_shapely()):
-            raise ValueError("initial_perimeter lies outside bbox")
+        if (self.initial_perimeter is None) == (self.ignition is None):
+            raise ValueError("provide exactly one of initial_perimeter or ignition")
+        from shapely.geometry import Point
+        initial = (self.initial_perimeter.to_shapely() if self.initial_perimeter is not None
+                   else Point(self.ignition.lon, self.ignition.lat))
+        if not box(*self.bbox).covers(initial):
+            raise ValueError("initial_perimeter or ignition lies outside bbox")
+        if self.weather[-1].t_min < self.horizon_min and self.weather_end_policy == "error":
+            raise ValueError("weather ends before horizon_min; explicitly choose weather_end_policy='hold' to extrapolate")
         return self
 
 
 def load_scenario(source) -> Scenario:
     """Contract A from a dict, a JSON string, or a path to a JSON file."""
     if isinstance(source, Scenario):
-        return source
+        source = source.model_dump(mode="json", by_alias=True, exclude_unset=True)
     if isinstance(source, Path) or (isinstance(source, str) and not source.lstrip().startswith("{")):
         source = Path(source).read_text()
     if isinstance(source, str):
