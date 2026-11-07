@@ -8,23 +8,30 @@ Goal: judges scan a QR, open the **phone** app, and talk to the **same** API as 
    ```bash
    ./dev.sh
    ```
-2. Find the laptop’s LAN IP (macOS):
+2. Find **your** laptop LAN IP (do not copy an example from docs):
    ```bash
    ipconfig getifaddr en0
    ```
-   Example: `192.168.1.42`
-3. Build a join page + QR (opens in your browser):
+   Right now on many campus/VPN networks this looks like `172.x.x.x`, not `192.168.x.x`.
+3. Confirm that IP works **from the laptop** before involving a phone:
+   ```bash
+   curl -s http://YOUR_IP:8000/health    # {"ok":true}
+   open http://YOUR_IP:5174              # phone UI in the browser
+   ```
+4. Build the join page + QR (script checks reachability, embeds the QR as a PNG):
    ```bash
    ./scripts/demo_join.sh
    ```
-   Or pass the IP explicitly:
+   Or:
    ```bash
-   ./scripts/demo_join.sh --lan 192.168.1.42
+   ./scripts/demo_join.sh --lan YOUR_IP
    ```
-4. Judges scan the QR → `http://<LAN-IP>:5174`  
-   The phone auto-uses `http://<LAN-IP>:8000` as `API_URL` (same host, port 8000).
+   Open `demo-join.html` if it does not pop up. You should see a QR image and the join URL.
+5. On a phone on the **same network as the laptop**, scan the QR or type that exact join URL.
 
-**Requirements:** phones on the same Wi‑Fi; no guest-network client isolation; mac firewall allows ports 8000 and 5174.
+**Requirements:** phone and laptop on the same Wi‑Fi/VPN; no guest-network client isolation; macOS Firewall allows incoming for Python/Node (or turn firewall off briefly).
+
+**If the phone browser spins forever:** your laptop IP is often on a VPN (`172.x`) that phones are not on. Use Option B (tunnel) instead.
 
 ---
 
