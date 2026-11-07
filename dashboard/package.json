@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "live": "vite build --watch",
     "lint": "oxlint",
     "preview": "vite preview"
   },

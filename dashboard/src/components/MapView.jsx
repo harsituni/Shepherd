@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Map as MapLibreMap, Marker } from 'maplibre-gl'
+import { LngLatBounds, Map as MapLibreMap, Marker, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
+
+// MapLibre 6 looks for its worker next to its own module URL, which breaks once
+// Vite pre-bundles or bundles it. Point it at the worker file explicitly.
+setWorkerUrl(maplibreWorkerUrl)
 import { MAP_CENTER, MAP_ZOOM } from '../config.js'
 import MapLegend from './MapLegend.jsx'
 import { MinusIcon, PlusIcon } from './icons.jsx'
@@ -81,6 +86,7 @@ export default function MapView({ hazards, shelters, onMapClick }) {
   const shelterMarkers = useRef(new Map())
   const nowMarkers = useRef(new Map())
   const clickRef = useRef(onMapClick)
+  const framed = useRef(false)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -133,8 +139,25 @@ export default function MapView({ hazards, shelters, onMapClick }) {
       nowStore.clear()
       map.remove()
       mapRef.current = null
+      framed.current = false
+      setLoaded(false)
     }
   }, [])
+
+  // Once, when the first data arrives: frame every hazard and shelter so the
+  // fire is on screen (the contract start view can leave it just off the edge).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map || framed.current || !hazards || !shelters) return
+    const coords = [
+      ...hazards.features.flatMap((f) => f.geometry?.coordinates?.[0] ?? []),
+      ...shelters.features.map((f) => f.geometry.coordinates),
+    ]
+    if (coords.length === 0) return
+    const bounds = coords.reduce((b, c) => b.extend(c), new LngLatBounds(coords[0], coords[0]))
+    map.fitBounds(bounds, { padding: { top: 70, right: 250, bottom: 70, left: 70 }, maxZoom: 13, duration: 800 })
+    framed.current = true
+  }, [hazards, shelters, loaded])
 
   // Hazards: polygons + a "Now" label on each core zone.
   useEffect(() => {

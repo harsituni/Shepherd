@@ -148,7 +148,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; background: var(--map-bg);
 }
 .map-wrap { position: relative; flex: 1; min-height: 620px; }
-.map { position: absolute; inset: 0; }
+/* More specific than maplibre-gl.css's `.maplibregl-map { position: relative }`,
+   which would otherwise collapse the map to 0px tall. */
+.map-wrap > .map { position: absolute; inset: 0; }
 
 .legend {
   position: absolute; left: 16px; bottom: 16px; z-index: 1; margin: 0;
