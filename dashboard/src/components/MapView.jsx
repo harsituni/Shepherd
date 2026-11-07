@@ -54,14 +54,19 @@ function ringCentroid(feature) {
   ]
 }
 
-// Keep a set of HTML markers in sync with a list of { id, lngLat, build }.
+// Keep a set of HTML markers in sync with a list of { id, lngLat, build, update? }.
+// `update(el)` runs on every sync, for markers whose content changes between polls.
 function syncMarkers(map, store, items) {
   const seen = new Set()
-  for (const { id, lngLat, build } of items) {
+  for (const { id, lngLat, build, update } of items) {
     seen.add(id)
-    const existing = store.get(id)
-    if (existing) existing.setLngLat(lngLat)
-    else store.set(id, new Marker({ element: build(), anchor: 'center' }).setLngLat(lngLat).addTo(map))
+    let marker = store.get(id)
+    if (marker) marker.setLngLat(lngLat)
+    else {
+      marker = new Marker({ element: build(), anchor: 'center' }).setLngLat(lngLat).addTo(map)
+      store.set(id, marker)
+    }
+    update?.(marker.getElement())
   }
   for (const [id, marker] of store) {
     if (!seen.has(id)) {
@@ -71,14 +76,31 @@ function syncMarkers(map, store, items) {
   }
 }
 
+// Shelter: navy square + name label, with a capacity pop-up on hover or keyboard focus.
 function shelterElement(name) {
   const el = document.createElement('div')
   el.className = 'shelter-marker'
+  el.tabIndex = 0
   const label = document.createElement('span')
   label.className = 'shelter-label'
   label.textContent = name
-  el.appendChild(label)
+  const popup = document.createElement('div')
+  popup.className = 'shelter-popup'
+  popup.setAttribute('role', 'tooltip')
+  el.append(label, popup)
   return el
+}
+
+const fmt = (n) => Number(n ?? 0).toLocaleString('en-CA')
+
+function updateShelter(el, { name, capacity, occupancy, open }) {
+  const pct = capacity ? Math.round(((occupancy ?? 0) / capacity) * 100) : 0
+  // e.g. "312/2,000 (16%)"
+  const lines = [['shelter-popup-title', `${fmt(occupancy)}/${fmt(capacity)} (${pct}%)`]]
+  if (open === false) lines.push(['shelter-popup-detail', 'Closed'])
+  const popup = el.querySelector('.shelter-popup')
+  popup.replaceChildren(...lines.map(([cls, text]) => textElement(cls, text)))
+  el.setAttribute('aria-label', `${name}. ${lines.map(([, t]) => t).join('. ')}`)
 }
 
 function textElement(className, text) {
@@ -307,6 +329,7 @@ export default function MapView({ hazards, shelters, reports, focus, startPoint,
       id: f.id,
       lngLat: f.geometry.coordinates,
       build: () => shelterElement(f.properties.name),
+      update: (el) => updateShelter(el, f.properties),
     }))
     syncMarkers(map, shelterMarkers.current, items)
   }, [shelters, loaded])
