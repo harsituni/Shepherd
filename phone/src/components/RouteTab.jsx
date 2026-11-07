@@ -17,9 +17,9 @@ export default function RouteTab({ map, location, route, routeError, shelters, o
     )
   } else if (routeError === 'no_route') {
     details = (
-      <div className="no-route" role="alert">
-        <strong>No safe shelter reachable</strong>
-        <span>Stay where you are if it is safe and call 911.</span>
+          <div className="no-route" role="alert">
+            <strong>No safe route found</strong>
+            <span>Stay where you are if it is safe and call 911.</span>
         <a className="btn-primary" href="tel:911">
           Call 911
         </a>

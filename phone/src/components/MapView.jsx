@@ -11,6 +11,7 @@ setWorkerUrl(maplibreWorkerUrl)
 const EMPTY = { type: 'FeatureCollection', features: [] }
 const HAZARD = '#D9480F'
 const BLUE = '#0070C4'
+const ROUTE_CYAN = '#00C2D7'
 
 // OSM raster tiles, muted so the hazard and route stand out (as in the mockup).
 const BASE_STYLE = {
@@ -107,7 +108,7 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
         type: 'line',
         source: 'route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': BLUE, 'line-width': 5 },
+        paint: { 'line-color': ROUTE_CYAN, 'line-width': 6 },
       })
       setLoaded(true)
     })

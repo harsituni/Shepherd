@@ -157,13 +157,28 @@ export default function App() {
       </main>
 
       <div className="action-bar">
-        <button type="button" className="action" onClick={() => setSheetOpen(true)}>
+        <button
+          type="button"
+          className="action"
+          disabled={!location || sending}
+          onClick={() => setSheetOpen(true)}
+        >
           Report hazard
         </button>
-        <button type="button" className="action action-safe" disabled={sending} onClick={() => sendReport('safe')}>
+        <button
+          type="button"
+          className="action action-safe"
+          disabled={!location || sending}
+          onClick={() => sendReport('safe')}
+        >
           I'm safe
         </button>
-        <button type="button" className="action action-help" disabled={sending} onClick={() => sendReport('sos')}>
+        <button
+          type="button"
+          className="action action-help"
+          disabled={!location || sending}
+          onClick={() => sendReport('sos')}
+        >
           Need help
         </button>
       </div>
