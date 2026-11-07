@@ -1,28 +1,26 @@
-"""Shepherd API — Step 0 endpoints for health, shelters, and hazards."""
+"""Shepherd API — Step 0 backend."""
 
 from __future__ import annotations
 
+import asyncio
 import math
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="Shepherd API")
+from backend.routing.router import NoRouteError, find_route, load_graph
+from backend.sim.wildfire import WildfireSim
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Wired up fully in issue #5 (WildfireSim + background loop).
-sim: Any | None = None
+sim: WildfireSim | None = None
 sim_time: int = 0
 dropped_hazards: list[dict] = []
+reports: list[dict] = []
 _next_hazard_id: int = 1
+_next_report_id: int = 1
 
 SHELTERS: list[dict] = [
     {
@@ -61,11 +59,53 @@ SHELTERS: list[dict] = [
 ]
 
 
+async def _sim_loop() -> None:
+    global sim_time
+    while True:
+        await asyncio.sleep(2)
+        if sim is not None:
+            sim.step(1)
+            sim_time += 1
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    global sim
+    sim = WildfireSim(lat=53.535, lon=-113.663)
+    load_graph()
+    task = asyncio.create_task(_sim_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+app = FastAPI(title="Shepherd API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 class HazardDrop(BaseModel):
     kind: str
     lat: float
     lon: float
     radius_m: float
+
+
+class ReportIn(BaseModel):
+    kind: str
+    lat: float
+    lon: float
+    note: Optional[str] = None
 
 
 def circle_polygon(lat: float, lon: float, radius_m: float, n: int = 32) -> list[list[float]]:
@@ -130,3 +170,44 @@ def post_hazard(body: HazardDrop) -> dict:
 def delete_hazards() -> dict:
     dropped_hazards.clear()
     return {"ok": True}
+
+
+@app.get("/route")
+def get_route(
+    lat: float = Query(...),
+    lon: float = Query(...),
+) -> dict:
+    try:
+        return find_route(lat, lon, all_hazard_features(), SHELTERS)
+    except NoRouteError as exc:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "no_route", "message": str(exc)},
+        )
+
+
+@app.post("/reports", status_code=201)
+def post_report(body: ReportIn) -> dict:
+    global _next_report_id
+    report_id = f"rp_{_next_report_id}"
+    _next_report_id += 1
+    feature = {
+        "type": "Feature",
+        "id": report_id,
+        "properties": {
+            "kind": body.kind,
+            "note": body.note,
+            "sim_time": sim_time,
+        },
+        "geometry": {
+            "type": "Point",
+            "coordinates": [body.lon, body.lat],
+        },
+    }
+    reports.append(feature)
+    return {"id": report_id, "received": True}
+
+
+@app.get("/reports")
+def get_reports() -> dict:
+    return {"type": "FeatureCollection", "features": reports}
