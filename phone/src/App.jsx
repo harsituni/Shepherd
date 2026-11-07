@@ -10,7 +10,7 @@ import {
   withChoice,
 } from './api.js'
 import { POLL_MS } from './config.js'
-import { evacueeId, useEvacuation } from './evacuate.js'
+import { useEvacuation, useHeartbeat } from './evacuate.js'
 import { isCurrentCore, nearestHazard } from './geo.js'
 import { placeName } from './placeName.js'
 import { nextClock } from './simClock.js'
@@ -215,26 +215,19 @@ export default function App() {
 
   // Heartbeat to POST /evacuees every ~2 s while evacuating (simulated or GPS), so the
   // dashboard shows this phone like any other.
-  useEffect(() => {
-    if (!evacuating) return
-    const id = evacueeId()
-    const beat = () => {
-      const loc = locationRef.current
-      const r = shownRef.current
-      if (!loc) return
-      postEvacuee({
-        id,
-        lat: loc[1],
-        lon: loc[0],
-        route_id: r?.route_id ?? null,
-        route_status: r?.status ?? null,
-        shelter_id: r?.shelter_id ?? null,
-      }).catch(() => {}) // a missed beat is fine; the next one follows in 2 s
+  const readHeartbeat = useCallback(() => {
+    const loc = locationRef.current
+    if (!loc) return null
+    const r = shownRef.current
+    return {
+      lat: loc[1],
+      lon: loc[0],
+      route_id: r?.route_id ?? null,
+      route_status: r?.status ?? null,
+      shelter_id: r?.shelter_id ?? null,
     }
-    beat()
-    const timer = setInterval(beat, POLL_MS)
-    return () => clearInterval(timer)
-  }, [evacuating])
+  }, [])
+  useHeartbeat({ active: evacuating, everyMs: POLL_MS, read: readHeartbeat, send: postEvacuee })
 
   // During a wildfire the evacuation card (leave-by countdown) takes the banner's place.
   const wildfire =
