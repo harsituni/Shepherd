@@ -1,0 +1,31 @@
+{
+  "sim_time": 12,
+  "horizon_min": 120,
+  "wind_kmh": 35,
+  "wind_from_deg": 270,
+  "outlines": [
+    {
+      "t_min": 15,
+      "type": "Feature",
+      "id": "fc_15",
+      "properties": { "kind": "wildfire", "t_min": 15, "zone": "predicted" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-113.700, 53.540], [-113.650, 53.545], [-113.640, 53.530],
+          [-113.690, 53.525], [-113.700, 53.540]
+        ]]
+      }
+    },
+    {
+      "t_min": 30,
+      "type": "Feature",
+      "id": "fc_30",
+      "properties": { "kind": "wildfire", "t_min": 30, "zone": "predicted" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-113.71, 53.54], [-113.64, 53.55], [-113.63, 53.52], [-113.70, 53.52], [-113.71, 53.54]]]
+      }
+    }
+  ]
+}

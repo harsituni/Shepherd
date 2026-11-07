@@ -3,6 +3,7 @@ import { LngLatBounds, Map as MapLibreMap, Marker, setWorkerUrl } from 'maplibre
 import 'maplibre-gl/dist/maplibre-gl.css'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { MAP_CENTER, MAP_ZOOM } from '../config.js'
+import { isCurrentCore, isPredicted, ringCentroid } from '../geo.js'
 
 // MapLibre 6 looks for its worker next to its own module URL, which breaks once
 // Vite pre-bundles or bundles it. Point it at the worker file explicitly.
@@ -17,7 +18,12 @@ const HAZARD = cssVar('--hazard', '#D9480F')
 const MAP_BG = cssVar('--map-bg', '#F3F7FB')
 const ROUTE = cssVar('--blue', '#0070C4')
 
-// OSM raster tiles, muted so the hazard and route stand out (as in the mockup).
+// Predicted features carry `predicted_min`; everything else is the hazard now.
+const PREDICTED = ['has', 'predicted_min']
+const CURRENT = ['!', PREDICTED]
+
+// OSM raster tiles, muted so the hazard and route stand out, but not so faint
+// that street names disappear on a phone outdoors.
 const BASE_STYLE = {
   version: 8,
   sources: {
@@ -35,7 +41,7 @@ const BASE_STYLE = {
       id: 'osm',
       type: 'raster',
       source: 'osm',
-      paint: { 'raster-saturation': -0.85, 'raster-contrast': -0.15, 'raster-opacity': 0.6 },
+      paint: { 'raster-saturation': -0.85, 'raster-contrast': -0.15, 'raster-opacity': 0.8 },
     },
   ],
 }
@@ -49,32 +55,74 @@ function youElement() {
   const el = document.createElement('div')
   el.className = 'you-marker'
   const label = document.createElement('span')
-  label.className = 'you-label'
+  label.className = 'map-label you-label'
   label.textContent = 'You'
   el.appendChild(label)
   return el
 }
 
+// Every shelter is a navy square; only the one the route goes to shows its name,
+// so the map stays readable at phone size.
 function shelterElement(name) {
   const el = document.createElement('div')
   el.className = 'shelter-marker'
   el.title = name
+  const label = document.createElement('span')
+  label.className = 'map-label shelter-label'
+  label.textContent = name
+  el.appendChild(label)
   return el
 }
 
-export default function MapView({ hazards, shelters, route, location, onTap, focusKey }) {
+// Put the destination's name on whichever side of its square has more room,
+// so it isn't cut off at the map edge.
+function placeShelterLabels(map, store) {
+  const half = map.getContainer().clientWidth / 2
+  for (const m of store.values()) {
+    const el = m.getElement()
+    if (el.classList.contains('is-target')) el.classList.toggle('label-left', map.project(m.getLngLat()).x > half)
+  }
+}
+
+function predictedLabel(minutes) {
+  const el = document.createElement('div')
+  el.className = 'map-label predicted-label'
+  el.textContent = `T+${minutes}`
+  return el
+}
+
+// Where to put a "T+30" label: the ring vertex farthest from the current hazard,
+// i.e. the leading edge of the predicted spread.
+function leadingEdge(feature, from) {
+  const ring = feature.geometry?.coordinates?.[0]
+  if (!ring?.length) return null
+  if (!from) return ringCentroid(ring)
+  let best = ring[0]
+  let bestD = -1
+  for (const p of ring) {
+    const d = (p[0] - from[0]) ** 2 + (p[1] - from[1]) ** 2
+    if (d > bestD) [best, bestD] = [p, d]
+  }
+  return best
+}
+
+export default function MapView({ hazards, shelters, route, location, onTap, onViewChange, focusKey, tall = false }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const youMarker = useRef(null)
   const shelterMarkers = useRef(new Map())
+  const predictedMarkers = useRef(new Map())
   const tapRef = useRef(onTap)
   const framed = useRef(false)
   const lastFocus = useRef(null)
   const [loaded, setLoaded] = useState(false)
 
+  const viewRef = useRef(onViewChange)
+
   useEffect(() => {
     tapRef.current = onTap
-  }, [onTap])
+    viewRef.current = onViewChange
+  }, [onTap, onViewChange])
 
   // Create the map once.
   useEffect(() => {
@@ -93,18 +141,33 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
     map.on('load', () => {
       map.addSource('hazards', { type: 'geojson', data: EMPTY })
       map.addSource('route', { type: 'geojson', data: EMPTY })
+      // Predicted spread first, so the current hazard draws on top of it.
+      map.addLayer({
+        id: 'hazard-predicted',
+        type: 'fill',
+        source: 'hazards',
+        filter: PREDICTED,
+        paint: { 'fill-color': ROUTE, 'fill-opacity': 0.06 },
+      })
+      map.addLayer({
+        id: 'hazard-predicted-outline',
+        type: 'line',
+        source: 'hazards',
+        filter: PREDICTED,
+        paint: { 'line-color': ROUTE, 'line-opacity': 0.7, 'line-width': 1.5, 'line-dasharray': [3, 3] },
+      })
       map.addLayer({
         id: 'hazard-buffer',
         type: 'fill',
         source: 'hazards',
-        filter: ['==', ['get', 'zone'], 'buffer'],
+        filter: ['all', CURRENT, ['==', ['get', 'zone'], 'buffer']],
         paint: { 'fill-color': HAZARD, 'fill-opacity': 0.3 },
       })
       map.addLayer({
         id: 'hazard-core',
         type: 'fill',
         source: 'hazards',
-        filter: ['==', ['get', 'zone'], 'core'],
+        filter: ['all', CURRENT, ['==', ['get', 'zone'], 'core']],
         paint: { 'fill-color': HAZARD, 'fill-opacity': 0.85 },
       })
       // White casing under the blue line keeps it legible over grey tiles and orange hazards.
@@ -126,10 +189,17 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
     })
 
     map.on('click', (e) => tapRef.current?.([e.lngLat.lng, e.lngLat.lat]))
+    map.on('move', () => placeShelterLabels(map, shelterMarkers.current))
+    const reportView = () => {
+      const c = map.getCenter()
+      viewRef.current?.([c.lng, c.lat], map.getZoom())
+    }
+    map.on('moveend', reportView)
+    map.once('load', reportView)
 
-    const shelterStore = shelterMarkers.current
+    const stores = [shelterMarkers.current, predictedMarkers.current]
     return () => {
-      shelterStore.clear()
+      stores.forEach((s) => s.clear())
       youMarker.current = null
       framed.current = false
       lastFocus.current = null
@@ -139,9 +209,36 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
     }
   }, [])
 
-  // Hazard polygons.
+  // The map is taller until a location is set; keep the canvas in step.
   useEffect(() => {
-    if (loaded) mapRef.current?.getSource('hazards')?.setData(hazards ?? EMPTY)
+    mapRef.current?.resize()
+  }, [tall])
+
+  // Hazard polygons + "T+30 / T+60" labels on the predicted rings.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map) return
+    map.getSource('hazards')?.setData(hazards ?? EMPTY)
+
+    const features = hazards?.features ?? []
+    const core = features.find(isCurrentCore)
+    const from = core ? ringCentroid(core.geometry.coordinates[0]) : null
+    const store = predictedMarkers.current
+    const seen = new Set()
+    for (const f of features.filter(isPredicted)) {
+      const at = leadingEdge(f, from)
+      if (!at) continue
+      const key = `${f.id}:${f.properties.predicted_min}`
+      seen.add(key)
+      if (store.has(key)) store.get(key).setLngLat(at)
+      else store.set(key, new Marker({ element: predictedLabel(f.properties.predicted_min) }).setLngLat(at).addTo(map))
+    }
+    for (const [key, m] of store) {
+      if (!seen.has(key)) {
+        m.remove()
+        store.delete(key)
+      }
+    }
   }, [hazards, loaded])
 
   // Route line.
@@ -151,7 +248,7 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
     mapRef.current?.getSource('route')?.setData(data)
   }, [route, loaded])
 
-  // Shelters as navy squares.
+  // Shelters as navy squares; the route's destination shows its name.
   useEffect(() => {
     const map = mapRef.current
     if (!loaded || !map) return
@@ -165,6 +262,7 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
           f.id,
           new Marker({ element: shelterElement(f.properties.name) }).setLngLat(f.geometry.coordinates).addTo(map),
         )
+      store.get(f.id).getElement().classList.toggle('is-target', f.id === route?.shelter_id)
     }
     for (const [id, m] of store) {
       if (!seen.has(id)) {
@@ -172,7 +270,8 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
         store.delete(id)
       }
     }
-  }, [shelters, loaded])
+    placeShelterLabels(map, store)
+  }, [shelters, route, loaded])
 
   // "You" marker.
   useEffect(() => {
@@ -207,7 +306,7 @@ export default function MapView({ hazards, shelters, route, location, onTap, foc
   }, [route, location, focusKey, loaded])
 
   return (
-    <div className="map-wrap">
+    <div className={tall ? 'map-wrap map-wrap-tall' : 'map-wrap'}>
       <div ref={containerRef} className="map" role="region" aria-label="Map. Tap to set your location." />
     </div>
   )

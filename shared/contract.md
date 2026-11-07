@@ -1,7 +1,9 @@
-# Shepherd — API Contract (v1)
+# Shepherd — API Contract (v2)
 
 The single source of truth for how every piece talks to every other piece.
 **Change nothing here without telling the team first, and log it in the Changelog.**
+
+**v2 is frozen for the final-vision build** unless the whole team agrees in chat.
 
 ---
 
@@ -16,29 +18,53 @@ The single source of truth for how every piece talks to every other piece.
 | Map | MapLibre GL JS + OpenStreetMap tiles |
 | Map start view | center `[-113.4938, 53.5461]` (downtown Edmonton), zoom `11` |
 
-**Phones on the same Wi-Fi:** run the backend with `--host 0.0.0.0` and use the laptop's IP instead of `localhost`. Put the backend URL in ONE config variable in each frontend (`API_URL`) so it's a one-line change.
+**Phones on the same Wi-Fi / judge QR:** run the backend with `--host 0.0.0.0` and put the laptop LAN IP or tunnel URL in each frontend’s `API_URL`.
 
 ### Conventions
-- **Coordinates in GeoJSON are `[lon, lat]`.** Edmonton is roughly lon `-113.5`, lat `53.5`. If your point lands in the ocean, you flipped them.
+- **Coordinates in GeoJSON are `[lon, lat]`.** Edmonton ≈ lon `-113.5`, lat `53.5`. Ocean = you flipped them.
 - Query params use names: `?lat=53.52&lon=-113.62`.
-- Polygons are closed: the last coordinate equals the first.
-- `sim_time` = whole minutes since the scenario started.
-- IDs are strings with a prefix: `hz_` hazard, `sh_` shelter, `rp_` report.
+- Polygons are closed: last coordinate equals first.
+- `sim_time` = whole **minutes** since the scenario started (ignition / `/sim/start`).
+- IDs are strings with a prefix: `hz_` hazard, `sh_` shelter, `rp_` report, `ev_` evacuee, `rt_` route option.
 - Errors (any non-2xx):
   ```json
   { "error": "no_route", "message": "No reachable shelter from this location" }
   ```
 
+### Wind & fire timing (Dviviz + Azer — read once)
+- **Wind speed unit: `wind_kmh`** (kilometres per hour). Always this field name.
+- **Wind direction: `wind_from_deg`** — meteorological **FROM** direction. `0` = from north, `90` = from east, `180` = from south, `270` = from west. Fire spreads roughly the opposite way (downwind).
+- **`arrival_min(lat, lon)`** — simulated minute when fire first reaches that point, or `null` if not within the forecast horizon (default 120 min).
+- **Road blocking rule (plain sentence):** a road segment is **blocked** if the driver would reach it **after** `arrival_min − 30` minutes (i.e. we close the road **30 minutes before** the fire is predicted to arrive).
+- **Route margin** = how many minutes of spare time you have vs that rule (higher is safer).
+- **Route status:**
+  - `"ok"` — margin ≥ 60
+  - `"tight"` — margin 0–59
+  - `"blocked"` — margin &lt; 0 (or no path that stays clear)
+
+### Flood
+**Out of scope for now.** If a client sends `"scenario": "flood"`, the API returns `400` with `"error": "unsupported_scenario"`.
+
 ---
 
 ## 1. HTTP endpoints
 
-### GET /health
+### Legend
+- **Step 0 (still live):** already implemented; keep working.
+- **v2 (final vision):** new or expanded; implement per assigned issues.
+
+---
+
+### GET /health  · Step 0
 ```json
 { "ok": true }
 ```
 
-### GET /hazards
+---
+
+### GET /hazards  · Step 0
+Current burned / active hazard polygons (now), plus `sim_time`.
+
 ```json
 {
   "type": "FeatureCollection",
@@ -62,21 +88,23 @@ The single source of truth for how every piece talks to every other piece.
 ```
 | Field | Values |
 |---|---|
-| `kind` | `"wildfire"` · `"flood"` |
-| `zone` | `"core"` = roads closed · `"buffer"` = roads slowed |
+| `kind` | `"wildfire"` (flood deferred) |
+| `zone` | `"core"` = treat as impassable / urgent · `"buffer"` = slowed / caution |
 | `source` | `"sim"` · `"live"` · `"report"` |
 
-### POST /hazards
-Dashboard click → drop a hazard (a circle).
+### POST /hazards  · Step 0
+Dashboard click → drop a hazard circle.
 ```json
 { "kind": "wildfire", "lat": 53.535, "lon": -113.663, "radius_m": 800 }
 ```
-Returns `201` with the new Feature (same shape as one item in `features` above).
+Returns `201` with the new Feature.
 
-### DELETE /hazards
-Clears all hazards (reset button). Returns `{ "ok": true }`.
+### DELETE /hazards  · Step 0
+Clears **dropped** hazards (not necessarily the whole sim — see `/sim/reset`). Returns `{ "ok": true }`.
 
-### GET /shelters
+---
+
+### GET /shelters  · Step 0
 ```json
 {
   "type": "FeatureCollection",
@@ -102,166 +130,342 @@ Clears all hazards (reset button). Returns `{ "ok": true }`.
   ]
 }
 ```
-(Locations are approximate. Fine for the demo.)
 
-### GET /route?lat=53.520&lon=-113.620
+---
+
+### GET /route?lat=&lon=  · **v2 expanded** (Step 0 single-route still noted below)
+
+**v2 response** — 2–3 options, leave-by, statuses:
+
 ```json
 {
-  "shelter_id": "sh_kinsmen",
-  "shelter_name": "Kinsmen Sports Centre",
-  "distance_km": 8.4,
-  "eta_min": 14,
-  "rerouted": false,
-  "reroute_reason": null,
-  "steps": [
-    { "instruction": "Head south on 170 St NW", "distance_km": 1.9 },
-    { "instruction": "Turn left onto Whitemud Dr", "distance_km": 5.8 },
-    { "instruction": "Arrive at Kinsmen Sports Centre", "distance_km": 0.7 }
+  "lat": 53.520,
+  "lon": -113.620,
+  "sim_time": 12,
+  "leave_by_sim_min": 18,
+  "leave_by_label": "Leave within 6 min (sim)",
+  "best_route_id": "rt_1",
+  "options": [
+    {
+      "id": "rt_1",
+      "shelter_id": "sh_kinsmen",
+      "shelter_name": "Kinsmen Sports Centre",
+      "distance_km": 8.4,
+      "eta_min": 14,
+      "margin_min": 72,
+      "status": "ok",
+      "clear_until_sim_min": 90,
+      "clear_until_label": "Clear until T+90",
+      "reason": null,
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-113.620, 53.520], [-113.540, 53.500], [-113.516, 53.519]]
+      }
+    },
+    {
+      "id": "rt_2",
+      "shelter_id": "sh_commonwealth",
+      "shelter_name": "Commonwealth Rec Centre",
+      "distance_km": 6.1,
+      "eta_min": 11,
+      "margin_min": 25,
+      "status": "tight",
+      "clear_until_sim_min": 48,
+      "clear_until_label": "Clear until T+48",
+      "reason": null,
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-113.620, 53.520], [-113.473, 53.559]]
+      }
+    },
+    {
+      "id": "rt_3",
+      "shelter_id": "sh_terwillegar",
+      "shelter_name": "Terwillegar Rec Centre",
+      "distance_km": 12.0,
+      "eta_min": 22,
+      "margin_min": -8,
+      "status": "blocked",
+      "clear_until_sim_min": null,
+      "clear_until_label": null,
+      "reason": "Blocked near Whitemud: fire arrives at T+40; you would reach that segment at T+55 (needs T+10 with 30 min buffer).",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-113.620, 53.520], [-113.595, 53.440]]
+      }
+    }
   ],
-  "geometry": {
-    "type": "LineString",
-    "coordinates": [[-113.620, 53.520], [-113.620, 53.490], [-113.540, 53.490], [-113.516, 53.519]]
-  }
+  "excluded": [
+    {
+      "shelter_id": "sh_terwillegar",
+      "reason": "Same as rt_3 — listed for UI grey cards if not duplicated in options."
+    }
+  ]
 }
 ```
-- `rerouted` / `reroute_reason`: `true` + a short reason when hazards changed the route since the last request. Step 0 can always send `false` / `null`.
-- `steps` may be `[]` until turn-by-turn exists.
-- No shelter reachable → `404` with `"error": "no_route"`.
 
-### POST /reports
-Phone buttons: Report hazard / I'm safe / Need help.
+| Field | Meaning |
+|---|---|
+| `leave_by_sim_min` | Latest **sim minute** you should start the **best usable** (`ok`/`tight`) route; `null` if none |
+| `margin_min` | Spare minutes vs fire buffer rule |
+| `status` | `"ok"` · `"tight"` · `"blocked"` |
+| `clear_until_sim_min` | Sim minute until which this route stays clear under current forecast |
+| `reason` | Required when `status` is `"blocked"`; otherwise `null` |
+| `excluded` | Optional extra blocked attempts with reasons (may be `[]`) |
+
+**Compatibility (Step 0):** until frontends migrate, the API **may also** include the old flat fields copying `options[0]` when present (`shelter_id`, `geometry`, `eta_min`, …) plus `rerouted` / `steps`. New phone/dashboard **must** read `options` + `leave_by_*`.
+
+- No usable route → `404` `{ "error": "no_route", "message": "..." }`.
+
+**Optional v2 query:** `GET /route?lat=&lon=&check_route_id=rt_1` — re-check a chosen route after wind change (same response shape; `best_route_id` may change).
+
+---
+
+### POST /reports  · Step 0
 ```json
 { "kind": "blocked_road", "lat": 53.530, "lon": -113.600, "note": "Tree down" }
 ```
 | `kind` | `"fire"` · `"flooded_road"` · `"blocked_road"` · `"safe"` · `"sos"` |
-|---|---|
 
-`note` is optional. Returns `201`:
-```json
-{ "id": "rp_1", "received": true }
-```
+Returns `201`: `{ "id": "rp_1", "received": true }`.
 
-### GET /reports
+### GET /reports  · Step 0
+FeatureCollection of Point features (see v1 examples). Phone reports for the dashboard.
+
+---
+
+### GET /forecast  · **v2 new**
+Predicted fire outlines for the map (not the same as “now” in `/hazards`, though they should be consistent).
+
 ```json
 {
-  "type": "FeatureCollection",
-  "features": [
+  "sim_time": 12,
+  "horizon_min": 120,
+  "wind_kmh": 35,
+  "wind_from_deg": 270,
+  "outlines": [
     {
+      "t_min": 15,
       "type": "Feature",
-      "id": "rp_1",
-      "properties": { "kind": "blocked_road", "note": "Tree down", "sim_time": 30 },
-      "geometry": { "type": "Point", "coordinates": [-113.600, 53.530] }
+      "id": "fc_15",
+      "properties": { "kind": "wildfire", "t_min": 15, "zone": "predicted" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-113.700, 53.540], [-113.650, 53.545], [-113.640, 53.530],
+          [-113.690, 53.525], [-113.700, 53.540]
+        ]]
+      }
+    },
+    {
+      "t_min": 30,
+      "type": "Feature",
+      "id": "fc_30",
+      "properties": { "kind": "wildfire", "t_min": 30, "zone": "predicted" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-113.71, 53.54], [-113.64, 53.55], [-113.63, 53.52], [-113.70, 53.52], [-113.71, 53.54]]] }
     }
   ]
 }
 ```
 
-### GET /roads/closed   *(Step 2. Fixture only until then)*
-```json
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "id": "rd_1",
-      "properties": { "name": "Stony Plain Rd", "status": "closed", "reason": "wildfire" },
-      "geometry": { "type": "LineString", "coordinates": [[-113.700, 53.541], [-113.640, 53.541]] }
-    }
-  ]
-}
-```
-`status`: `"closed"` · `"slowed"`
+`outlines` **must** include entries for **t_min = 15, 30, 45, 60, 75, 90, 105, 120** when a wildfire sim is running. If sim is `idle`, return `"outlines": []` and `200`.
 
-### Simulation control   *(Step 2. Dashboard only)*
+---
+
+### POST /sim/wind  · **v2 new**
+Dashboard wind control. Reruns Dviviz forecast.
+
+```json
+{ "wind_kmh": 40, "wind_from_deg": 270 }
+```
+
+Returns `/sim/state` shape (below), after forecast rebuild has been kicked off (may still be computing; clients should re-fetch `/forecast` and `/route` over the next few seconds).
+
+---
+
+### Simulation control  · **v2 required for dashboard** (was “Step 2” in v1)
+
 | Endpoint | Body | Returns |
 |---|---|---|
-| `POST /sim/start` | `{ "scenario": "wildfire", "lat": 53.535, "lon": -113.663, "wind_kmh": 35, "wind_from_deg": 315, "fuel_dryness": 0.8 }` | `/sim/state` shape |
-| `POST /sim/pause` · `/sim/resume` · `/sim/reset` | none | `/sim/state` shape |
-| `POST /sim/speed` | `{ "multiplier": 4 }` | `/sim/state` shape |
-| `GET /sim/state` | none | `{ "state": "running", "scenario": "wildfire", "sim_time": 30, "speed": 4 }` |
+| `GET /sim/state` | none | state object below |
+| `POST /sim/start` | wildfire start body | state object |
+| `POST /sim/pause` | none | state object |
+| `POST /sim/resume` | none | state object |
+| `POST /sim/reset` | none | state object |
+| `POST /sim/speed` | `{ "multiplier": 4 }` | state object |
 
-`state`: `"idle"` · `"running"` · `"paused"`. Flood start body: `{ "scenario": "flood", "river_rise_m_per_hr": 0.5 }`.
+#### GET /sim/state
+```json
+{
+  "state": "running",
+  "scenario": "wildfire",
+  "sim_time": 30,
+  "speed": 4,
+  "wind_kmh": 35,
+  "wind_from_deg": 315
+}
+```
+`state`: `"idle"` · `"running"` · `"paused"`.  
+`speed`: `1` · `4` · `16`.  
+`scenario`: `"wildfire"` or `null` when idle.
+
+#### POST /sim/start
+```json
+{
+  "scenario": "wildfire",
+  "lat": 53.535,
+  "lon": -113.663,
+  "wind_kmh": 35,
+  "wind_from_deg": 315,
+  "fuel_dryness": 0.8,
+  "humidity_pct": 22
+}
+```
+`humidity_pct` optional. `"scenario": "flood"` → `400` `{ "error": "unsupported_scenario", "message": "Flood deferred" }`.
+
+---
+
+### POST /evacuees  · **v2 new**
+Phone heartbeat every ~2 s while evacuating.
+
+```json
+{
+  "id": "ev_judge_3",
+  "lat": 53.521,
+  "lon": -113.610,
+  "route_id": "rt_1",
+  "route_status": "ok",
+  "shelter_id": "sh_kinsmen"
+}
+```
+Upserts by `id`. Returns `200` or `201`:
+```json
+{ "id": "ev_judge_3", "received": true }
+```
+
+### GET /evacuees  · **v2 new**
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "ev_judge_3",
+      "properties": {
+        "route_id": "rt_1",
+        "route_status": "ok",
+        "shelter_id": "sh_kinsmen",
+        "updated_sim_time": 14
+      },
+      "geometry": { "type": "Point", "coordinates": [-113.610, 53.521] }
+    }
+  ]
+}
+```
+Dashboard polls every 2 s. Servers **may** drop evacuees with no POST for 30+ seconds — if so, document in changelog when implemented.
+
+---
+
+### GET /roads/closed  · optional / later
+Still as in v1 fixtures. Not required for Saturday demo if time-aware routing uses `arrival_min` internally.
 
 ---
 
 ## 2. Live updates
 
-**Step 0–1: polling.** Frontends re-fetch `/hazards`, `/reports` (dashboard) and `/route` (phone) every **2 seconds**.
+**Hackathon default: polling every 2 seconds.**
+- Phone: `/route` (or check), `/hazards`, `POST /evacuees`
+- Dashboard: `/hazards`, `/reports`, `/forecast`, `/evacuees`, `/sim/state`
 
-**Step 2+: WebSocket `ws://localhost:8000/ws`.** The server pushes a small "something changed" message, and clients re-fetch what's listed in `changed`.
-```json
-{ "type": "tick", "sim_time": 35, "changed": ["hazards", "roads"] }
-```
-```json
-{ "type": "report", "changed": ["reports"] }
-```
-`type`: `"tick"` · `"report"` · `"reset"`. `changed`: any of `"hazards"`, `"roads"`, `"shelters"`, `"reports"`.
+**Later:** WebSocket `ws://localhost:8000/ws` with `{ "type", "sim_time", "changed": [...] }` — unchanged idea from v1; not required for Saturday.
 
 ---
 
 ## 3. Python interfaces inside the backend
 
-These are how `api/` (Harsit) calls into routing (Azer) and sim (Dviviz). Same rule: don't change a signature without telling the others.
+Do not change a signature without telling the team and updating this file.
 
-### `backend/sim/wildfire.py` (Dviviz)
+### `backend/sim/wildfire.py` (Dviviz) — still required
 ```python
 class WildfireSim:
     def __init__(self, lat: float, lon: float, wind_kmh: float = 20,
                  wind_from_deg: float = 315, fuel_dryness: float = 0.7): ...
-    def step(self, minutes: int) -> None: ...        # advance the fire
-    def features(self) -> list[dict]: ...            # GeoJSON Features, kind="wildfire"
-```
-
-### `backend/sim/flood.py` (Dviviz)
-```python
-class FloodSim:
-    def __init__(self, river_rise_m_per_hr: float = 0.5): ...
     def step(self, minutes: int) -> None: ...
-    def features(self) -> list[dict]: ...            # GeoJSON Features, kind="flood"
+    def features(self) -> list[dict]: ...   # GeoJSON Features, kind="wildfire" (NOW)
 ```
-Step 0 version of both: a circle (or blob near the river) whose radius grows every `step()`.
 
-### `backend/routing/router.py` (Azer)
+### Forecast helpers (Dviviz) — **v2**
+Exact module path can be `wildfire.py` or `forecast.py`, but **names below are frozen**:
+
+```python
+def forecast(horizon_min: int = 120) -> list[dict]:
+    """Return outline features (or dicts with t_min + geometry) at 15-min steps."""
+
+def arrival_min(lat: float, lon: float) -> int | None:
+    """Sim minute fire reaches this point, or None if outside horizon."""
+
+def set_wind(wind_kmh: float, wind_from_deg: float) -> None:
+    """Update wind and recompute forecast (few seconds)."""
+```
+
+### FloodSim
+**Deferred.** Do not implement for the final vision track.
+
+### `backend/routing/router.py` (Azer) — **v2**
 ```python
 class NoRouteError(Exception): ...
 
-def load_graph() -> None: ...                         # call once at startup
-def find_route(lat: float, lon: float,
-               hazards: list[dict],                   # GeoJSON hazard Features
-               shelters: list[dict]) -> dict: ...     # returns the GET /route body
-                                                      # raises NoRouteError if none reachable
-def closed_roads(hazards: list[dict]) -> list[dict]: ...  # GeoJSON LineStrings (Step 2)
+def load_graph() -> None: ...
+
+def find_routes(lat: float, lon: float,
+                arrival_min_fn,                 # callable (lat,lon)->int|None
+                shelters: list[dict]) -> dict:
+    """Returns the GET /route v2 body (options, leave_by_*, etc.)."""
+
+def check_route(lat: float, lon: float, route_id: str,
+                arrival_min_fn, shelters: list[dict]) -> dict:
+    """Re-validate a chosen route; same response shape as find_routes."""
 ```
-Step 0 version: `find_route` returns a straight line from the point to the nearest shelter.
+
+Step 0 `find_route(...)` (single straight line) may remain as a fallback inside `load_graph` failure paths, but **HTTP `/route` should call `find_routes`** once Azer lands v2.
+
+**Blocking rule again:** segment blocked if driver would arrive after `arrival_min − 30`.
 
 ---
 
-## 4. Fixtures (fake data for frontends)
+## 4. Fixtures
 
-Copy each example above into its own file so the frontends can build before the backend is ready:
+Keep existing Step 0 fixtures. Add when frontends need them (can be a follow-up PR):
 
 ```
-shared/fixtures/hazards.json
-shared/fixtures/shelters.json
-shared/fixtures/route.json
-shared/fixtures/reports.json
-shared/fixtures/roads_closed.json
-shared/fixtures/sim_state.json
+shared/fixtures/route_v2.json      # GET /route v2 example
+shared/fixtures/forecast.json      # GET /forecast example
+shared/fixtures/evacuees.json      # GET /evacuees example
+shared/fixtures/sim_state.json     # GET /sim/state example
 ```
-Frontends: one flag `USE_FIXTURES = true` → read local files; `false` → call `API_URL`.
+
+`USE_FIXTURES = true` → local JSON; `false` → `API_URL`.
 
 ---
 
-## 5. Step 0 done = 
-1. `GET /health` works.
-2. Dashboard shows the Edmonton map + shelters + a hazard that grows every 2 s.
-3. Click on the dashboard map → `POST /hazards` → the new circle appears.
-4. Phone: tap to set your location → route line to a shelter drawn on the map.
-5. All six PRs merged into `main`.
+## 5. What “done” means now
+
+### Step 0 (already shipped)
+1. `/health`, map, shelters, growing fire, click hazard, phone route, reports.
+
+### Final vision (Saturday night target)
+1. Fire **forecast** outlines (+15…+120) and `arrival_min`.
+2. **Time-aware** routes with 2–3 options, margins, leave-by.
+3. Dashboard **wind** changes forecast; a chosen route can go red.
+4. Phone shows leave-by + cards and offers a new route when blocked.
+5. Dashboard shows **evacuee dots** from all phones.
+6. Judges join via **QR / public URL**.
 
 ---
 
 ## Changelog
+
 | When | Who | What |
 |---|---|---|
-| Fri 7:15 PM | Harsit | v1 agreed by team |
+| Fri (hackathon start) | Harsit | v1 agreed by team |
+| Sat (final vision) | Harsit | **v2:** multi-option `/route`, `/forecast`, `/sim/wind`, `/evacuees`, wind units (`wind_kmh` + `wind_from_deg` FROM), road block = arrive after `arrival_min − 30`, flood deferred, sim control required for dashboard, Python `find_routes` / `arrival_min` / `set_wind` |

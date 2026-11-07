@@ -1,15 +1,20 @@
 import { useState } from 'react'
 import { CloseIcon } from './icons.jsx'
 
+// `other` is not in contract v1's report kinds yet (asked Harsit to add it).
 const KINDS = [
   ['fire', 'Fire'],
   ['flooded_road', 'Flooded road'],
   ['blocked_road', 'Blocked road'],
+  ['other', 'Other'],
 ]
 
 export default function ReportSheet({ onSubmit, onClose, sending }) {
   const [kind, setKind] = useState('fire')
   const [note, setNote] = useState('')
+  const isOther = kind === 'other'
+  // "Other" means nothing to responders without a description, so the note is required.
+  const missingNote = isOther && note.trim() === ''
 
   return (
     <div className="sheet-scrim" onClick={onClose}>
@@ -21,7 +26,7 @@ export default function ReportSheet({ onSubmit, onClose, sending }) {
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault()
-          onSubmit({ kind, note: note.trim() })
+          if (!missingNote) onSubmit({ kind, note: note.trim() })
         }}
       >
         <div className="sheet-head">
@@ -45,11 +50,17 @@ export default function ReportSheet({ onSubmit, onClose, sending }) {
           ))}
         </div>
         <label className="field">
-          <span>Note (optional)</span>
-          <textarea rows="2" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
+          <span>{isOther ? 'What did you see? (required)' : 'Note (optional)'}</span>
+          <textarea
+            rows="2"
+            value={note}
+            maxLength={200}
+            required={isOther}
+            onChange={(e) => setNote(e.target.value)}
+          />
         </label>
         <span className="muted small">Uses your current location on the map.</span>
-        <button type="submit" className="btn-primary" disabled={sending}>
+        <button type="submit" className="btn-primary" disabled={sending || missingNote}>
           {sending ? 'Sending…' : 'Send report'}
         </button>
       </form>

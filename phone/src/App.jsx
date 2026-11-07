@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getHazards, getRoute, getShelters, postReport } from './api.js'
+import { getHazards, getNotifications, getRoute, getShelters, getSimState, postReport } from './api.js'
 import { POLL_MS } from './config.js'
+import { isCurrentCore, nearestHazard } from './geo.js'
+import { placeName } from './placeName.js'
+import { nextClock } from './simClock.js'
 import AlertBanner from './components/AlertBanner.jsx'
+import EvacCard from './components/EvacCard.jsx'
 import MapView from './components/MapView.jsx'
+import { AlertsTab, mostSevere, NotificationPopup } from './components/Notifications.jsx'
 import RouteTab from './components/RouteTab.jsx'
-import TipsTab from './components/TipsTab.jsx'
+import { CrookIcon } from './components/icons.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
 
 // Resolves to [lon, lat], or null if unavailable, denied or slow.
@@ -22,8 +27,7 @@ function deviceLocation() {
 
 const TABS = [
   ['route', 'Route'],
-  ['tips', 'Survival tips'],
-  ['gov', 'Gov updates'],
+  ['gov', 'Alerts'],
 ]
 
 export default function App() {
@@ -37,12 +41,44 @@ export default function App() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [toast, setToast] = useState(null)
+  const [notifications, setNotifications] = useState([])
+  const [popup, setPopup] = useState(null)
+  const [clock, setClock] = useState(null) // sim clock for the leave-by countdown
+  const seenNotes = useRef(new Set())
   const toastTimer = useRef(null)
   const locationRef = useRef(location)
+  const [areaName, setAreaName] = useState('Edmonton')
+  const areaTimer = useRef(null)
+  const areaAbort = useRef(null)
 
   useEffect(() => {
     locationRef.current = location
   }, [location])
+
+  // Header place name follows the map. Wait until panning/zooming settles,
+  // then look it up; keep the previous name if the lookup fails.
+  const onViewChange = useCallback((center, zoom) => {
+    clearTimeout(areaTimer.current)
+    areaTimer.current = setTimeout(async () => {
+      areaAbort.current?.abort()
+      const ctrl = new AbortController()
+      areaAbort.current = ctrl
+      try {
+        const name = await placeName(center, zoom, ctrl.signal)
+        if (name && !ctrl.signal.aborted) setAreaName(name)
+      } catch {
+        // offline or rate-limited: leave the current name
+      }
+    }, 600)
+  }, [])
+
+  useEffect(
+    () => () => {
+      clearTimeout(areaTimer.current)
+      areaAbort.current?.abort()
+    },
+    [],
+  )
 
   const showToast = useCallback((text) => {
     clearTimeout(toastTimer.current)
@@ -51,9 +87,20 @@ export default function App() {
   }, [])
 
   const refresh = useCallback(async () => {
-    const [h, s] = await Promise.allSettled([getHazards(), getShelters()])
+    const [h, s, n, st] = await Promise.allSettled([getHazards(), getShelters(), getNotifications(), getSimState()])
     if (h.status === 'fulfilled') setHazards(h.value)
+    // Sim clock from /sim/state; older backends without it fall back to /hazards' sim_time at 1x.
+    if (st.status === 'fulfilled' && st.value) setClock((c) => nextClock(c, st.value))
+    else if (h.status === 'fulfilled') setClock((c) => nextClock(c, { sim_time: h.value?.sim_time }))
     if (s.status === 'fulfilled') setShelters(s.value)
+    if (n.status === 'fulfilled') {
+      const fresh = n.value.filter((x) => !seenNotes.current.has(x.id))
+      if (fresh.length) {
+        fresh.forEach((x) => seenNotes.current.add(x.id))
+        setNotifications(n.value)
+        setPopup(mostSevere(fresh)) // pop up the most important new one
+      }
+    }
 
     const loc = locationRef.current
     if (!loc) return
@@ -127,14 +174,38 @@ export default function App() {
     [showToast, setLocationAndRoute],
   )
 
+  // During a wildfire the evacuation card (leave-by countdown) takes the banner's place.
+  const wildfire =
+    route?.leave_by_sim_min != null ||
+    (hazards?.features ?? []).some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
+
   return (
     <div className="phone">
       <header className="header">
-        <span className="brand">Shepherd</span>
-        <span className="city">Edmonton</span>
+        <span className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <CrookIcon />
+          </span>
+          Shepherd
+        </span>
+        <span className="city" aria-live="polite" title={areaName}>
+          {areaName}
+        </span>
       </header>
 
-      <AlertBanner hazards={hazards} location={location} />
+      {popup && <NotificationPopup key={popup.id} notification={popup} onDismiss={() => setPopup(null)} />}
+
+      {wildfire ? (
+        <EvacCard
+          location={location}
+          route={route}
+          routeError={routeError}
+          near={location ? nearestHazard(location, hazards) : null}
+          clock={clock}
+        />
+      ) : (
+        <AlertBanner hazards={hazards} location={location} notifications={notifications} />
+      )}
 
       <nav className="tabs" role="tablist" aria-label="Sections">
         {TABS.map(([id, label]) => (
@@ -163,9 +234,12 @@ export default function App() {
                 route={route}
                 location={location}
                 onTap={setLocationAndRoute}
+                onViewChange={onViewChange}
                 focusKey={focusKey}
+                tall={!location}
               />
             }
+            hazards={hazards}
             location={location}
             route={route}
             routeError={routeError}
@@ -173,12 +247,7 @@ export default function App() {
             onStartNavigation={() => setFocusKey(Date.now())}
           />
         </div>
-        {tab === 'tips' && <TipsTab />}
-        {tab === 'gov' && (
-          <div className="gov">
-            <p className="muted">No government updates yet. Updates sent by emergency officials will appear here.</p>
-          </div>
-        )}
+        {tab === 'gov' && <AlertsTab notifications={notifications} />}
       </main>
 
       <div className="action-bar">
@@ -192,7 +261,7 @@ export default function App() {
         </button>
         <button
           type="button"
-          className="action action-safe"
+          className="action"
           disabled={!location || sending}
           onClick={() => sendReport('safe')}
         >

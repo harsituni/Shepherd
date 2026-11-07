@@ -17,24 +17,30 @@ Live evacuation routing for Edmonton. Simulates wildfires and floods, closes roa
 
 ## Run it
 
-**Backend** (from repo root)
+**One command** (API + dashboard + phone). Frees ports 8000 / 5173 / 5174 if needed; Ctrl+C stops all.
+```bash
+./dev.sh
+```
+Then open http://localhost:8000/health · http://localhost:5173 · http://localhost:5174
+
+First time only: create the Python venv (script runs `npm install` for frontends if missing):
 ```bash
 python3 -m venv backend/.venv
-source backend/.venv/bin/activate        # Windows: backend\.venv\Scripts\activate
+source backend/.venv/bin/activate
 pip install -r backend/requirements.txt
+```
+
+**Or run pieces yourself**
+
+Backend (from repo root):
+```bash
+source backend/.venv/bin/activate
 uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
-Check: http://localhost:8000/health · API docs: http://localhost:8000/docs
 
-**Dashboard**
-```bash
-cd dashboard && npm install && npm run dev    # http://localhost:5173
-```
+Dashboard: `cd dashboard && npm install && npm run dev` → http://localhost:5173
 
-**Phone**
-```bash
-cd phone && npm install && npm run dev        # http://localhost:5174
-```
+Phone: `cd phone && npm install && npm run dev` → http://localhost:5174
 
 ## How we work
 - Read `AGENT_CONTEXT.md` and `shared/contract.md` first.

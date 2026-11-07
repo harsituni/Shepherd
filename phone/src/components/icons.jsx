@@ -1,8 +1,9 @@
 // Simple inline stroke icons (no emoji, no icon library).
 
-function Svg({ size = 18, strokeWidth = 2, children, style }) {
+function Svg({ size = 18, strokeWidth = 2, children, style, className }) {
   return (
     <svg
+      className={className}
       width={size}
       height={size}
       viewBox="0 0 24 24"
@@ -18,6 +19,15 @@ function Svg({ size = 18, strokeWidth = 2, children, style }) {
     </svg>
   )
 }
+
+// Placeholder logo: a shepherd's crook (matches the dashboard's mark).
+export const CrookIcon = (p) => (
+  <Svg strokeWidth={2.2} {...p}>
+    <path d="M7 21V9a5 5 0 0 1 10 0" />
+    <path d="M17 9v2" />
+    <path d="M4 21h16" />
+  </Svg>
+)
 
 export const WarningIcon = (p) => (
   <Svg size={20} {...p}>

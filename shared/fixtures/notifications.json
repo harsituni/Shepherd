@@ -1,0 +1,18 @@
+{
+  "notifications": [
+    {
+      "id": "nt_1",
+      "title": "Wildfire burning in west Edmonton",
+      "message": "A wildfire is burning in west Edmonton. Pack a go-bag and be ready to leave if you are told to.",
+      "severity": "advisory",
+      "time": "2026-11-07T13:40:00-07:00"
+    },
+    {
+      "id": "nt_2",
+      "title": "Leave west Edmonton now",
+      "message": "Leave now. Follow the route in Shepherd to an open shelter and avoid closed roads.",
+      "severity": "evacuation",
+      "time": "2026-11-07T14:05:00-07:00"
+    }
+  ]
+}

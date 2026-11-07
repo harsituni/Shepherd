@@ -1,10 +1,11 @@
-const KIND_LABEL = { wildfire: 'Wildfire', flood: 'Flood' }
+// `flood` stays labelled for live feeds; the simulation itself offers wildfire and tornado.
+const KIND_LABEL = { wildfire: 'Wildfire', tornado: 'Tornado', flood: 'Flood' }
 
 // Built only from /hazards data: hazard kinds, zone count and sim_time.
 export default function IncidentBanner({ hazards, mode }) {
   // Predicted-spread features (`predicted_min`) aren't active zones.
   const features = (hazards?.features ?? []).filter((f) => f.properties?.predicted_min == null)
-  const modeLabel = mode === 'drill' ? 'drill' : 'live'
+  const modeLabel = mode === 'drill' ? 'simulation' : 'live'
 
   if (features.length === 0) {
     return (
@@ -12,7 +13,7 @@ export default function IncidentBanner({ hazards, mode }) {
         <span className="banner-dot idle" aria-hidden="true" />
         <strong>No active hazards</strong>
         <span className="banner-sub">
-          {mode === 'drill' ? 'Pick a hazard and click the map to start a drill' : 'Monitoring live feeds'}
+          {mode === 'drill' ? 'Pick a hazard and click the map to start a simulation' : 'Monitoring live feeds'}
         </span>
       </div>
     )

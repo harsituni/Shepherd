@@ -1,4 +1,4 @@
-"""Shepherd API — Step 0 backend."""
+"""Shepherd API — Step 0 + sim controls (contract v2)."""
 
 from __future__ import annotations
 
@@ -10,13 +10,12 @@ from typing import Optional
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.routing.router import NoRouteError, find_route, load_graph
-from backend.sim.wildfire import WildfireSim
+from backend.sim.controller import SimController
 
-sim: WildfireSim | None = None
-sim_time: int = 0
+controller = SimController()
 dropped_hazards: list[dict] = []
 reports: list[dict] = []
 _next_hazard_id: int = 1
@@ -60,18 +59,13 @@ SHELTERS: list[dict] = [
 
 
 async def _sim_loop() -> None:
-    global sim_time
     while True:
         await asyncio.sleep(2)
-        if sim is not None:
-            sim.step(1)
-            sim_time += 1
+        controller.tick()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global sim
-    sim = WildfireSim(lat=53.535, lon=-113.663)
     load_graph()
     task = asyncio.create_task(_sim_loop())
     try:
@@ -108,6 +102,25 @@ class ReportIn(BaseModel):
     note: Optional[str] = None
 
 
+class SimStart(BaseModel):
+    scenario: str = "wildfire"
+    lat: float
+    lon: float
+    wind_kmh: float = 20
+    wind_from_deg: float = 315
+    fuel_dryness: float = 0.7
+    humidity_pct: Optional[float] = None
+
+
+class SimSpeed(BaseModel):
+    multiplier: int = Field(..., description="1, 4, or 16")
+
+
+class SimWind(BaseModel):
+    wind_kmh: float
+    wind_from_deg: float
+
+
 def circle_polygon(lat: float, lon: float, radius_m: float, n: int = 32) -> list[list[float]]:
     """Return a closed GeoJSON ring [lon, lat] approximating a circle."""
     dlat = radius_m / 111_320
@@ -121,8 +134,17 @@ def circle_polygon(lat: float, lon: float, radius_m: float, n: int = 32) -> list
 
 
 def all_hazard_features() -> list[dict]:
-    sim_features = sim.features() if sim is not None else []
-    return list(sim_features) + list(dropped_hazards)
+    return list(controller.features()) + list(dropped_hazards)
+
+
+def _unsupported_flood() -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "unsupported_scenario",
+            "message": "Flood deferred",
+        },
+    )
 
 
 @app.get("/health")
@@ -139,7 +161,7 @@ def get_shelters() -> dict:
 def get_hazards() -> dict:
     return {
         "type": "FeatureCollection",
-        "sim_time": sim_time,
+        "sim_time": controller.sim_time,
         "features": all_hazard_features(),
     }
 
@@ -197,7 +219,7 @@ def post_report(body: ReportIn) -> dict:
         "properties": {
             "kind": body.kind,
             "note": body.note,
-            "sim_time": sim_time,
+            "sim_time": controller.sim_time,
         },
         "geometry": {
             "type": "Point",
@@ -211,3 +233,50 @@ def post_report(body: ReportIn) -> dict:
 @app.get("/reports")
 def get_reports() -> dict:
     return {"type": "FeatureCollection", "features": reports}
+
+
+@app.get("/forecast")
+def get_forecast() -> dict:
+    """Predicted fire outlines at +15…+120 min (contract v2)."""
+    return controller.forecast()
+
+
+@app.get("/sim/state")
+def get_sim_state() -> dict:
+    return controller.status()
+
+
+@app.post("/sim/start")
+def post_sim_start(body: SimStart) -> dict:
+    if body.scenario == "flood":
+        return _unsupported_flood()
+    try:
+        return controller.start(body.model_dump())
+    except ValueError:
+        return _unsupported_flood()
+
+
+@app.post("/sim/pause")
+def post_sim_pause() -> dict:
+    return controller.pause()
+
+
+@app.post("/sim/resume")
+def post_sim_resume() -> dict:
+    return controller.resume()
+
+
+@app.post("/sim/reset")
+def post_sim_reset() -> dict:
+    return controller.reset()
+
+
+@app.post("/sim/speed")
+def post_sim_speed(body: SimSpeed) -> dict:
+    return controller.set_speed(body.multiplier)
+
+
+@app.post("/sim/wind")
+def post_sim_wind(body: SimWind) -> dict:
+    """Change wind; kicks off spread/forecast recompute (contract v2)."""
+    return controller.set_wind(body.wind_kmh, body.wind_from_deg)

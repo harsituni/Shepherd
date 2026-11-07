@@ -1,6 +1,8 @@
 :root {
   --navy: #0b3d6e;
   --navy-deep: #0a3360;
+  /* Header: Alberta's brand dark blue (GoA design tokens --goa-color-brand-dark), same as phone/. */
+  --header: #005072;
   --blue: #0070c4;
   --blue-hover: #005a9e;
   --tint: #eaf3fb;
@@ -19,6 +21,8 @@
   --danger-title: #8a2f06;
   --danger-text: #6b3a1f;
   --danger-icon: #b4400b;
+  /* Gold focus ring, as on Alberta.ca. Focus only; never decoration. */
+  --focus: #feba35;
 
   --radius-control: 6px;
   --radius-card: 8px;
@@ -44,9 +48,11 @@ body { margin: 0; background: #ffffff; }
 button, input, select, textarea { font-family: inherit; color: inherit; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
+/* Joined segments and tabs would clip an outside ring; draw it inside. */
+.tabs button:focus-visible, .segmented button:focus-visible, .mode-switch button:focus-visible { outline-offset: -3px; }
 
 .num { font-variant-numeric: tabular-nums; }
 .sr-only {
@@ -63,7 +69,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .header {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: 16px; padding: 14px 28px; background: var(--navy); color: #fff;
+  gap: 16px; padding: 14px 28px; background: var(--header); color: #fff;
 }
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand-mark {
