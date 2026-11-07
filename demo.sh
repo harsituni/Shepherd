@@ -5,7 +5,6 @@
 #   ./demo.sh
 #
 # Ctrl+C stops everything. Needs once: brew install cloudflared
-#
 # Laptop-only (no tunnels/QR): use ./dev.sh instead.
 set -euo pipefail
 
@@ -13,6 +12,8 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 DEMO_DIR="$ROOT/.demo"
+JOIN_HTML="$ROOT/demo-join.html"
+JOIN_TXT="$DEMO_DIR/JOIN_URL.txt"
 mkdir -p "$DEMO_DIR"
 PHONE_LOG="$DEMO_DIR/cloudflared-phone.log"
 API_LOG="$DEMO_DIR/cloudflared-api.log"
@@ -21,6 +22,7 @@ STACK_LOG="$DEMO_DIR/stack.log"
 PIDS=()
 PHONE_CF_PID=""
 API_CF_PID=""
+WROTE_JOIN=0
 
 WINDOWS=0
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) WINDOWS=1 ;; esac
@@ -65,6 +67,26 @@ free_port() {
   fi
 }
 
+mark_join_stale() {
+  # Old Cloudflare URLs die when tunnels stop — don't leave a scannable dead QR.
+  if [[ "$WROTE_JOIN" == 1 || -f "$JOIN_HTML" ]]; then
+    cat >"$JOIN_HTML" <<'HTML'
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><title>Shepherd — tunnels stopped</title>
+<style>body{font-family:system-ui,sans-serif;max-width:28rem;margin:2rem auto;padding:0 1rem;color:#0B2545}
+code{background:#EAF3FB;padding:2px 6px;border-radius:4px}</style></head>
+<body>
+<h1>Tunnels are stopped</h1>
+<p>This QR / join link is <strong>dead</strong> (Cloudflare error 1033 if you scan an old one).</p>
+<p>On the laptop run:</p>
+<p><code>./demo.sh</code></p>
+<p>Then scan the <em>new</em> QR it opens — quick-tunnel URLs change every run.</p>
+</body></html>
+HTML
+    rm -f "$JOIN_TXT"
+  fi
+}
+
 cleanup() {
   echo
   echo "Stopping Shepherd demo (stack + tunnels)…"
@@ -77,12 +99,12 @@ cleanup() {
     kill "$pid" 2>/dev/null || true
     pkill -P "$pid" 2>/dev/null || true
   done
-  # Ports we own — clear leftovers (uvicorn reloader / vite children).
   for port in 8000 5173 5174; do
-    kill_pids "$(port_pids "$port")" -TERM
+    kill_pids "$(port_pids "$port")" -KILL
   done
+  mark_join_stale
   wait 2>/dev/null || true
-  echo "Done. Re-open demo-join.html later only if tunnels are running again."
+  echo "Done. Run ./demo.sh again for a fresh QR (old links will not work)."
 }
 trap cleanup EXIT INT TERM
 
@@ -94,18 +116,28 @@ need_cmd() {
   fi
 }
 
+http_ok() {
+  local url="$1" code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 1 --max-time 2 "$url" 2>/dev/null || echo 000)"
+  [[ "$code" =~ ^[23][0-9][0-9]$ ]]
+}
+
 wait_http() {
-  local url="$1" label="$2" i
-  for i in $(seq 1 90); do
-    if curl -sf --connect-timeout 1 -o /dev/null "$url"; then
-      echo "OK  $label"
-      return 0
-    fi
+  local label="$1" i u
+  shift
+  local urls=("$@")
+  for i in $(seq 1 120); do
+    for u in "${urls[@]}"; do
+      if http_ok "$u"; then
+        echo "OK  $label"
+        return 0
+      fi
+    done
     sleep 0.5
   done
-  echo "Timed out waiting for $label ($url)" >&2
+  echo "Timed out waiting for $label (${urls[*]})" >&2
   echo "--- stack log (tail) ---" >&2
-  tail -40 "$STACK_LOG" >&2 || true
+  tail -50 "$STACK_LOG" >&2 || true
   exit 1
 }
 
@@ -120,8 +152,23 @@ wait_tunnel_url() {
     sleep 0.4
   done
   echo "Timed out waiting for $label tunnel. Log: $log" >&2
-  tail -30 "$log" >&2 || true
+  tail -40 "$log" >&2 || true
   exit 1
+}
+
+open_join_page() {
+  local path="$1"
+  echo "Opening QR page: $path"
+  if command -v open >/dev/null 2>&1; then
+    open -a Safari "$path" 2>/dev/null \
+      || open -a "Google Chrome" "$path" 2>/dev/null \
+      || open "$path" 2>/dev/null \
+      || echo "Could not auto-open — open that file manually."
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$path" 2>/dev/null || echo "Open $path manually."
+  else
+    echo "Open $path in a browser to show the QR."
+  fi
 }
 
 need_cmd curl
@@ -133,28 +180,22 @@ VENV_ACTIVATE=backend/.venv/bin/activate
 [[ -f "$VENV_ACTIVATE" ]] || VENV_ACTIVATE=backend/.venv/Scripts/activate
 if [[ ! -f "$VENV_ACTIVATE" ]]; then
   echo "Missing backend/.venv. Create it once:" >&2
-  echo "  python3 -m venv backend/.venv" >&2
-  echo "  source backend/.venv/bin/activate" >&2
+  echo "  python3 -m venv backend/.venv && source backend/.venv/bin/activate" >&2
   echo "  pip install -r backend/requirements.txt" >&2
   exit 1
 fi
 # shellcheck disable=SC1090
 source "$VENV_ACTIVATE"
 
-if [[ ! -d dashboard/node_modules ]]; then
-  echo "Installing dashboard deps…"
-  (cd dashboard && npm install)
-fi
-if [[ ! -d phone/node_modules ]]; then
-  echo "Installing phone deps…"
-  (cd phone && npm install)
-fi
+[[ -d dashboard/node_modules ]] || (cd dashboard && npm install)
+[[ -d phone/node_modules ]] || (cd phone && npm install)
 
 if ! grep -q 'allowedHosts' phone/vite.config.js 2>/dev/null; then
   echo "WARN phone/vite.config.js missing allowedHosts — Cloudflare Host may be blocked." >&2
 fi
 
-# Clear ports / old tunnels so this run owns everything.
+# Kill stale join page / tunnels / ports before starting.
+rm -f "$JOIN_HTML" "$JOIN_TXT"
 pkill -f 'cloudflared tunnel --url http://127.0.0.1:5174' 2>/dev/null || true
 pkill -f 'cloudflared tunnel --url http://127.0.0.1:8000' 2>/dev/null || true
 free_port 8000
@@ -163,20 +204,25 @@ free_port 5174
 
 echo "Starting API + dashboard + phone…"
 : >"$STACK_LOG"
-(
-  uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000 &
-  echo $! >>"$DEMO_DIR/stack.pids"
-  (cd dashboard && npm run dev) &
-  echo $! >>"$DEMO_DIR/stack.pids"
-  (cd phone && npm run dev) &
-  echo $! >>"$DEMO_DIR/stack.pids"
-  wait
-) >>"$STACK_LOG" 2>&1 &
+: >"$DEMO_DIR/stack.pids"
+
+uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000 >>"$STACK_LOG" 2>&1 &
 PIDS+=("$!")
 
-wait_http "http://127.0.0.1:8000/health" "API :8000"
-wait_http "http://127.0.0.1:5173/" "Dashboard :5173"
-wait_http "http://127.0.0.1:5174/" "Phone :5174"
+(cd dashboard && npm run dev) >>"$STACK_LOG" 2>&1 &
+PIDS+=("$!")
+
+(cd phone && npm run dev) >>"$STACK_LOG" 2>&1 &
+PIDS+=("$!")
+
+# Phone demo only needs API + phone. Dashboard is nice-to-have on the laptop.
+wait_http "API :8000" "http://127.0.0.1:8000/health" "http://localhost:8000/health"
+wait_http "Phone :5174" "http://127.0.0.1:5174/" "http://localhost:5174/"
+if http_ok "http://127.0.0.1:5173/" || http_ok "http://localhost:5173/"; then
+  echo "OK  Dashboard :5173"
+else
+  echo "WARN Dashboard :5173 not up yet — phone tunnels will still work. Check $STACK_LOG"
+fi
 
 : >"$PHONE_LOG"
 : >"$API_LOG"
@@ -191,22 +237,60 @@ API_URL="$(wait_tunnel_url "$API_LOG" api)"
 echo "OK  Phone tunnel: $PHONE_URL"
 echo "OK  API tunnel:   $API_URL"
 
-"$ROOT/scripts/demo_join.sh" --tunnel "$PHONE_URL" "$API_URL"
+# Build QR without relying on demo_join's flaky `open`.
+python3 - "$JOIN_HTML" "$PHONE_URL" "$API_URL" <<'PY'
+import base64, json, sys, urllib.parse, urllib.request
+out, phone, api = sys.argv[1], sys.argv[2].rstrip("/"), sys.argv[3].rstrip("/")
+join = f"{phone}?api={urllib.parse.quote(api, safe='')}"
+try:
+    q = urllib.parse.quote(join, safe="")
+    png = urllib.request.urlopen(
+        f"https://api.qrserver.com/v1/create-qr-code/?size=280x280&ecc=M&data={q}",
+        timeout=15,
+    ).read()
+    img = f'<img alt="QR" width="280" height="280" src="data:image/png;base64,{base64.b64encode(png).decode()}" />'
+except Exception as exc:
+    q = urllib.parse.quote(join, safe="")
+    img = f'<img alt="QR" width="280" height="280" src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data={q}" /><p>Embed failed: {exc}</p>'
+html = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Shepherd — join phone</title>
+<style>
+body{{font-family:system-ui,sans-serif;max-width:28rem;margin:2rem auto;padding:0 1rem;color:#0B2545}}
+code{{word-break:break-all;background:#EAF3FB;padding:2px 6px;border-radius:4px}}
+.muted{{color:#3B5A7A}}.big{{font-size:1.05rem;font-weight:600}}
+</style></head><body>
+<h1>Shepherd phone</h1>
+<p class="muted">Scan this QR (fresh for this <code>./demo.sh</code> run). Old QRs die when the script stops.</p>
+<div>{img}</div>
+<p class="big">Join URL</p>
+<p><code>{json.dumps(join)[1:-1]}</code></p>
+<p class="muted">API: <code>{json.dumps(api)[1:-1]}</code></p>
+</body></html>
+"""
+open(out, "w", encoding="utf-8").write(html)
+print(join)
+PY
+JOIN="$(python3 -c "import urllib.parse,sys; print(sys.argv[1].rstrip('/')+'?api='+urllib.parse.quote(sys.argv[2].rstrip('/'), safe=''))" "$PHONE_URL" "$API_URL")"
+echo "$JOIN" >"$JOIN_TXT"
+WROTE_JOIN=1
 
-JOIN="${PHONE_URL}?api=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$API_URL")"
+open_join_page "$JOIN_HTML"
 
 cat <<EOF
 
 ════════════════════════════════════════════════════════════
-  ONE LINK for teammates / judges (also in demo-join.html):
+  FRESH join link (share this — not an old QR):
 
   $JOIN
 
-  Dashboard (this laptop only): http://localhost:5173
-  Ctrl+C stops API, frontends, and tunnels.
+  Also saved in:  $JOIN_TXT
+  QR page:        $JOIN_HTML
+
+  Dashboard: http://localhost:5173
+  Ctrl+C stops everything (old links then show “tunnels stopped”).
 ════════════════════════════════════════════════════════════
 
 EOF
 
-# Stay alive until interrupted.
 wait
