@@ -56,7 +56,7 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
 - `GET /hazards`: draw `zone: core` solid orange, `buffer` lighter.
 - `GET /shelters`: `occupancy / capacity` for "% full".
 - `GET /forecast` (contract v2): `outlines` at `t_min` 15, 30 … 120 minutes from now; the 30 and 60 min ones are drawn as the predicted path (merged into the hazards as `predicted_min` features in `src/api.js`). Empty when idle.
-- `POST /evacuees` (contract v2) `{ id, lat, lon, route_id, route_status, shelter_id }`: a heartbeat every ~2 s from the moment a location is set (map tap, preset or Need help) and while evacuating, so the dashboard marks the phone. Route fields are null until a route is shown; the id is one per phone (`src/evacuate.js`).
+- `POST /evacuees` (contract v2) `{ id, lat, lon, route_id, route_status, shelter_id }`: a heartbeat every ~2 s from the moment a location is set (map tap, preset or Need help) and while evacuating, so the dashboard marks the phone. Route fields are null until a route is shown; the id is one per phone (`src/evacuate.js`). While it is sharing, a quiet line under the map says "Your location is shared with responders." (14px Slate Faint, no icon).
 - `POST /reports` `{ kind, lat, lon, note? }`, `kind` = `fire`|`flooded_road`|`blocked_road` (Report hazard sheet), `safe` (I'm safe), `sos` (Need help). 201 → `{ id, received }` → toast.
 - Live updates: poll `/route` every 2 s; later WebSocket `ws://localhost:8000/ws` → re-fetch on `changed`.
 - Errors come back as `{ error, message }`.

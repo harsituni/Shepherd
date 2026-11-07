@@ -203,6 +203,10 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .shelter-marker.is-unsafe .shelter-popup { color: var(--closed); border-color: var(--closed); }
 .shelter-popup-warning { width: 200px; margin-top: 4px; white-space: normal; font-weight: 600; }
 
+/* Quiet one-line notice right under the map while the phone shares its location.
+   Slate Faint at the 14px floor (4.8:1 on white), no icon, no box. */
+.location-shared { margin: 0; padding: 8px 20px 0; font-size: var(--fs-sm); color: var(--muted-2); }
+
 /* One-row key under the map, listing only what is drawn. */
 .map-key {
   display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 10px 20px;
