@@ -116,6 +116,11 @@ class SimSpeed(BaseModel):
     multiplier: int = Field(..., description="1, 4, or 16")
 
 
+class SimWind(BaseModel):
+    wind_kmh: float
+    wind_from_deg: float
+
+
 def circle_polygon(lat: float, lon: float, radius_m: float, n: int = 32) -> list[list[float]]:
     """Return a closed GeoJSON ring [lon, lat] approximating a circle."""
     dlat = radius_m / 111_320
@@ -263,3 +268,9 @@ def post_sim_reset() -> dict:
 @app.post("/sim/speed")
 def post_sim_speed(body: SimSpeed) -> dict:
     return controller.set_speed(body.multiplier)
+
+
+@app.post("/sim/wind")
+def post_sim_wind(body: SimWind) -> dict:
+    """Change wind; kicks off spread/forecast recompute (contract v2)."""
+    return controller.set_wind(body.wind_kmh, body.wind_from_deg)
