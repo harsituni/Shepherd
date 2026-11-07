@@ -1,4 +1,4 @@
-import { routeLengthKm } from '../evacuate.js'
+import { evacueeId, routeLengthKm } from '../evacuate.js'
 
 // Issue #56: under the route cards. Before leaving: pick Simulated drive (in-room
 // demo) or Real GPS, then Start evacuating. While evacuating: progress and Stop.
@@ -42,7 +42,10 @@ export default function EvacuateControls({ route, trip, mode, onMode, onStart, o
         ) : (
           <span>Following your phone's location (real GPS).</span>
         )}
-        <span className="muted">Responders can see your position while you evacuate.</span>
+        <span className="muted">
+          Responders can see your position while you evacuate. Your device:{' '}
+          <span className="num">{evacueeId()}</span>
+        </span>
         <button type="button" className="btn-outline" onClick={onStop}>
           Stop
         </button>

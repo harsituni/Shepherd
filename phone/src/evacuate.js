@@ -38,22 +38,74 @@ export const routeLengthKm = (coords) => (coords?.length ? legs(coords).total : 
 
 // ---------- evacuee id ----------
 
-// One id per phone, so heartbeats upsert one dot on the dashboard. Kept in
-// localStorage when available; otherwise it lasts for this page load.
+// One id per phone (issue #57), so heartbeats upsert one dot on the dashboard and a
+// refresh keeps the same dot. Kept in localStorage; if storage is blocked it lasts
+// for this page load. `ev_` prefix per the contract's id convention.
+const ID_KEY = 'shepherd.evacueeId'
+const ID_PATTERN = /^ev_[0-9a-f]{12}$/
 let memoryId = null
+
+function newId() {
+  const bytes = new Uint8Array(6)
+  // getRandomValues works on plain http too (randomUUID needs https).
+  if (globalThis.crypto?.getRandomValues) crypto.getRandomValues(bytes)
+  else bytes.forEach((_, i) => (bytes[i] = Math.floor(Math.random() * 256)))
+  return `ev_${[...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')}`
+}
+
 export function evacueeId() {
-  const make = () => `ev_${Math.random().toString(36).slice(2, 8)}`
   try {
-    let id = localStorage.getItem('shepherd.evacueeId')
-    if (!id) {
-      id = make()
-      localStorage.setItem('shepherd.evacueeId', id)
+    let id = localStorage.getItem(ID_KEY)
+    if (!ID_PATTERN.test(id ?? '')) {
+      id = newId()
+      localStorage.setItem(ID_KEY, id)
     }
     return id
   } catch {
-    memoryId ??= make()
+    memoryId ??= newId()
     return memoryId
   }
+}
+
+// ---------- heartbeat ----------
+
+// POST /evacuees every `everyMs` while `active`: the phone's id, position and chosen
+// route. Skips a beat while the previous one is still in flight (slow networks), and
+// beats again as soon as the page is visible (browsers throttle timers in hidden tabs).
+// `read()` returns { lat, lon, route_id, route_status, shelter_id } or null.
+export function useHeartbeat({ active, everyMs, read, send }) {
+  const readRef = useRef(read)
+  const sendRef = useRef(send)
+  useEffect(() => {
+    readRef.current = read
+    sendRef.current = send
+  }, [read, send])
+
+  useEffect(() => {
+    if (!active) return
+    const id = evacueeId()
+    let inFlight = false
+    const beat = async () => {
+      const body = readRef.current?.()
+      if (!body || inFlight) return
+      inFlight = true
+      try {
+        await sendRef.current({ id, ...body })
+      } catch {
+        // a missed beat is fine; the next one follows shortly
+      } finally {
+        inFlight = false
+      }
+    }
+    const onVisible = () => document.visibilityState === 'visible' && beat()
+    beat()
+    const timer = setInterval(beat, everyMs)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [active, everyMs])
 }
 
 // ---------- GPS ----------
