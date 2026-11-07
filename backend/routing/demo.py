@@ -1,8 +1,8 @@
-"""Run separately to download Edmonton roads and print one real road route."""
+"""Run separately to print a saved-road route or a clearly marked backup."""
 
 import json
 
-from router import find_route, load_graph
+from backend.routing.router import find_route, load_graph
 
 
 def main():
@@ -21,8 +21,8 @@ def main():
 
     print("Demo shelter availability is fictional; locations are approximate.")
     print("ETA is illustrative at 30 km/h, not an actual traffic estimate.")
-    print("Hazards are ignored. Routes are not safety-checked.")
-    print("Loading Edmonton roads; the first run needs internet...")
+    print("This example has no hazards. Results are not navigation instructions.")
+    print("Loading saved Edmonton roads; no downloads...")
     load_graph()
     result = find_route(53.520, -113.620, [], shelters)
     print(json.dumps(result, indent=2))

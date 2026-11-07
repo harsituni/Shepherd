@@ -5,6 +5,7 @@ eta_min is illustrative at 30 km/h, not an actual traffic estimate.
 """
 
 from math import ceil
+import logging
 import os
 from pathlib import Path
 
@@ -15,11 +16,16 @@ from shapely.geometry import LineString, Point, shape
 
 
 ROUTING_DIR = Path(__file__).resolve().parent
-GRAPH_PATH = ROUTING_DIR / "data" / "edmonton_drive.graphml"
+GRAPH_PATH = ROUTING_DIR / "data" / "edmonton_demo_drive.graphml"
 # West, south, east, north; includes the contract's example shelters.
 DEMO_BBOX = (-113.70, 53.42, -113.43, 53.58)
 ILLUSTRATIVE_SPEED_KMH = 30.0
 _graph = None
+_backup_mode = False
+BACKUP_WARNING = (
+    "Road graph unavailable. Straight-line distance and ETA are estimates only, "
+    "not navigation instructions or a verified safe driving route."
+)
 
 
 class NoRouteError(Exception):
@@ -27,33 +33,26 @@ class NoRouteError(Exception):
 
 
 def load_graph() -> None:
-    """Load SHEPHERD_GRAPH_PATH, or use the default saved roads.
-
-    Only the default path can trigger a download if missing.
-    Call once at startup. Download and file errors propagate to the caller.
-    """
-    global _graph
-    if _graph is not None:
+    """Load saved roads once, or use estimate-only backup mode. Never download."""
+    global _graph, _backup_mode
+    if _graph is not None or _backup_mode:
         return
 
     saved_path = os.environ.get("SHEPHERD_GRAPH_PATH")
     graph_path = GRAPH_PATH
-    if saved_path is not None:
-        graph_path = Path(saved_path)
+    try:
+        if saved_path is not None:
+            graph_path = Path(saved_path)
         if not graph_path.is_file():
-            raise FileNotFoundError(
-                f"SHEPHERD_GRAPH_PATH must point to an existing GraphML file: {saved_path!r}"
-            )
-
-    # Load the roads
-    if graph_path.exists():
+            raise FileNotFoundError(f"Saved road graph is missing or not a file: {graph_path}")
         graph = ox.load_graphml(graph_path)
-    else:
-        GRAPH_PATH.parent.mkdir(parents=True, exist_ok=True)
-        ox.settings.cache_folder = str(ROUTING_DIR / "data" / "http_cache")
-        ox.settings.use_cache = True
-        graph = ox.graph_from_bbox(DEMO_BBOX, network_type="drive", retain_all=True)
-        ox.save_graphml(graph, GRAPH_PATH)
+        if len(graph) == 0 or graph.number_of_edges() == 0:
+            raise ValueError("Saved graph contains no usable roads")
+    except Exception as error:
+        # Only loading errors enable the backup, never routing failures.
+        _backup_mode = True
+        logging.getLogger(__name__).warning("%s File: %s. Error: %s", BACKUP_WARNING, graph_path, error)
+        return
     _graph = graph
 
 
@@ -61,6 +60,54 @@ def _inside_demo(lat, lon):
     """Check that a location is inside the downloaded demo area."""
     west, south, east, north = DEMO_BBOX
     return west <= lon <= east and south <= lat <= north
+
+
+def _straight_line_route(lat, lon, hazards, shelters):
+    """Choose the nearest eligible shelter without crossing a core hazard."""
+    if not _inside_demo(lat, lon):
+        raise NoRouteError("No route in the Edmonton demo area")
+    nearest = None
+    best_distance = float("inf")
+    best_coordinates = None
+    for shelter in shelters:
+        properties = shelter["properties"]
+        if not properties["open"] or properties["occupancy"] >= properties["capacity"]:
+            continue
+        end_lon, end_lat = shelter["geometry"]["coordinates"]
+        if not _inside_demo(end_lat, end_lon):
+            continue
+        coordinates = [[lon, lat], [end_lon, end_lat]]
+        line = LineString(coordinates)
+        blocked = False
+        for hazard in hazards:
+            if hazard["properties"].get("zone") != "core":
+                continue
+            area = shape(hazard["geometry"])
+            if (line.intersects(area) or area.intersects(Point(lon, lat))
+                    or area.intersects(Point(end_lon, end_lat))):
+                blocked = True
+                break
+        if blocked:
+            continue
+        distance = float(ox.distance.great_circle(lat, lon, end_lat, end_lon)) / 1000
+        if distance < best_distance:
+            nearest = shelter
+            best_distance = distance
+            best_coordinates = coordinates
+    if nearest is None:
+        raise NoRouteError("No eligible shelter with a clear straight-line estimate")
+    return {
+        "shelter_id": nearest["id"],
+        "shelter_name": nearest["properties"]["name"],
+        "distance_km": best_distance,
+        "eta_min": ceil(best_distance / ILLUSTRATIVE_SPEED_KMH * 60),
+        "rerouted": False,
+        "reroute_reason": None,
+        "steps": [],
+        "geometry": {"type": "LineString", "coordinates": best_coordinates},
+        "approximate": True,
+        "warning": BACKUP_WARNING,
+    }
 
 
 def _shortest_edge(graph, start, end):
@@ -217,6 +264,8 @@ def find_route(lat: float, lon: float,
     The API layer must translate NoRouteError into the contract's HTTP 404.
     """
     if _graph is None:
+        if _backup_mode:
+            return _straight_line_route(lat, lon, hazards, shelters)
         raise RuntimeError("Road graph is not loaded. Call load_graph() at startup.")
     if len(_graph) == 0 or not _inside_demo(lat, lon):
         raise NoRouteError("No route in the Edmonton demo area")

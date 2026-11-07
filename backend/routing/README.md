@@ -1,8 +1,46 @@
-# Step 1 routing
+# Road routing and straight-line backup
 
 This prototype chooses the shortest reachable road route to an open shelter
-with spare capacity. Hazards are accepted but ignored. It does not establish
-that a route is safe, hazard-free, or currently drivable.
+with spare capacity. Roads crossing core hazards are removed before routing.
+If the saved graph cannot load, it returns a straight-line estimate to the
+nearest eligible shelter whose line does not touch a core hazard. Neither
+mode establishes that a route is safe or currently drivable.
+
+`load_graph()` never downloads roads. It uses `data/edmonton_demo_drive.graphml`
+by default, or `SHEPHERD_GRAPH_PATH` if set. Missing, unreadable, malformed, or
+empty road graphs activate backup mode and log a warning instead of stopping
+backend startup. A loaded graph with blocked or disconnected roads still
+raises `NoRouteError`; it never switches to a straight line.
+
+Backup responses retain the existing single-route fields and add
+`approximate: true` and `warning`. Distance is straight-line distance; ETA is
+only illustrative at 30 km/h. `steps` is empty and these are not navigation
+instructions. Lines touching core hazards, including either endpoint, are
+rejected. Closed/full shelters and locations outside the demo area are excluded.
+
+The current API passes these extra fields through and the phone accepts them,
+but the phone does not yet display the warning. Inspect the JSON/backend log;
+do not present the phone's backup line as a verified driving route. This is
+the existing single-route compatibility mode, not full contract v2 timing.
+
+Call `load_graph()` once at startup. The selected mode lasts until restart.
+Calling `find_route()` before startup still raises an error. The routing
+Python dependencies must be installed even when using backup mode.
+
+## Try backup mode without touching the real graph
+
+From the repository root, point a fresh demo process at a nonexistent file:
+
+```powershell
+$env:SHEPHERD_GRAPH_PATH = "backend/routing/data/missing_backup_test.graphml"
+backend/routing/.venv/Scripts/python.exe -B backend/routing/demo.py
+Remove-Item Env:SHEPHERD_GRAPH_PATH
+```
+
+No file is created or deleted. Look for `"approximate": true` and the warning
+in the output. Clearing the environment variable restores the default saved
+graph for the next process. If you normally use a custom path, set it back
+instead. Importing/downloading roads remains a separate manual step below.
 
 ## Setup
 
@@ -30,9 +68,9 @@ lookups on the unprojected longitude/latitude graph. No shared files were edited
 backend/routing/.venv/Scripts/python.exe -B -m unittest discover -s backend/routing -v
 ```
 
-The tests use a tiny NetworkX graph, real OSMnx nearest-node lookups, and real
-GraphML save/load. Only the road download is mocked. No internet is needed
-once the packages are installed.
+The tests use tiny NetworkX/XML fixtures, real OSMnx nearest-node lookups,
+and temporary GraphML files. Download calls are mocked or blocked. They do
+not load the large Edmonton graph. No internet is needed once packages are installed.
 
 ## Real Edmonton demo (run separately)
 
@@ -166,25 +204,18 @@ To use an existing GraphML file, set this before starting the backend or demo:
 $env:SHEPHERD_GRAPH_PATH = "backend/routing/data/downtown_drive.graphml"
 ```
 
-Relative paths are resolved from the current working directory. An explicit
-path must point to an existing file; missing files raise a clear error without
-contacting Overpass. Load errors also propagate without a download fallback.
-Set the variable before the first `load_graph()` call; later calls reuse memory.
-
-When the variable is unset, the first run downloads driving roads from OpenStreetMap through Overpass.
+Relative paths are resolved from the current working directory. Missing or
+unloadable files select estimate-only backup mode without contacting Overpass.
+Set the variable before the first `load_graph()` call; later calls reuse the mode.
+The default graph is `backend/routing/data/edmonton_demo_drive.graphml`.
 The demo area is longitude -113.70 to -113.43 and latitude 53.42 to 53.58.
-The graph is saved at `backend/routing/data/edmonton_drive.graphml`.
-Later processes load that file; repeat calls in the same process reuse memory.
-The cache and virtual environment are ignored by the routing .gitignore.
-
-Download or file errors are shown to the caller; there is no straight-line
-fallback. If the download fails, check the reported network/server error and
-retry later. A successful offline test run does not prove a live download works.
+The data, cache, and virtual environment are ignored by the routing .gitignore.
+The preparation scripts still report import/download failures to the caller.
 
 ## What each function does
 
 - `NoRouteError`: signals that no eligible shelter is reachable in the demo graph.
-- `load_graph()`: reads saved roads, or downloads and saves them the first time.
+- `load_graph()`: reads saved roads, or enables estimate-only backup mode.
   Call it once at backend startup before calling `find_route()`.
 - `_inside_demo()`: prevents locations outside this demo area from snapping to
   unrelated boundary roads.
@@ -195,13 +226,14 @@ retry later. A successful offline test run does not prove a live download works.
   geometry, it uses that edge's endpoints.
 - `find_route()`: snaps the user and each eligible shelter to nearby nodes,
   searches directed roads by length, skips unreachable shelters, and returns
-  the shortest result using the unchanged contract fields.
+  the shortest result using the existing response fields. In backup mode it
+  uses `_straight_line_route()` and adds estimate metadata.
 - `closed_roads()`: still returns an empty list as a Step 2 placeholder.
 - `demo.main()`: loads the roads and prints a route using three sample shelters.
 
 ## Response details and limits
 
-Coordinates use `[longitude, latitude]`. Distance is the sum of selected road
+Coordinates use `[longitude, latitude]`. In road mode, distance is the sum of selected road
 edge lengths, converted from metres to kilometres. Routes begin and end at
 snapped road nodes, not exact user coordinates or building entrances. Access
 from a building to a road is not modeled. Two locations snapping to the same
@@ -210,12 +242,14 @@ node produce zero road distance and two identical coordinates.
 `eta_min` is an **illustrative estimate at a fixed 30 km/h**, rounded up. It is
 not an actual traffic estimate. The contract has no ETA-label field, so the
 label is documented here and printed by the demo; the frontend should label
-it accordingly. `steps` remains empty, `rerouted` is false, and
-`reroute_reason` is null.
+it accordingly. `steps` remains empty. Road mode sets `rerouted` and
+`reroute_reason` when hazards change the route relative to the no-hazard route.
+Backup mode uses `rerouted: false`, `reroute_reason: null`, and a separate warning.
 
 The finite demo graph can miss routes that leave the downloaded area. Snapping
 does not verify entrance access, and routing does not model turn restrictions,
-live closures, disasters, or traffic. There is no automatic rerouting.
+live traffic or forecast fire-arrival timing. Current core hazards are avoided;
+buffer zones do not change routing costs. Each request recalculates its route.
 The API owner must catch `NoRouteError` and return the contract's HTTP 404 JSON.
 
 API references used:

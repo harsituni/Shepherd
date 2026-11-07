@@ -343,6 +343,9 @@ class RoutingTests(unittest.TestCase):
 
 class GraphLoadingTests(unittest.TestCase):
     def setUp(self):
+        backup_patch = patch.object(router, "_backup_mode", False)
+        backup_patch.start()
+        self.addCleanup(backup_patch.stop)
         env_patch = patch.dict(os.environ)
         env_patch.start()
         self.addCleanup(env_patch.stop)
@@ -373,15 +376,19 @@ class GraphLoadingTests(unittest.TestCase):
             self.assertIn(list(BEND), result["geometry"]["coordinates"])
             self.download.assert_not_called()
 
-    def test_missing_environment_path_raises_clear_error(self):
+    def test_missing_environment_path_enables_backup(self):
         with tempfile.TemporaryDirectory() as folder:
             saved_file = Path(folder) / "missing.graphml"
             os.environ["SHEPHERD_GRAPH_PATH"] = str(saved_file)
-            with self.assertRaisesRegex(FileNotFoundError, "SHEPHERD_GRAPH_PATH") as error:
+            with self.assertLogs(router.__name__, level="WARNING") as logs:
                 load_graph()
-            self.assertIn(repr(str(saved_file)), str(error.exception))
+            self.assertIn(str(saved_file), logs.output[0])
+            self.assertIn("not navigation instructions", logs.output[0])
+            self.assertTrue(router._backup_mode)
             self.assertIsNone(router._graph)
             self.assertFalse(saved_file.exists())
+            result = find_route(53.54, -113.50, [], [shelter("sh_a", 3)])
+            self.assertTrue(result["approximate"])
             self.download.assert_not_called()
 
     def test_environment_path_must_be_a_file(self):
@@ -389,8 +396,10 @@ class GraphLoadingTests(unittest.TestCase):
             for saved_path in [folder, ""]:
                 with self.subTest(saved_path=saved_path):
                     os.environ["SHEPHERD_GRAPH_PATH"] = saved_path
-                    with self.assertRaisesRegex(FileNotFoundError, "SHEPHERD_GRAPH_PATH"):
+                    router._backup_mode = False
+                    with self.assertLogs(router.__name__, level="WARNING"):
                         load_graph()
+                    self.assertTrue(router._backup_mode)
                     self.assertIsNone(router._graph)
             self.download.assert_not_called()
 
@@ -399,46 +408,141 @@ class GraphLoadingTests(unittest.TestCase):
             saved_file = Path(folder) / "roads.graphml"
             saved_file.touch()
             os.environ["SHEPHERD_GRAPH_PATH"] = str(saved_file)
-            with patch.object(router.ox, "load_graphml", side_effect=ValueError("invalid graph")):
-                with self.assertRaisesRegex(ValueError, "invalid graph"):
-                    load_graph()
+            # Real malformed XML must also enter backup mode.
+            with self.assertLogs(router.__name__, level="WARNING"):
+                load_graph()
+            self.assertTrue(router._backup_mode)
             self.assertIsNone(router._graph)
             self.download.assert_not_called()
 
-    def test_download_once_then_use_saved_file(self):
-        # Pretend the download works, then check that the file is reused.
+    def test_default_saved_file_loads_once_without_download(self):
         with tempfile.TemporaryDirectory() as folder:
             saved_file = Path(folder) / "roads.graphml"
+            router.ox.save_graphml(fake_graph(), saved_file)
             with patch.object(router, "GRAPH_PATH", saved_file), \
-                 patch.object(router, "_graph", None), \
-                 patch.object(router.ox.settings, "cache_folder"), \
-                 patch.object(router.ox.settings, "use_cache"), \
-                 patch.object(router.ox, "graph_from_bbox", return_value=fake_graph()) as download:
+                 patch.object(router.ox, "load_graphml", wraps=router.ox.load_graphml) as load:
                 load_graph()
-                self.assertTrue(saved_file.exists())
                 load_graph()
-                download.assert_called_once_with(
-                    router.DEMO_BBOX, network_type="drive", retain_all=True
-                )
-                # Clear the graph from memory; it should load from disk.
+                load.assert_called_once_with(saved_file)
                 router._graph = None
                 load_graph()
-                self.assertEqual(download.call_count, 1)
+                self.assertEqual(load.call_count, 2)
                 result = find_route(53.54, -113.50, [], [shelter("sh_a", 3)])
                 self.assertEqual(result["distance_km"], 0.7)
                 self.assertIn(list(BEND), result["geometry"]["coordinates"])
+                self.assertNotIn("approximate", result)
+            self.download.assert_not_called()
 
-    def test_download_error_does_not_make_up_a_route(self):
+    def test_missing_default_file_never_downloads_or_retries(self):
         with tempfile.TemporaryDirectory() as folder:
             saved_file = Path(folder) / "roads.graphml"
             with patch.object(router, "GRAPH_PATH", saved_file), \
-                 patch.object(router, "_graph", None), \
-                 patch.object(router.ox.settings, "cache_folder"), \
-                 patch.object(router.ox.settings, "use_cache"), \
-                 patch.object(router.ox, "graph_from_bbox", side_effect=ConnectionError("offline")):
-                with self.assertRaisesRegex(ConnectionError, "offline"):
+                 patch.object(router.ox, "load_graphml") as load:
+                with self.assertLogs(router.__name__, level="WARNING") as logs:
                     load_graph()
+                    load_graph()
+                self.assertEqual(len(logs.output), 1)
+                load.assert_not_called()
+                self.download.assert_not_called()
+                self.assertTrue(router._backup_mode)
                 self.assertIsNone(router._graph)
+                self.assertFalse(saved_file.exists())
+
+    def test_unreadable_file_enables_backup(self):
+        with tempfile.TemporaryDirectory() as folder:
+            saved_file = Path(folder) / "roads.graphml"
+            saved_file.touch()
+            with patch.object(router, "GRAPH_PATH", saved_file), \
+                 patch.object(router.ox, "load_graphml", side_effect=PermissionError("denied")):
+                with self.assertLogs(router.__name__, level="WARNING"):
+                    load_graph()
+                self.assertTrue(router._backup_mode)
+                self.download.assert_not_called()
+
+    def test_empty_saved_graph_enables_backup(self):
+        with tempfile.TemporaryDirectory() as folder:
+            saved_file = Path(folder) / "roads.graphml"
+            router.ox.save_graphml(nx.MultiDiGraph(crs="EPSG:4326"), saved_file)
+            with patch.object(router, "GRAPH_PATH", saved_file):
+                with self.assertLogs(router.__name__, level="WARNING"):
+                    load_graph()
+                self.assertTrue(router._backup_mode)
+
+
+class BackupTests(unittest.TestCase):
+    def setUp(self):
+        for name, value in [("_graph", None), ("_backup_mode", True)]:
+            setting = patch.object(router, name, value)
+            setting.start()
+            self.addCleanup(setting.stop)
+        blocked = patch.object(router.ox, "graph_from_bbox", side_effect=AssertionError("No downloads"))
+        blocked.start()
+        self.addCleanup(blocked.stop)
+
+    def test_nearest_eligible_shelter_and_estimate_fields(self):
+        choices = [shelter("sh_closed", 1, is_open=False),
+                   shelter("sh_full", 1, occupancy=100),
+                   shelter("sh_overfull", 1, occupancy=101),
+                   shelter("sh_far", 3), shelter("sh_near", 2)]
+        original = deepcopy(choices)
+        result = find_route(53.54, -113.50, [], choices)
+        self.assertEqual(result["shelter_id"], "sh_near")
+        self.assertEqual(result["geometry"]["coordinates"], [list(POINTS[1]), list(POINTS[2])])
+        self.assertGreater(result["distance_km"], 0.65)
+        self.assertLess(result["distance_km"], 0.67)
+        self.assertEqual(result["eta_min"], 2)
+        self.assertTrue(result["approximate"])
+        self.assertIn("not navigation instructions", result["warning"])
+        self.assertEqual(result["steps"], [])
+        self.assertFalse(result["rerouted"])
+        self.assertIsNone(result["reroute_reason"])
+        self.assertEqual(choices, original)
+        json.dumps(result, allow_nan=False)
+
+    def test_blocked_nearest_line_selects_clear_shelter(self):
+        fire = hazard_box(-113.496, 53.539, -113.494, 53.541)
+        result = find_route(53.54, -113.50, [fire], [shelter("sh_near", 2), shelter("sh_clear", 4)])
+        self.assertEqual(result["shelter_id"], "sh_clear")
+
+    def test_crossing_touching_and_endpoint_hazards_are_rejected(self):
+        fires = [hazard_box(-113.496, 53.539, -113.494, 53.541),
+                 hazard_box(-113.496, 53.540, -113.494, 53.541),
+                 hazard_box(-113.501, 53.539, -113.499, 53.541),
+                 hazard_box(-113.491, 53.539, -113.489, 53.541)]
+        for fire in fires:
+            with self.subTest(fire=fire), self.assertRaises(NoRouteError):
+                find_route(53.54, -113.50, [fire], [shelter("sh_a", 2)])
+
+    def test_same_location_is_rejected_inside_fire(self):
+        fire = hazard_box(-113.501, 53.539, -113.499, 53.541)
+        with self.assertRaises(NoRouteError):
+            find_route(53.54, -113.50, [fire], [shelter("sh_here", 1)])
+        result = find_route(53.54, -113.50, [], [shelter("sh_here", 1)])
+        self.assertEqual(result["distance_km"], 0)
+
+    def test_no_eligible_shelter_raises(self):
+        for choices in [[], [shelter("sh_closed", 2, is_open=False)],
+                        [shelter("sh_full", 2, occupancy=100)]]:
+            with self.subTest(choices=choices), self.assertRaises(NoRouteError):
+                find_route(53.54, -113.50, [], choices)
+
+    def test_demo_bounds_still_apply(self):
+        with self.assertRaises(NoRouteError):
+            find_route(0, 0, [], [shelter("sh_a", 2)])
+        outside = shelter("sh_outside", 2)
+        outside["geometry"]["coordinates"] = [0, 0]
+        with self.assertRaises(NoRouteError):
+            find_route(53.54, -113.50, [], [outside])
+
+    def test_buffer_is_not_a_core_closure(self):
+        fire = hazard_box(-113.51, 53.53, -113.47, 53.56, zone="buffer")
+        result = find_route(53.54, -113.50, [fire], [shelter("sh_a", 2)])
+        self.assertTrue(result["approximate"])
+
+    def test_loaded_disconnected_roads_do_not_use_backup(self):
+        with patch.object(router, "_graph", fake_graph()):
+            with self.assertRaises(NoRouteError):
+                find_route(53.54, -113.50, [], [shelter("sh_disconnected", 5)])
 
 
 if __name__ == "__main__":
