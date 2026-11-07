@@ -24,8 +24,8 @@ Swapping in a real engine:
 
 Usage:
     python -m backend.sim.wildfire                   # ASCII animation, default wind
-    python engine/spread0.py 0                    # calm: circle
-    python engine/spread0.py 35 270 0.9           # wind_kmh wind_from_deg fuel_dryness
+    python -m backend.sim.wildfire 0                 # calm: circle
+    python -m backend.sim.wildfire 35 270 0.9        # wind_kmh wind_from_deg fuel_dryness
 """
 
 from __future__ import annotations
