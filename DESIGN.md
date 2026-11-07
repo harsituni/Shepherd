@@ -22,6 +22,7 @@ colors:
   danger-title: "#8A2F06"
   danger-text: "#6B3A1F"
   danger-icon: "#B4400B"
+  focus: "#FEBA35"
 typography:
   headline:
     fontFamily: "Public Sans, system-ui, sans-serif"
@@ -179,12 +180,13 @@ The visual rejections are explicit and binding (see Do's and Don'ts): no gradien
 A cool, low-saturation blue-and-white civic palette, with one warm signal colour kept for danger.
 
 ### Primary
-- **Service Blue** (#0070C4): the one primary-action and route colour. Primary buttons, focus rings, range accents, the tab underline, evacuation routes, and the dashed predicted-spread rings. On the phone it is also the ETA figure and the "you" dot. Hover deepens to **Pressed Blue** (#005A9E).
+- **Service Blue** (#0070C4): the one primary-action and route colour. Primary buttons, range accents, the tab underline, evacuation routes, and the dashed predicted-spread rings. On the phone it is also the "you" dot and the Advisory severity label. Hover deepens to **Pressed Blue** (#005A9E).
 - **Masthead Navy** (#0B3D6E): headers, shelter markers, selected-state fills (choice tiles and segmented controls), outline-button borders and labels, icon-button glyphs, the toast and the "Need help" action. **Deep Navy** (#0A3360) is a reserved token and currently unused.
 
 ### Signal
 - **Hazard Orange** (#D9480F): the active hazard only, used as fills, outlines, the incident-banner dot, the start marker and report-pin strokes.
 - **Closure Red** (#C62828): closed roads, the "Roads closed" stat and SOS reports only.
+- **Focus Gold** (#FEBA35): the keyboard focus ring only, as on Alberta.ca: a 3px outline. Never decoration, never a fill. Gold on white is about 1.7:1, below WCAG 2.2's 3:1 guidance for focus indicators, so the 3px width is what carries it. If an accessibility review flags it, keep the gold and add a 1px navy ring inside it rather than switching back to blue.
 - **Evacuation Tint family**, shared by both surfaces for evacuation-order alerts and "no safe route" states: background **Ember Wash** (#FFF3EC), border **Ember Edge** (#F6D2BE), title **Ember Ink** (#8A2F06), body **Ember Text** (#6B3A1F) and icon **Ember Mark** (#B4400B). Ember Ink is also the fill of the selected "Evacuation" severity segment (white text, which passes 4.5:1 where Hazard Orange would not).
 
 ### Neutral
@@ -204,7 +206,7 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 
 **The One Tint Rule.** Sky Tint means "this is the alert". If the banner and a hint look the same, the banner has lost its authority, so inline hints and notices are plain text with an icon.
 
-**The Quiet Basemap Rule.** The OpenStreetMap raster is desaturated (saturation −0.85, contrast −0.15, opacity 0.6) over Map Paper, so Shepherd's own layers are always the loudest thing on the map.
+**The Quiet Basemap Rule.** The OpenStreetMap raster is desaturated (saturation −0.85, contrast −0.15, opacity 0.8) over Map Paper, so Shepherd's own layers are always the loudest thing on the map while street names stay readable on a phone outdoors.
 
 ## Typography
 
@@ -215,7 +217,7 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 ### Hierarchy
 One scale for both surfaces, exposed as tokens in each `index.css`: `--fs-sm` 14px, `--fs-body` 16px, `--fs-brand` 18px, `--fs-h` 20px. Nothing on screen is smaller than 14px except MapLibre's attribution.
 
-- **Headline** (700, 26–28px, line-height 1.1, tabular): stat tile values (26px) and the phone ETA (28px). Numbers, not sentences.
+- **Headline** (700, 26px, line-height 1.1, tabular): dashboard stat tile values only. Numbers, not sentences. The phone has no big stat number; its ETA reads inline (see Route summary).
 - **Heading** (700, 20px): phone shelter name, report sheet heading.
 - **Title** (700, 18px): brand name, dashboard panel titles such as "Simulate & predict" (sentence case, no uppercase tracking).
 - **Body** (400–600, 16px): the default size. Alert titles, banner text, phone tabs, inline notices, list item titles, the next-turn instruction, primary button labels, inputs and selects.
@@ -232,7 +234,7 @@ One scale for both surfaces, exposed as tokens in each `index.css`: `--fs-sm` 14
 ## Layout
 
 - **Dashboard:** a full-height column with a navy header (padding 14px 28px), the incident banner (10px 28px), then a wrapping three-column flex row: controls (260–300px, 24px padding), the map centre (grows, map minimum height 620px) with a history slider bar along the bottom, and a side panel (340–380px, 24px padding) with a 2×2 stat-tile grid and tabs. The map has the legend at bottom-left and zoom buttons at top-right, both inset 16px.
-- **Phone:** a single column, max 480px wide and 100dvh tall, centred on Map Paper with 1px side borders on desktop. Navy header, alert banner, tabs, scrolling content (route map 290px tall), and a fixed three-button action bar that respects `env(safe-area-inset-bottom)`.
+- **Phone:** a single column, max 480px wide and 100dvh tall, centred on Map Paper with 1px side borders on desktop. Navy header, alert banner, tabs (Route · Safety tips · Alerts), scrolling content, and a fixed three-button action bar that respects `env(safe-area-inset-bottom)`. The route map is `min(440px, 55dvh)` tall until a location is set (the map is the whole task then), and 290px after, with a one-row map key under it.
 - **Spacing rhythm:** 4 / 6 / 8 / 12 / 14 / 16 / 20 / 24 px, with a 28px horizontal gutter on the dashboard chrome and 20px on the phone. Gaps inside groups are 6–8px; between sections, 14–24px.
 - **Responsive:** below 1100px the dashboard panels stack and the separators move from left/right borders to top/bottom (map minimum 480px). Below 600px the gutters drop to 16px.
 
@@ -264,7 +266,7 @@ Plain and confident, with solid fills and no ornament.
 - **Outline (secondary):** white with a 1px navy border and a navy 600 14px label, 40px tall on the dashboard (e.g. "Back to live") and 48px in the phone action bar.
 - **Icon button:** 44×44px square with a 1px navy border and navy glyph (dashboard). The play/pause button is the panel's one solid Service Blue button. Phone close buttons are borderless and muted.
 - **Disabled:** a distinct flat style, never an opacity fade. Frost Border outline, Map Paper fill, Slate Faint label. A disabled fieldset turns its labels and slider accents Slate Faint.
-- **Focus:** a 2px Service Blue outline with a 2px offset on every focusable control.
+- **Focus:** a 3px Focus Gold outline with a 2px offset on every focusable control. Tabs, segmented-control buttons and the Live/Drill switch draw it inside (`outline-offset: -3px`) so the edges aren't clipped.
 
 **The One Solid Rule.** Each area has at most one solid-filled button: play/pause in the controls panel, "Send update" in Notify, "Start navigation" in the phone route view, and "Need help" in the phone action bar. Everything beside it is an outline. Never give three side-by-side buttons three different treatments.
 
@@ -288,8 +290,19 @@ A 2×2 grid of four tiles only: People at risk, Roads closed, Active reroutes an
 
 ### Incident banner and alerts
 - **Incident banner (dashboard):** a 16px Sky Tint strip with a bottom border, an 8px hazard-orange status dot (grey when idle), a bold hazard name and a muted status line.
-- **Alert banner (phone):** an icon plus a 16px 700 navy title and a 14px muted line on Sky Tint. An evacuation order switches the whole banner to the Evacuation Tint family.
+- **Alert banner (phone):** an icon plus a 16px 700 navy title and a 14px muted line (at most two lines) on Sky Tint. It shows the most severe active government notification, else the nearest hazard. The second line is the hazard relation when known ("Fire is 2.4 km west of you, moving east."). Advisory has a blue info icon, Alert a navy warning icon, and an evacuation order (or being inside the hazard) switches the whole banner to the Evacuation Tint family.
+- **Notification pop-up (phone):** slides down over the header when a new government notification arrives (220ms ease-out, none under reduced motion). A white card with 8px corners, a 1px border and the system's one soft shadow (`0 8px 24px rgba(11,37,69,0.18)`). A severity icon, a 14px 600 severity · time line, a 16px 700 title, and "Tap to read" expanding to the message; a close button dismisses it. Evacuation orders use the Ember Edge border.
+- **Severity colours:** Advisory = Service Blue, Alert = Masthead Navy, Evacuation order = Ember Ink text with an Ember Mark icon. These colour the severity label and icon only, never a left-border stripe or fill.
 - **Inline notice (phone):** plain 16px text with a leading stroke icon, with no box, fill or border. Hints ("Tap the map…") are Slate Muted; the reroute notice is navy 600 so it reads as news.
+
+### Route summary (phone)
+The shelter name as a 20px 700 heading, then one 16px line: **ETA** in Ink 700, then distance and "% full" in Slate Muted, separated by middots ("**6 min** · 4.1 km · 41% full"). No eyebrow label and no oversized ETA figure.
+
+### Safety tips (phone)
+A numbered list. Each step number is a navy 700 16px tabular "1." in a 32px gutter, with a 16px bold instruction and a 14px muted explanation, rows separated by Frost Divider lines.
+
+### Alerts tab (phone)
+Government notifications, newest first, as plain divided rows: the coloured severity · time line, a 16px bold title and a 14px muted message. The empty state is one muted sentence.
 
 ### Feed and report lists
 Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 title (SOS in Closure Red), a 14px Slate Faint time and location, and a 14px muted note. Hovering a row fills it with Map Paper, and every row is at least 44px tall.
@@ -300,10 +313,11 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 titl
 
 ### Map layers (signature)
 - **Hazard core:** Hazard Orange fill at 0.85 opacity with a 1.5px orange outline. **Buffer:** orange at 0.3 opacity.
-- **Predicted spread:** Service Blue fill at 0.06 with a 1.5px dashed line (`[3, 3]`, 0.6 opacity), labelled T+30 / T+60 in navy 600 14px with a halo.
+- **Predicted spread** (both surfaces): features with a `predicted_min` property. Service Blue fill at 0.06 with a 1.5px dashed line (`[3, 3]`; 0.6 opacity on the dashboard, 0.7 on the phone), labelled T+30 / T+60 at the leading edge in navy 600 14px with a halo. They are never drawn or counted as the current hazard.
 - **Route (phone):** a 5px Service Blue line over a 9px white casing, with round caps and joins, so it stays legible over grey tiles and orange hazards. Never cyan or any off-palette colour.
 - **Closed road:** Closure Red, solid when closed and dashed when slowed.
-- **Shelter:** a 20px navy square (4px corners, 2px white border) with a 600 14px label.
+- **Shelter:** a 20px navy square (4px corners, 2px white border) with a 600 14px label. On the phone only the route's destination is labelled, on whichever side of the square has more room.
+- **Map key (phone):** a one-row, wrapping key under the map listing only what is drawn (Hazard now, Predicted spread, Your route, Shelter, You), 14px Slate Muted with small swatches. The dashboard keeps its floating legend.
 - **Report pin:** a white circle with a 2.5px hazard-orange stroke. **Priority resident:** a navy-outlined diamond. **You:** an 18px blue dot with a 3px white ring.
 
 ## Do's and Don'ts
@@ -325,7 +339,7 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 titl
 - **Don't** use gradients of any kind: backgrounds, buttons, text or glows.
 - **Don't** use emoji as icons.
 - **Don't** use glassmorphism or blur, neon glows, coloured left-border accent cards, oversized rounded "bubble" cards or bouncy animations.
-- **Don't** use orange or red for anything except the hazard and closed roads.
+- **Don't** use orange or red for anything except the hazard and closed roads, or Focus Gold for anything but the focus ring.
 - **Don't** use pill shapes (999px corners) or 10px "bubble" controls.
 - **Don't** fade disabled controls with `opacity`, and never disable "Need help".
 - **Don't** set text smaller than 14px, or use small uppercase tracked eyebrow labels.
