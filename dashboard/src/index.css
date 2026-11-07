@@ -13,7 +13,12 @@
   --map-bg: #f3f7fb;
   --hazard: #d9480f;
   --closed: #c62828;
-  --grey-chip: #f1f4f7;
+  --surface: #ffffff;
+  --danger-bg: #fff3ec;
+  --danger-border: #f6d2be;
+  --danger-title: #8a2f06;
+  --danger-text: #6b3a1f;
+  --danger-icon: #b4400b;
 
   --radius-control: 6px;
   --radius-card: 8px;
@@ -133,7 +138,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-size: 13px; font-weight: 500; color: var(--text);
 }
 .segmented button[aria-pressed='true'] { background: var(--tint); color: var(--navy); font-weight: 600; }
-.segmented button.severity-evac[aria-pressed='true'] { background: #fff3ec; color: #8a2f06; }
+.segmented button.severity-evac[aria-pressed='true'] { background: var(--danger-bg); color: var(--danger-title); }
 
 .conditions { margin: 0; padding: 0; border: 0; min-width: 0; }
 .conditions:disabled { opacity: 0.6; }
