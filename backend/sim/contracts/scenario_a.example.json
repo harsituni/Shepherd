@@ -1,0 +1,32 @@
+{
+  "schema": "v1",
+  "scenario_id": "fmm-demo-1",
+  "run_id": "fmm-demo-1-r1",
+  "t0": "2026-11-08T20:00:00Z",
+  "horizon_min": 360,
+  "step_min": 15,
+  "bbox": [-111.60, 56.62, -111.25, 56.80],
+  "initial_perimeter": {
+    "type": "Polygon",
+    "coordinates": [[
+      [-111.5060, 56.6985],
+      [-111.5000, 56.6970],
+      [-111.4940, 56.6990],
+      [-111.4945, 56.7020],
+      [-111.5010, 56.7035],
+      [-111.5065, 56.7015],
+      [-111.5060, 56.6985]
+    ]]
+  },
+  "weather": [
+    { "t_min": 0,   "wind_speed_ms": 6.5, "wind_dir_deg": 270, "temp_c": 24, "rh_pct": 18, "precip_mm": 0 },
+    { "t_min": 60,  "wind_speed_ms": 8.0, "wind_dir_deg": 250, "temp_c": 26, "rh_pct": 15, "precip_mm": 0 },
+    { "t_min": 120, "wind_speed_ms": 8.5, "wind_dir_deg": 250, "temp_c": 27, "rh_pct": 14, "precip_mm": 0 },
+    { "t_min": 180, "wind_speed_ms": 9.0, "wind_dir_deg": 240, "temp_c": 27, "rh_pct": 14, "precip_mm": 0 },
+    { "t_min": 240, "wind_speed_ms": 7.5, "wind_dir_deg": 200, "temp_c": 25, "rh_pct": 17, "precip_mm": 0 },
+    { "t_min": 300, "wind_speed_ms": 6.5, "wind_dir_deg": 180, "temp_c": 23, "rh_pct": 20, "precip_mm": 0 },
+    { "t_min": 360, "wind_speed_ms": 6.0, "wind_dir_deg": 180, "temp_c": 21, "rh_pct": 24, "precip_mm": 0 }
+  ],
+  "n_ensemble": 1,
+  "fbp": { "fuel_type": "M-1", "pc": 50, "ffmc": 92, "bui": 90 }
+}

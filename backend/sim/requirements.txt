@@ -1,0 +1,6 @@
+numpy
+pyproj
+shapely>=2
+rasterio
+pydantic>=2
+pytest
