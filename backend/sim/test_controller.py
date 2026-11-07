@@ -101,6 +101,38 @@ class SimControllerTests(unittest.TestCase):
         self.assertEqual(len(after), len(before))
         self.assertTrue(c.features())
 
+    def test_forecast_idle_empty(self):
+        c = SimController()
+        body = c.forecast()
+        self.assertEqual(body["outlines"], [])
+        self.assertEqual(body["horizon_min"], 120)
+        self.assertEqual(body["sim_time"], 0)
+
+    def test_forecast_running_has_eight_outlines(self):
+        c = SimController()
+        c.start(
+            {
+                "scenario": "wildfire",
+                "lat": 53.535,
+                "lon": -113.663,
+                "wind_kmh": 25,
+                "wind_from_deg": 270,
+            }
+        )
+        body = c.forecast()
+        self.assertEqual(body["horizon_min"], 120)
+        ts = [o["t_min"] for o in body["outlines"]]
+        self.assertEqual(ts, [15, 30, 45, 60, 75, 90, 105, 120])
+        for o in body["outlines"]:
+            self.assertEqual(o["properties"]["zone"], "predicted")
+            self.assertEqual(o["id"], f"fc_{o['t_min']}")
+            ring = o["geometry"]["coordinates"][0]
+            self.assertEqual(ring[0], ring[-1])
+            self.assertGreaterEqual(len(ring), 4)
+        # Live footprint unchanged after forecast expand
+        self.assertEqual(c.sim_time, 0)
+        self.assertTrue(c.features())
+
 
 if __name__ == "__main__":
     unittest.main()

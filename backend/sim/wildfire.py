@@ -119,18 +119,67 @@ class WildfireSim:
         self.minutes += minutes
         self._burn_until(self.minutes)
 
+    def forecast(self, horizon_min: int = 120) -> list[dict]:
+        """Return predicted outline Features at 15-min steps up to horizon_min.
+
+        Each item includes top-level ``t_min`` plus a GeoJSON Feature with
+        ``zone: "predicted"`` (contract GET /forecast).
+        Does not change the live sim footprint.
+        """
+        steps = [t for t in range(15, horizon_min + 1, 15)]
+        burned_snap = set(self.burning)
+        arrival_snap = dict(self.arrival)
+        frontier_snap = list(self._frontier)
+
+        self._burn_until(horizon_min)
+        arrival_full = dict(self.arrival)
+
+        self.burning = burned_snap
+        self.arrival = arrival_snap
+        self._frontier = frontier_snap
+        heapq.heapify(self._frontier)
+
+        outlines: list[dict] = []
+        for t_min in steps:
+            cells = {cell for cell, at in arrival_full.items() if at <= t_min}
+            if not cells:
+                cells = set(burned_snap)
+            ring = self._ring_for_cells(cells)
+            outlines.append({
+                "t_min": t_min,
+                "type": "Feature",
+                "id": f"fc_{t_min}",
+                "properties": {
+                    "kind": "wildfire",
+                    "t_min": t_min,
+                    "zone": "predicted",
+                },
+                "geometry": {"type": "Polygon", "coordinates": [ring]},
+            })
+        return outlines
+
     def features(self) -> list[dict]:
-        cx = sum(c for c, _ in self.burning) / len(self.burning)
-        cy = sum(r for _, r in self.burning) / len(self.burning)
-        ring = [self._to_lonlat(*self._edge(cx, cy, 2 * math.pi * i / OUTLINE_POINTS))
-                for i in range(OUTLINE_POINTS)]
-        ring.append(ring[0])
+        ring = self._ring_for_cells(self.burning)
         return [{
             "type": "Feature",
             "id": "hz_sim_fire",
             "properties": {"kind": "wildfire", "zone": "core", "source": "sim"},
             "geometry": {"type": "Polygon", "coordinates": [ring]},
         }]
+
+    def _ring_for_cells(self, cells: set) -> list[list[float]]:
+        if not cells:
+            # Degenerate point-ring at ignition so callers always get a polygon.
+            lon, lat = self.lon, self.lat
+            return [[lon, lat], [lon, lat], [lon, lat], [lon, lat]]
+        cx = sum(c for c, _ in cells) / len(cells)
+        cy = sum(r for _, r in cells) / len(cells)
+        ring = [
+            self._to_lonlat(*self._edge_in(cells, cx, cy, 2 * math.pi * i / OUTLINE_POINTS))
+            for i in range(OUTLINE_POINTS)
+        ]
+        ring.append(ring[0])
+        return ring
 
     def _burn_until(self, t):
         # Dijkstra, paused at time t: pop cells that have caught fire, and offer each
@@ -155,13 +204,16 @@ class WildfireSim:
                     heapq.heappush(self._frontier, (reach, nxt))
 
     def _edge(self, cx, cy, angle):
-        # Walk out from the burnt area's centre in half-cell steps until leaving the
-        # burning cells, then return the last burning cell's outer edge as (east_m, north_m)
+        return self._edge_in(self.burning, cx, cy, angle)
+
+    def _edge_in(self, cells, cx, cy, angle):
+        # Walk out from the area's centre in half-cell steps until leaving the
+        # cells, then return the last cell's outer edge as (east_m, north_m)
         dx, dy = math.sin(angle), math.cos(angle)
         dist = 0.0
         while True:
             nxt = dist + 0.5
-            if (round(cx + nxt * dx), round(cy + nxt * dy)) not in self.burning:
+            if (round(cx + nxt * dx), round(cy + nxt * dy)) not in cells:
                 break
             dist = nxt
         dist += 0.5
