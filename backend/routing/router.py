@@ -518,9 +518,13 @@ def find_routes(lat: float, lon: float, arrival_min_fn,
         option["approximate"] = option.get("approximate", False)
         warning = option.get("warning", "Road geometry with illustrative travel times only.")
         warning += " Forecast checks sample the route; they are not a safety guarantee."
-        if not option["forecast_complete"] and option["status"] != "blocked":
-            warning += " Some fire arrival times are unknown; any margin or deadline covers known samples only."
-            option["clear_until_label"] = "Fire timing unknown; no safety guarantee"
+        # Incomplete forecast is a warning only — do not replace a missing
+        # clear-until with an emergency-sounding label when no fire was sampled.
+        if not option.get("forecast_complete", True) and option["status"] != "blocked":
+            warning += (
+                " Some fire arrival times are unknown; any margin or deadline "
+                "covers known samples only."
+            )
         option["warning"] = warning
         options.append(option)
         if option["status"] == "blocked":
@@ -531,6 +535,12 @@ def find_routes(lat: float, lon: float, arrival_min_fn,
         if option["status"] != "blocked":
             usable.append(option)
     if not usable:
+        # Outside the demo box every shelter attempt fails the same way — don't
+        # blame the fire forecast for a pin that was never routable.
+        if not options and excluded:
+            reasons = [entry["reason"] for entry in excluded]
+            if reasons and all("demo area" in reason for reason in reasons):
+                raise NoRouteError("No route in the Edmonton demo area")
         raise NoRouteError("No usable route under the supplied fire forecast")
 
     # No returned deadline is not a numeric safety margin.
