@@ -5,7 +5,7 @@ import AlertBanner from './components/AlertBanner.jsx'
 import MapView from './components/MapView.jsx'
 import { AlertsTab, mostSevere, NotificationPopup } from './components/Notifications.jsx'
 import RouteTab from './components/RouteTab.jsx'
-import TipsTab from './components/TipsTab.jsx'
+import { CrookIcon } from './components/icons.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
 
 // Resolves to [lon, lat], or null if unavailable, denied or slow.
@@ -23,7 +23,6 @@ function deviceLocation() {
 
 const TABS = [
   ['route', 'Route'],
-  ['tips', 'Safety tips'],
   ['gov', 'Alerts'],
 ]
 
@@ -142,7 +141,12 @@ export default function App() {
   return (
     <div className="phone">
       <header className="header">
-        <span className="brand">Shepherd</span>
+        <span className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <CrookIcon />
+          </span>
+          Shepherd
+        </span>
         <span className="city">Edmonton</span>
       </header>
 
@@ -189,7 +193,6 @@ export default function App() {
             onStartNavigation={() => setFocusKey(Date.now())}
           />
         </div>
-        {tab === 'tips' && <TipsTab />}
         {tab === 'gov' && <AlertsTab notifications={notifications} />}
       </main>
 
