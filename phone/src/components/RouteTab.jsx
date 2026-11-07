@@ -1,5 +1,6 @@
 import { isCurrentCore, isPredicted } from '../geo.js'
 import { PinIcon, RerouteIcon, TurnIcon } from './icons.jsx'
+import EvacuateControls from './EvacuateControls.jsx'
 import RouteOptions from './RouteOptions.jsx'
 
 function percentFull(shelters, shelterId) {
@@ -40,10 +41,28 @@ export default function RouteTab({
   routeError,
   shelters,
   onChoose,
-  onStartNavigation,
+  trip,
+  evacMode,
+  onEvacMode,
+  onStartEvacuating,
+  onStopEvacuating,
 }) {
+  const controls = (
+    <EvacuateControls
+      route={route}
+      trip={trip}
+      mode={evacMode}
+      onMode={onEvacMode}
+      onStart={onStartEvacuating}
+      onStop={onStopEvacuating}
+    />
+  )
+
   let details
-  if (!location) {
+  if (trip) {
+    // Evacuating: just the progress and Stop (no switching routes mid-trip).
+    details = controls
+  } else if (!location) {
     details = (
       <div className="notice">
         <PinIcon />
@@ -99,9 +118,7 @@ export default function RouteTab({
             </div>
           </div>
         )}
-        <button type="button" className="btn-primary" onClick={onStartNavigation}>
-          Start navigation
-        </button>
+        {controls}
       </>
     )
   } else {
@@ -130,9 +147,7 @@ export default function RouteTab({
             </div>
           </div>
         )}
-        <button type="button" className="btn-primary" onClick={onStartNavigation}>
-          Start navigation
-        </button>
+        {controls}
       </>
     )
   }

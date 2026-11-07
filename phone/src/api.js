@@ -241,6 +241,13 @@ export async function getNotifications() {
   }
 }
 
+// Evacuee heartbeat (contract v2): { id, lat, lon, route_id, route_status, shelter_id },
+// upserted by id. Sent every ~2 s while evacuating so the dashboard can show the dot.
+export async function postEvacuee(body) {
+  if (!USE_FIXTURES) return request('/evacuees', { method: 'POST', body: JSON.stringify(body) })
+  return { id: body.id, received: true }
+}
+
 // kind: fire | flooded_road | blocked_road | safe | sos | other (other: not in contract v1 yet)
 export async function postReport({ kind, lat, lon, note }) {
   const body = { kind, lat, lon, ...(note ? { note } : {}) }

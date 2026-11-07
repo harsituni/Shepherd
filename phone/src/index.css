@@ -244,6 +244,31 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .status-blocked .route-card-status { color: var(--closed); }
 .status-blocked .route-card-clear { color: var(--muted); }
 
+/* ---------- start evacuating (issue #56) ---------- */
+
+.evacuate-controls { display: flex; flex-direction: column; gap: 10px; }
+.evacuate-controls .muted { margin: 0; }
+/* Segmented control: one bordered strip, joined buttons, navy fill when selected. */
+.segmented { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.segmented button {
+  flex: 1; min-height: 44px; padding: 0 8px; border: 0; background: #fff;
+  color: var(--text); font-size: var(--fs-sm); font-weight: 500; cursor: pointer;
+}
+.segmented button + button { border-left: 1px solid var(--border); }
+.segmented button[aria-checked='true'] { background: var(--navy); color: #fff; font-weight: 600; }
+.segmented button:focus-visible { outline-offset: -3px; }
+.btn-outline {
+  min-height: 48px; padding: 0 16px; border: 1px solid var(--navy); border-radius: var(--radius);
+  background: #fff; color: var(--navy); font-size: var(--fs-body); font-weight: 600; cursor: pointer;
+}
+.btn-outline:hover { background: var(--map-bg); }
+.trip-status { display: flex; flex-direction: column; gap: 6px; color: var(--text); }
+.trip-status strong { font-size: var(--fs-h); font-weight: 700; line-height: 1.25; }
+.trip-status .muted { margin: 0; }
+.trip-status .btn-outline { margin-top: 8px; }
+.trip-bar { display: block; height: 6px; background: var(--divider); border-radius: 3px; overflow: hidden; }
+.trip-bar span { display: block; height: 100%; background: var(--blue); }
+
 .shelter { display: flex; flex-direction: column; gap: 4px; }
 .shelter-name { font-size: var(--fs-h); font-weight: 700; line-height: 1.25; }
 .trip { font-size: var(--fs-body); color: var(--muted); }
