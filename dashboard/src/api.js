@@ -1,6 +1,7 @@
 import { API_URL, USE_FIXTURES } from './config.js'
 import hazardsFixture from '../../shared/fixtures/hazards.json'
 import sheltersFixture from '../../shared/fixtures/shelters.json'
+import reportsFixture from '../../shared/fixtures/reports.json'
 
 // ---------- real backend ----------
 
@@ -74,6 +75,11 @@ export async function getHazards() {
 export async function getShelters() {
   if (!USE_FIXTURES) return request('/shelters')
   return structuredClone(sheltersFixture)
+}
+
+export async function getReports() {
+  if (!USE_FIXTURES) return request('/reports')
+  return structuredClone(reportsFixture)
 }
 
 export async function postHazard({ kind, lat, lon, radius_m }) {

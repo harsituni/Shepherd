@@ -237,6 +237,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .empty { margin: 0; padding: 12px 0; font-size: 13px; color: var(--muted); }
 
+.report-list { list-style: none; margin: 0; padding: 0; }
+.report-list li + li { border-top: 1px solid var(--divider); }
+.report-item {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; min-height: 44px;
+  padding: 10px 4px; border: 0; background: #fff; text-align: left; font: inherit; color: var(--text);
+}
+.report-item:hover { background: var(--tint); }
+.report-row { display: flex; justify-content: space-between; gap: 8px; }
+.report-kind { font-size: 14px; font-weight: 600; }
+.report-kind.sos { color: var(--closed); }
+.report-time, .report-loc { font-size: 12px; color: var(--muted-2); }
+.report-note { font-size: 13px; color: var(--muted); }
+
 .btn-primary {
   min-height: 48px; border: 0; border-radius: var(--radius-control);
   background: var(--blue); color: #fff; font-size: 15px; font-weight: 600;

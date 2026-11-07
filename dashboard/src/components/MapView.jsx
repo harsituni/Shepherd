@@ -80,7 +80,7 @@ function nowElement() {
   return el
 }
 
-export default function MapView({ hazards, shelters, onMapClick }) {
+export default function MapView({ hazards, shelters, reports, focus, onMapClick }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const shelterMarkers = useRef(new Map())
@@ -126,6 +126,19 @@ export default function MapView({ hazards, shelters, onMapClick }) {
         type: 'line',
         source: 'hazards',
         paint: { 'line-color': HAZARD, 'line-width': 1.5 },
+      })
+      // Phone reports: white dot with an orange ring (matches the legend swatch).
+      map.addSource('reports', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'report-pins',
+        type: 'circle',
+        source: 'reports',
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#FFFFFF',
+          'circle-stroke-color': HAZARD,
+          'circle-stroke-width': 2.5,
+        },
       })
       setLoaded(true)
     })
@@ -182,6 +195,20 @@ export default function MapView({ hazards, shelters, onMapClick }) {
     }))
     syncMarkers(map, shelterMarkers.current, items)
   }, [shelters, loaded])
+
+  // Reports: pins redrawn on every poll.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map) return
+    map.getSource('reports')?.setData(reports ?? EMPTY)
+  }, [reports, loaded])
+
+  // Centre on a report picked from the side panel.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map || !focus) return
+    map.flyTo({ center: focus.lngLat, zoom: Math.max(map.getZoom(), 14), duration: 800 })
+  }, [focus, loaded])
 
   return (
     <div className="map-wrap">
