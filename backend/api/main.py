@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import Any, Optional
@@ -13,8 +15,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from backend.routing.router import NoRouteError, check_route, find_routes, load_graph
+from backend.routing.router import (
+    NoRouteError, check_route, find_routes, find_routes_v3, graph_bbox, load_graph, prepare_forecast,
+)
 from backend.sim.controller import SimController
+
+log = logging.getLogger(__name__)
+
+# Routing v3 (2-4 fire-checked road routes) stays opt-in until the phone ships.
+ROUTING_VERSION = os.environ.get("SHEPHERD_ROUTING", "v2").strip().lower()
 
 controller = SimController()
 dropped_hazards: list[dict] = []
@@ -128,6 +137,9 @@ async def _sim_loop() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     load_graph()
+    if ROUTING_VERSION == "v3":
+        # The fire must cover every road routing can use, or far roads would look clear.
+        controller.set_domain(graph_bbox())
     task = asyncio.create_task(_sim_loop())
     try:
         yield
@@ -300,9 +312,20 @@ def get_route(
     lat: float = Query(...),
     lon: float = Query(...),
     check_route_id: Optional[str] = Query(None),
+    debug: bool = Query(False),
 ) -> dict:
-    """Multi-option leave-by routes (contract v2)."""
+    """Multi-option leave-by routes (contract v2; v3 with SHEPHERD_ROUTING=v3)."""
     try:
+        if ROUTING_VERSION == "v3":
+            return find_routes_v3(
+                lat,
+                lon,
+                controller.oracle(),
+                SHELTERS,
+                sim_time=controller.sim_time,
+                check_route_id=check_route_id,
+                debug=debug,
+            )
         if check_route_id:
             return check_route(
                 lat,
@@ -393,9 +416,11 @@ def post_sim_start(body: SimStart) -> dict:
     if body.scenario == "flood":
         return _unsupported_flood()
     try:
-        return controller.start(body.model_dump())
+        state = controller.start(body.model_dump())
     except ValueError:
         return _unsupported_flood()
+    _prepare_routing()
+    return state
 
 
 @app.post("/sim/pause")
@@ -421,4 +446,16 @@ def post_sim_speed(body: SimSpeed) -> dict:
 @app.post("/sim/wind")
 def post_sim_wind(body: SimWind) -> dict:
     """Change wind; kicks off spread/forecast recompute (contract v2)."""
-    return controller.set_wind(body.wind_kmh, body.wind_from_deg)
+    state = controller.set_wind(body.wind_kmh, body.wind_from_deg)
+    _prepare_routing()
+    return state
+
+
+def _prepare_routing() -> None:
+    """v3: build the new forecast's road deadlines now, not on the next phone's /route."""
+    if ROUTING_VERSION != "v3":
+        return
+    try:
+        prepare_forecast(controller.oracle())
+    except Exception:  # noqa: BLE001 - routing builds these lazily anyway
+        log.exception("routing v3: could not prepare the forecast ahead of /route")

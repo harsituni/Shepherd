@@ -86,6 +86,33 @@ Call `load_graph()` once at startup. The selected mode lasts until restart.
 Calling `find_route()` before startup still raises an error. The routing
 Python dependencies must be installed even when using backup mode.
 
+## Routing v3 (behind `SHEPHERD_ROUTING=v3`)
+
+Start the API with `SHEPHERD_ROUTING=v3` to serve `find_routes_v3()`; v2 stays
+the default. v3 returns 2-4 road routes from the pin, each checked against the
+fire forecast for the whole trip. Unsafe routes are kept, marked `blocked` with
+a reason and `hazard_intercept`, and never dropped for being unsafe. When every
+route is unsafe the answer is still 200, with `no_safe_route: true` and
+`best_route_id: null`. 404 is only for outside the demo area, no road within
+300 m, or no open shelter reachable by road.
+
+- `road_graph.py`: the graph as arrays (`RoadGraph`), a SciPy CSR matrix, a
+  `cKDTree` snap, and the exact road-to-fire-cell table (grid traversal).
+- `safety.py`: per-forecast road deadlines (`EdgeFire`), and `judge()`, which
+  gives ok / tight / blocked with the 30-minute buffer, cell by cell, including
+  the walk from the pin to the road and the shelter's own cell.
+- `candidates.py`: the usual road to the 5 nearest shelters by road, the
+  iterated safe search plus a roomier pass (`safest`), and penalty-search
+  `alternative`s. The route named in `check_route_id` is always rebuilt.
+- `select.py`: ranking, 80% overlap dedup, and the 2-4 options shown.
+- The sim side is `backend/sim/oracle.py`: `controller.oracle()` returns a frozen,
+  read-only `ForecastOracle` that covers the whole road graph and at least the
+  next 240 minutes.
+
+`GET /route?debug=1` adds `timings`. `python -m backend.routing.bench_routes`
+checks the speed budgets in-process; add `--url http://localhost:8000` to
+replay the scenarios at 1, 5 and 15 polling clients against a running v3 API.
+
 ## Try backup mode without touching the real graph
 
 From the repository root, point a fresh demo process at a nonexistent file:
@@ -127,6 +154,9 @@ python -B -m unittest discover -s backend/routing -v
 The tests use tiny NetworkX/XML fixtures, real OSMnx nearest-node lookups,
 and temporary GraphML files. Download calls are mocked or blocked. They do
 not load the large Edmonton graph. No internet is needed once packages are installed.
+
+The v3 scenario tests (`test_routing_v3_scenarios.py`) do load the saved
+Edmonton graph and run the real sim; run everything with `python -m pytest backend`.
 
 ## Real Edmonton demo (run separately)
 
