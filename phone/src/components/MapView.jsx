@@ -76,6 +76,13 @@ function boundsOf(coords) {
   return coords.reduce((b, c) => b.extend(c), new LngLatBounds(coords[0], coords[0]))
 }
 
+// Hollow pin where the person tapped, while they confirm it as their location.
+function pendingElement() {
+  const el = document.createElement('div')
+  el.className = 'pending-marker'
+  return el
+}
+
 function youElement() {
   const el = document.createElement('div')
   el.className = 'you-marker'
@@ -185,6 +192,7 @@ export default function MapView({
   shelters,
   route,
   location,
+  pending, // [lon, lat] tapped but not yet confirmed, or null
   onTap,
   onViewChange,
   focusKey,
@@ -194,6 +202,7 @@ export default function MapView({
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const youMarker = useRef(null)
+  const pendingMarker = useRef(null)
   const shelterMarkers = useRef(new Map())
   const predictedMarkers = useRef(new Map())
   const tapRef = useRef(onTap)
@@ -327,6 +336,7 @@ export default function MapView({
     return () => {
       stores.forEach((s) => s.clear())
       youMarker.current = null
+      pendingMarker.current = null
       openShelter.current = null
       framed.current = false
       lastFocus.current = null
@@ -423,6 +433,16 @@ export default function MapView({
     } else if (youMarker.current) youMarker.current.setLngLat(location)
     else youMarker.current = new Marker({ element: youElement() }).setLngLat(location).addTo(map)
   }, [location, loaded])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !loaded) return
+    if (!pending) {
+      pendingMarker.current?.remove()
+      pendingMarker.current = null
+    } else if (pendingMarker.current) pendingMarker.current.setLngLat(pending)
+    else pendingMarker.current = new Marker({ element: pendingElement() }).setLngLat(pending).addTo(map)
+  }, [pending, loaded])
 
   // First load: frame hazards and shelters so the fire is on screen.
   useEffect(() => {

@@ -319,17 +319,37 @@ export default function App() {
     }
   }, [setLocationAndRoute])
 
-  // Tapping the map picks a pretend location, so switch to Simulated drive.
-  // Picking Real GPS again jumps back to the phone's location.
-  const tapMap = useCallback(
-    (lngLat) => {
-      evacModeRef.current = 'sim'
-      setEvacMode('sim')
-      setLocating(false) // a tap wins over a GPS fix still on its way
-      setLocationAndRoute(lngLat)
-    },
-    [setLocationAndRoute],
-  )
+  // Tapping the map drops a pending pin and asks before moving the person there
+  // (a stray tap while panning shouldn't reroute them). Tapping again moves the
+  // pending pin. A confirmed tap is a pretend location, so it switches to
+  // Simulated drive; picking Real GPS again jumps back to the phone's location.
+  const [pendingTap, setPendingTap] = useState(null) // [lon, lat] awaiting confirmation
+  const tapMap = useCallback((lngLat) => setPendingTap(lngLat), [])
+  const confirmTap = useCallback(() => {
+    if (!pendingTap) return
+    evacModeRef.current = 'sim'
+    setEvacMode('sim')
+    setLocating(false) // a confirmed tap wins over a GPS fix still on its way
+    setPendingTap(null)
+    setLocationAndRoute(pendingTap)
+  }, [pendingTap, setLocationAndRoute])
+  const cancelTap = useCallback(() => setPendingTap(null), [])
+
+  // "Need help" asks once before sending an SOS, so a stray tap doesn't alert
+  // responders. It replaces any tapped location still waiting for confirmation.
+  const [confirmHelp, setConfirmHelp] = useState(false)
+  const askHelp = useCallback(() => {
+    setPendingTap(null)
+    setConfirmHelp(true)
+  }, [])
+  const sendHelp = useCallback(() => {
+    setConfirmHelp(false)
+    sendReport('sos')
+  }, [sendReport])
+  // Starting a trip locks the location, so drop any unconfirmed tap.
+  useEffect(() => {
+    if (evacuating) setPendingTap(null)
+  }, [evacuating])
 
   // Heartbeat to POST /evacuees every ~2 s once the user has set a location (by tapping
   // the map, a preset, or Need help) and while evacuating (simulated or GPS), so the
@@ -385,6 +405,7 @@ export default function App() {
             shelters={shelters}
             route={shown}
             location={location}
+            pending={pendingTap}
             onTap={evacuating ? undefined : tapMap}
             onViewChange={onViewChange}
             focusKey={focusKey}
@@ -418,13 +439,44 @@ export default function App() {
         version={SHEPHERD_VERSION}
         actions={{
           report: () => setSheetOpen(true),
-          help: () => sendReport('sos'),
+          help: askHelp,
           canReport: !!location && !sending,
           sending,
         }}
       />
 
-      {toast ? (
+      {confirmHelp ? (
+        <div className="confirm-box" role="alertdialog" aria-labelledby="help-title" aria-describedby="help-desc">
+          <strong id="help-title">Send a help request?</strong>
+          <span id="help-desc">
+            {location
+              ? 'Responders will see your location and come to help.'
+              : "Shepherd will use your phone's location so responders can find you."}{' '}
+            If you are in danger, also call 911.
+          </span>
+          <div className="confirm-actions">
+            <button type="button" className="btn-outline" onClick={() => setConfirmHelp(false)}>
+              Cancel
+            </button>
+            <button type="button" className="btn-help" onClick={sendHelp} autoFocus>
+              Send request
+            </button>
+          </div>
+        </div>
+      ) : pendingTap ? (
+        <div className="confirm-box" role="dialog" aria-labelledby="confirm-title">
+          <strong id="confirm-title">Set your location here?</strong>
+          <span>Shepherd will find routes from this spot.</span>
+          <div className="confirm-actions">
+            <button type="button" className="btn-outline" onClick={cancelTap}>
+              Cancel
+            </button>
+            <button type="button" className="btn-primary" onClick={confirmTap} autoFocus>
+              Set location
+            </button>
+          </div>
+        </div>
+      ) : toast ? (
         <div className="toast" role="status">
           {toast}
         </div>
