@@ -3,6 +3,7 @@ import { distanceKm, pointInRing, ringCentroid } from './geo.js'
 import hazardsFixture from '../../shared/fixtures/hazards.json'
 import sheltersFixture from '../../shared/fixtures/shelters.json'
 import notificationsFixture from '../../shared/fixtures/notifications.json'
+import reportsFixture from '../../shared/fixtures/reports.json'
 
 // ---------- real backend ----------
 
@@ -296,5 +297,21 @@ export async function deletePriority(id) {
 export async function postReport({ kind, lat, lon, note }) {
   const body = { kind, lat, lon, ...(note ? { note } : {}) }
   if (!USE_FIXTURES) return request('/reports', { method: 'POST', body: JSON.stringify(body) })
-  return { id: `rp_${nextReportId++}`, received: true }
+  const id = `rp_${nextReportId++}`
+  fakeReports.push({ type: 'Feature', id, properties: { kind, note: note ?? null, sim_time: null }, geometry: { type: 'Point', coordinates: [lon, lat] } })
+  return { id, received: true }
+}
+
+// Hazard reports every phone can see on its map. "I'm safe" and "Need help" stay off
+// the public map: they mark where a person is, which is for responders only.
+export const PUBLIC_REPORT_KINDS = ['fire', 'flooded_road', 'blocked_road', 'other']
+const fakeReports = structuredClone(reportsFixture.features)
+
+export async function getReports() {
+  const body = USE_FIXTURES ? { features: structuredClone(fakeReports) } : await request('/reports')
+  // The message is for emergency personnel only, so it never reaches the public map.
+  const features = (body?.features ?? [])
+    .filter((f) => PUBLIC_REPORT_KINDS.includes(f.properties?.kind))
+    .map((f) => ({ ...f, properties: { kind: f.properties.kind, sim_time: f.properties.sim_time } }))
+  return { type: 'FeatureCollection', features }
 }

@@ -5,6 +5,7 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { MAP_CENTER, MAP_ZOOM } from '../config.js'
 import { isCurrentCore, isPredicted, ringCentroid } from '../geo.js'
 import { dangerRings, evacZones, unsafeShelterIds, UNSAFE_SHELTER_TEXT } from '../evacuation.js'
+import { kindOf, REPORT_KINDS, reportSvg } from '../reportKinds.js'
 
 // MapLibre 6 looks for its worker next to its own module URL, which breaks once
 // Vite pre-bundles or bundles it. Point it at the worker file explicitly.
@@ -82,6 +83,66 @@ function boundsOf(coords) {
 function pendingElement() {
   const el = document.createElement('div')
   el.className = 'pending-marker'
+  return el
+}
+
+// Hazard reports from every phone (GET /reports): a white circle with the kind's
+// stroke symbol in hazard orange. Tap for what was reported, when, and the note.
+function reportElement(id, kind, onToggle) {
+  const el = document.createElement('div')
+  el.className = `report-marker rk-${kindOf(kind)}`
+  el.dataset.id = id
+  el.tabIndex = 0
+  el.setAttribute('role', 'button')
+  el.setAttribute('aria-expanded', 'false')
+  el.append(reportSvg(kind), Object.assign(document.createElement('div'), { className: 'shelter-popup report-popup' }))
+  el.addEventListener('click', (e) => {
+    e.stopPropagation()
+    onToggle(id)
+  })
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    onToggle(id)
+  })
+  return el
+}
+
+// The report's message is written for emergency personnel, so the public pop-up
+// shows only what was reported and when.
+function updateReport(el, { kind, sim_time: t }) {
+  const info = REPORT_KINDS[kind] ?? REPORT_KINDS.other
+  const lines = [['shelter-popup-title', info.seen]]
+  // sim_time is 0 when no scenario is running; "T+0" would mean nothing to a resident.
+  if (t) lines.push(['report-popup-time num', `T+${t} min`])
+  el.querySelector('.report-popup').replaceChildren(
+    ...lines.map(([cls, text]) => Object.assign(document.createElement('div'), { className: cls, textContent: text })),
+  )
+  el.setAttribute('aria-label', lines.map(([, text]) => text).join('. '))
+}
+
+// The pin being dropped for a new report: a hazard-orange teardrop map pin with a
+// white centre, anchored at its tip. Draggable while placing.
+const SVG_NS = 'http://www.w3.org/2000/svg'
+function reportPinElement() {
+  const el = document.createElement('div')
+  el.className = 'report-pin'
+  el.setAttribute('aria-label', 'Report pin. Drag to where the hazard is.')
+  const svg = document.createElementNS(SVG_NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 32 42')
+  svg.setAttribute('width', '32')
+  svg.setAttribute('height', '42')
+  svg.setAttribute('aria-hidden', 'true')
+  const body = document.createElementNS(SVG_NS, 'path')
+  body.setAttribute('d', 'M16 40.5S3 26.4 3 15.5a13 13 0 0 1 26 0C29 26.4 16 40.5 16 40.5z')
+  body.setAttribute('class', 'report-pin-body')
+  const dot = document.createElementNS(SVG_NS, 'circle')
+  dot.setAttribute('cx', '16')
+  dot.setAttribute('cy', '15.5')
+  dot.setAttribute('r', '5')
+  dot.setAttribute('class', 'report-pin-dot')
+  svg.append(body, dot)
+  el.appendChild(svg)
   return el
 }
 
@@ -195,6 +256,10 @@ export default function MapView({
   route,
   location,
   pending, // [lon, lat] tapped but not yet confirmed, or null
+  reports, // public hazard reports (GET /reports, filtered in api.js)
+  reportPin, // [lon, lat] of a report being placed, or null
+  reportStep, // 'place' | 'details' | null: where the pin should sit on screen
+  onReportPinMove, // ([lon, lat]) after the pin is dragged
   onTap,
   onViewChange,
   focusKey,
@@ -205,6 +270,8 @@ export default function MapView({
   const mapRef = useRef(null)
   const youMarker = useRef(null)
   const pendingMarker = useRef(null)
+  const reportPinMarker = useRef(null)
+  const reportMarkers = useRef(new Map())
   const shelterMarkers = useRef(new Map())
   const predictedMarkers = useRef(new Map())
   const tapRef = useRef(onTap)
@@ -213,19 +280,31 @@ export default function MapView({
   const openShelter = useRef(null) // id of the shelter whose pop-up is open
   const [loaded, setLoaded] = useState(false)
 
-  // Open one shelter's pop-up (or none), closing any other.
-  const showShelterPopup = useRef((id) => {
-    openShelter.current = id
-    for (const m of shelterMarkers.current.values()) {
-      const el = m.getElement()
-      const isOpen = el.dataset.id === id
-      el.classList.toggle('is-open', isOpen)
-      el.setAttribute('aria-expanded', String(isOpen))
+  // One pop-up open at a time across shelters and reports, keyed "s:<id>" / "r:<id>".
+  const showShelterPopup = useRef((key) => {
+    openShelter.current = key
+    const stores = [
+      ['s:', shelterMarkers.current],
+      ['r:', reportMarkers.current],
+    ]
+    for (const [prefix, store] of stores) {
+      for (const m of store.values()) {
+        const el = m.getElement()
+        const isOpen = key === prefix + el.dataset.id
+        el.classList.toggle('is-open', isOpen)
+        el.setAttribute('aria-expanded', String(isOpen))
+      }
     }
   }).current
-  const toggleShelterPopup = useRef((id) => showShelterPopup(openShelter.current === id ? null : id)).current
+  const togglePopup = (key) => showShelterPopup(openShelter.current === key ? null : key)
+  const toggleShelterPopup = useRef((id) => togglePopup(`s:${id}`)).current
+  const toggleReportPopup = useRef((id) => togglePopup(`r:${id}`)).current
 
   const viewRef = useRef(onViewChange)
+  const pinMoveRef = useRef(onReportPinMove)
+  useEffect(() => {
+    pinMoveRef.current = onReportPinMove
+  }, [onReportPinMove])
 
   useEffect(() => {
     tapRef.current = onTap
@@ -347,7 +426,10 @@ export default function MapView({
       if (openShelter.current != null) return showShelterPopup(null)
       tapRef.current?.([e.lngLat.lng, e.lngLat.lat])
     })
-    map.on('move', () => placeShelterLabels(map, shelterMarkers.current))
+    map.on('move', () => {
+      placeShelterLabels(map, shelterMarkers.current)
+      placeShelterLabels(map, reportMarkers.current)
+    })
     const reportView = () => {
       const c = map.getCenter()
       viewRef.current?.([c.lng, c.lat], map.getZoom())
@@ -355,11 +437,12 @@ export default function MapView({
     map.on('moveend', reportView)
     map.once('load', reportView)
 
-    const stores = [shelterMarkers.current, predictedMarkers.current]
+    const stores = [shelterMarkers.current, predictedMarkers.current, reportMarkers.current]
     return () => {
       stores.forEach((s) => s.clear())
       youMarker.current = null
       pendingMarker.current = null
+      reportPinMarker.current = null
       openShelter.current = null
       framed.current = false
       lastFocus.current = null
@@ -440,7 +523,7 @@ export default function MapView({
       if (!seen.has(id)) {
         m.remove()
         store.delete(id)
-        if (openShelter.current === id) openShelter.current = null
+        if (openShelter.current === `s:${id}`) openShelter.current = null
       }
     }
     placeShelterLabels(map, store)
@@ -466,6 +549,70 @@ export default function MapView({
     } else if (pendingMarker.current) pendingMarker.current.setLngLat(pending)
     else pendingMarker.current = new Marker({ element: pendingElement() }).setLngLat(pending).addTo(map)
   }, [pending, loaded])
+
+  // Hazard reports from every phone, refreshed on each poll (even while one is open).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map) return
+    const store = reportMarkers.current
+    const seen = new Set()
+    for (const f of reports?.features ?? []) {
+      const id = String(f.id)
+      seen.add(id)
+      if (store.has(id)) store.get(id).setLngLat(f.geometry.coordinates)
+      else
+        store.set(
+          id,
+          new Marker({ element: reportElement(id, f.properties.kind, toggleReportPopup) })
+            .setLngLat(f.geometry.coordinates)
+            .addTo(map),
+        )
+      updateReport(store.get(id).getElement(), f.properties)
+    }
+    for (const [id, m] of store) {
+      if (!seen.has(id)) {
+        m.remove()
+        store.delete(id)
+        if (openShelter.current === `r:${id}`) openShelter.current = null
+      }
+    }
+    placeShelterLabels(map, store)
+  }, [reports, loaded])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !loaded) return
+    if (!reportPin) {
+      reportPinMarker.current?.remove()
+      reportPinMarker.current = null
+      return
+    }
+    const marker = reportPinMarker.current
+    if (marker) marker.setLngLat(reportPin)
+    else {
+      const m = new Marker({ element: reportPinElement(), anchor: 'bottom', draggable: true })
+      m.on('dragend', () => {
+        const p = m.getLngLat()
+        pinMoveRef.current?.([p.lng, p.lat])
+      })
+      reportPinMarker.current = m.setLngLat(reportPin).addTo(map)
+    }
+    reportPinMarker.current.setDraggable(reportStep === 'place')
+    reportPinMarker.current.getElement().classList.toggle('is-placing', reportStep === 'place')
+  }, [reportPin, reportStep, loaded])
+
+  // Only when the step changes (not on every drag): with the sheet open it covers the
+  // bottom of the screen, so slide the pin into the strip above it; while placing,
+  // bring it back to the middle, clear of the instruction card at the top.
+  useEffect(() => {
+    const map = mapRef.current
+    const pin = reportPinMarker.current
+    if (!map || !loaded || !pin || !reportStep) return
+    const h = map.getContainer().clientHeight
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const offset = reportStep === 'details' ? [0, -h * 0.22] : [0, h * 0.1]
+    map.easeTo({ center: pin.getLngLat(), offset, duration: reduce ? 0 : 400 })
+  }, [reportStep, loaded])
 
   // First load: frame hazards and shelters so the fire is on screen.
   useEffect(() => {
