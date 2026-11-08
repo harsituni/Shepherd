@@ -116,22 +116,30 @@ export default function App() {
         }
       }
 
-    const loc = locationRef.current
-    if (!loc) return
-    // While evacuating the dot moves every frame, so a response for where it was
-    // 2 s ago is still the one to show. Otherwise a moved pin makes it stale.
-    const stale = () => !evacuatingRef.current && locationRef.current !== loc
-    try {
-      const r = await getRoute(loc[1], loc[0])
-      if (stale()) return
-      setRoute(r)
-      setRouteError(null)
-    } catch (err) {
-      if (stale()) return
-      setRoute(null)
-      if (err.code !== 'no_route') {
-        setRouteError('network')
-        return
+      const loc = locationRef.current
+      if (!loc) return
+      // While evacuating the dot moves every frame, so a response for where it was
+      // 2 s ago is still the one to show. Otherwise a moved pin makes it stale.
+      const stale = () => !evacuatingRef.current && locationRef.current !== loc
+      try {
+        const r = await getRoute(loc[1], loc[0])
+        if (stale()) return
+        setRoute(r)
+        setRouteError(null)
+      } catch (err) {
+        if (stale()) return
+        if (err.code !== 'no_route') {
+          // Keep the last good route on the map; only show reconnect if we never had one.
+          setRouteError('network')
+          return
+        }
+        setRoute(null)
+        // Contract only has error "no_route". Outside the demo box (or idle with
+        // no fire) should not panic people into calling 911.
+        const features = h.status === 'fulfilled' ? (h.value?.features ?? []) : []
+        const fireOn = features.some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
+        const outOfArea = /demo area/i.test(err.message ?? '')
+        setRouteError(fireOn && !outOfArea ? 'no_route' : 'out_of_area')
       }
     } finally {
       refreshBusy.current = false
