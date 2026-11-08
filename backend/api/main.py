@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from backend.routing.router import (
     NoRouteError, check_route, find_routes, find_routes_v3, graph_bbox, load_graph, prepare_forecast,
 )
+from backend.routing.traffic import engine as traffic_engine
 from backend.sim.controller import SimController
 
 log = logging.getLogger(__name__)
@@ -150,10 +151,27 @@ SHELTERS: list[dict] = [
 ]
 
 
+def _traffic_route(lat: float, lon: float) -> dict:
+    """Router callback for the crowd assigner (same path phones use)."""
+    forecast = controller.forecast()
+    return find_routes_v3(
+        lat,
+        lon,
+        controller.oracle(),
+        SHELTERS,
+        sim_time=controller.sim_time,
+        hazards={"type": "FeatureCollection", "features": controller.features()},
+        forecast_outlines=forecast.get("outlines") or [],
+    )
+
+
 async def _sim_loop() -> None:
     while True:
         await asyncio.sleep(2)
         controller.tick()
+        # Phones count as cars; rebalance simulated crowd every few sim-minutes.
+        traffic_engine.sync_phones(evacuees)
+        traffic_engine.on_sim_tick(controller.sim_time)
 
 
 @asynccontextmanager
@@ -162,6 +180,7 @@ async def lifespan(_app: FastAPI):
     if ROUTING_VERSION == "v3":
         # The fire must cover every road routing can use, or far roads would look clear.
         controller.set_domain(graph_bbox())
+    traffic_engine.set_callbacks(_traffic_route, lambda: SHELTERS)
     task = asyncio.create_task(_sim_loop())
     try:
         yield
@@ -223,6 +242,13 @@ class SimSpeed(BaseModel):
 class SimWind(BaseModel):
     wind_kmh: float
     wind_from_deg: float
+
+
+class TrafficConfig(BaseModel):
+    """Additive /traffic API (not in contract v2)."""
+    enabled: Optional[bool] = None
+    anti_gridlock: Optional[bool] = None
+    simulated_count: Optional[int] = None
 
 
 class PriorityIn(BaseModel):
@@ -476,6 +502,63 @@ def get_forecast() -> dict:
     return controller.forecast()
 
 
+@app.get("/traffic")
+def get_traffic() -> dict:
+    """Congested roads + metrics. Additive — not in contract v2."""
+    traffic_engine.sync_phones(evacuees)
+    body = traffic_engine.payload()
+    body["sim_time"] = controller.sim_time
+    return body
+
+
+@app.get("/traffic/state")
+def get_traffic_state() -> dict:
+    traffic_engine.sync_phones(evacuees)
+    body = traffic_engine.status()
+    body["sim_time"] = controller.sim_time
+    return body
+
+
+@app.post("/traffic/config")
+def post_traffic_config(body: TrafficConfig) -> dict:
+    traffic_engine.sync_phones(evacuees)
+    state = traffic_engine.configure(
+        enabled=body.enabled,
+        anti_gridlock=body.anti_gridlock,
+        simulated_count=body.simulated_count,
+    )
+    state["sim_time"] = controller.sim_time
+    return state
+
+
+@app.post("/traffic/compare")
+def post_traffic_compare() -> dict:
+    """Naive pile-up vs anti-gridlock clearance times."""
+    traffic_engine.sync_phones(evacuees)
+    result = traffic_engine.compare(sim_time=controller.sim_time)
+    result["sim_time"] = controller.sim_time
+    return result
+
+
+@app.post("/traffic/rebalance")
+def post_traffic_rebalance() -> dict:
+    traffic_engine.sync_phones(evacuees)
+    state = traffic_engine.rebalance_now(sim_time=controller.sim_time)
+    state["sim_time"] = controller.sim_time
+    return state
+
+
+@app.get("/route/traffic_hint")
+def get_traffic_hint(
+    lat: float = Query(...),
+    lon: float = Query(...),
+    route_id: Optional[str] = Query(None),
+) -> dict:
+    """Phone banner helper: faster route available under current traffic."""
+    hint = traffic_engine.faster_route_hint(lat, lon, route_id, sim_time=controller.sim_time)
+    return {"hint": hint, "sim_time": controller.sim_time}
+
+
 @app.post("/evacuees")
 def post_evacuee(body: EvacueeIn, response: Response) -> dict:
     """Phone location heartbeat. Upserts by id; 201 on first sight, 200 on update."""
@@ -539,7 +622,10 @@ def get_evacuees() -> dict:
 
 @app.get("/sim/state")
 def get_sim_state() -> dict:
-    return controller.status()
+    state = controller.status()
+    # Additive traffic summary for the dashboard metrics card.
+    state["traffic"] = traffic_engine.status()
+    return state
 
 
 @app.post("/sim/start")
@@ -550,7 +636,12 @@ def post_sim_start(body: SimStart) -> dict:
         state = controller.start(body.model_dump())
     except ValueError:
         return _unsupported_flood()
+    # Crowd the simulated cars around the ignition / touchdown point.
+    traffic_engine.set_cluster(body.lat, body.lon)
+    if traffic_engine.enabled:
+        traffic_engine.configure(enabled=True)  # respawn + reassign near the hazard
     _prepare_routing()
+    state["traffic"] = traffic_engine.status()
     return state
 
 
@@ -566,7 +657,10 @@ def post_sim_resume() -> dict:
 
 @app.post("/sim/reset")
 def post_sim_reset() -> dict:
-    return controller.reset()
+    state = controller.reset()
+    # Keep traffic config, but clear volumes / assignments for a fresh scenario.
+    traffic_engine.configure(enabled=traffic_engine.enabled)
+    return state
 
 
 @app.post("/sim/speed")
