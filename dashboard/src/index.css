@@ -516,6 +516,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .rk-sos { color: var(--closed); }
 .rk-safe { color: var(--muted); }
 .rk-fill { fill: none; }
+
+/* Report pin on the map: a 14px white dot with a 2.5px hazard-orange ring, like the
+   legend's one "Public report" swatch, so the map and legend stay uncluttered.
+   Hover or keyboard focus grows it to 28px and shows the kind's symbol, ring in the
+   kind's colour, plus a pop-up (what, when, the message for responders). */
+.report-pin {
+  position: relative; width: 14px; height: 14px; border-radius: 50%; cursor: default;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface); border: 2.5px solid var(--hazard);
+  transition: width 150ms cubic-bezier(0.22, 1, 0.36, 1), height 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.report-pin::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; }
+.report-pin svg { display: none; }
+.report-pin:hover, .report-pin:focus-visible { z-index: 5; width: 28px; height: 28px; border-color: currentColor; border-width: 2px; }
+.report-pin:hover svg, .report-pin:focus-visible svg { display: block; }
+.report-pin:hover .shelter-popup, .report-pin:focus-visible .shelter-popup { display: block; }
+.report-popup { color: var(--text); }
+.report-popup .shelter-popup-title { color: var(--text); }
+.report-popup-line { width: max-content; max-width: 220px; white-space: normal; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .report-pin { transition: none; }
+}
 .rk-blocked_road .rk-fill { fill: var(--evac-stripe); }
 .report-time, .report-loc { font-size: var(--fs-sm); color: var(--muted-2); }
 .report-note { font-size: var(--fs-sm); color: var(--muted); }

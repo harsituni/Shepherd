@@ -10,6 +10,7 @@ import { MAP_CENTER, MAP_ZOOM } from '../config.js'
 import MapLegend from './MapLegend.jsx'
 import { MinusIcon, PlusIcon } from './icons.jsx'
 import { evacZones, UNSAFE_SHELTER_TEXT } from '../evacuation.js'
+import { kindOf, reportLabel, reportSvg } from '../reportKinds.jsx'
 
 const EMPTY = { type: 'FeatureCollection', features: [] }
 const NO_IDS = new Set()
@@ -164,6 +165,31 @@ const PRIORITY_NEED_LABEL = {
   other: 'Other needs',
 }
 
+// Phone report: a small white dot with an orange ring, matching the legend swatch.
+// Hover (or keyboard focus) grows it to show the kind's symbol in its colour, with
+// a pop-up: what was reported, when, and the message for responders.
+function reportElement(kind) {
+  const el = document.createElement('div')
+  el.className = `report-pin rk-${kindOf(kind)}`
+  el.tabIndex = 0
+  const popup = document.createElement('div')
+  popup.className = 'shelter-popup report-popup'
+  popup.setAttribute('role', 'tooltip')
+  el.append(reportSvg(kind), popup)
+  // A click on a pin isn't a click on the map (which would place a start point).
+  el.addEventListener('click', (e) => e.stopPropagation())
+  return el
+}
+
+function updateReport(el, { kind, note, sim_time: t }) {
+  const lines = [['shelter-popup-title', reportLabel(kind)]]
+  // sim_time is 0 when no scenario has run; "T+0" would just be noise.
+  if (t) lines.push(['report-popup-line num', `T+${t}`])
+  if (note) lines.push(['report-popup-line', note])
+  el.querySelector('.report-popup').replaceChildren(...lines.map(([cls, text]) => textElement(cls, text)))
+  el.setAttribute('aria-label', `Report: ${lines.map(([, text]) => text).join('. ')}`)
+}
+
 function priorityElement() {
   const el = document.createElement('div')
   el.className = 'priority-marker'
@@ -261,6 +287,7 @@ export default function MapView({
   const predictedMarkers = useRef(new Map())
   const startMarkers = useRef(new Map())
   const priorityMarkers = useRef(new Map())
+  const reportMarkers = useRef(new Map())
   const clickRef = useRef(onMapClick)
   const framed = useRef(false)
   const [loaded, setLoaded] = useState(false)
@@ -398,19 +425,6 @@ export default function MapView({
         filter: CURRENT,
         paint: { 'line-color': KIND_COLOR, 'line-width': 1.5 },
       })
-      // Phone reports: white dot with an orange ring (matches the legend swatch).
-      map.addSource('reports', { type: 'geojson', data: EMPTY })
-      map.addLayer({
-        id: 'report-pins',
-        type: 'circle',
-        source: 'reports',
-        paint: {
-          'circle-radius': 6,
-          'circle-color': SURFACE,
-          'circle-stroke-color': HAZARD,
-          'circle-stroke-width': 2.5,
-        },
-      })
       // Phones that have set a location (GET /evacuees): the same blue dot with a
       // white ring the phone shows for "You", a little smaller. On top of everything.
       map.addSource('evacuees', { type: 'geojson', data: EMPTY })
@@ -430,7 +444,9 @@ export default function MapView({
 
     map.on('click', (e) => clickRef.current?.(e.lngLat))
 
-    const stores = [shelterMarkers, nowMarkers, predictedMarkers, startMarkers, priorityMarkers].map((r) => r.current)
+    const stores = [shelterMarkers, nowMarkers, predictedMarkers, startMarkers, priorityMarkers, reportMarkers].map(
+      (r) => r.current,
+    )
     return () => {
       stores.forEach((s) => s.clear())
       map.remove()
@@ -546,11 +562,18 @@ export default function MapView({
     syncMarkers(map, priorityMarkers.current, items)
   }, [evacuees, onlyPriority, loaded])
 
-  // Reports: pins redrawn on every poll.
+  // Reports: plain pins (the legend's one "Public report" entry), redrawn on every
+  // poll; hovering one shows its kind's symbol and a pop-up.
   useEffect(() => {
     const map = mapRef.current
     if (!loaded || !map) return
-    map.getSource('reports')?.setData(reports ?? EMPTY)
+    const items = (reports?.features ?? []).map((f) => ({
+      id: `${f.id}:${f.properties?.kind}`,
+      lngLat: f.geometry.coordinates,
+      build: () => reportElement(f.properties?.kind),
+      update: (el) => updateReport(el, f.properties ?? {}),
+    }))
+    syncMarkers(map, reportMarkers.current, items)
   }, [reports, loaded])
 
   // Centre on a report picked from the side panel.

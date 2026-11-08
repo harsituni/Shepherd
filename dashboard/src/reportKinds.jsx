@@ -30,8 +30,36 @@ export const REPORT_KINDS = {
   },
 }
 
-const kindOf = (kind) => (REPORT_KINDS[kind] ? kind : 'other')
+export const kindOf = (kind) => (REPORT_KINDS[kind] ? kind : 'other')
 export const reportLabel = (kind) => REPORT_KINDS[kind]?.label ?? kind
+const partsOf = (kind) =>
+  REPORT_KINDS[kindOf(kind)].paths.map((p) => (typeof p === 'string' ? { d: p, fill: false } : p))
+
+// The same symbol as a plain <svg> element, for MapLibre markers (not React).
+const SVG_NS = 'http://www.w3.org/2000/svg'
+export function reportSvg(kind, size = 16) {
+  const svg = document.createElementNS(SVG_NS, 'svg')
+  for (const [k, v] of Object.entries({
+    viewBox: '0 0 24 24',
+    width: size,
+    height: size,
+    fill: 'none',
+    stroke: 'currentColor',
+    'stroke-width': 2,
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'aria-hidden': 'true',
+    class: `rk rk-${kindOf(kind)}`,
+  }))
+    svg.setAttribute(k, String(v))
+  for (const { d, fill } of partsOf(kind)) {
+    const path = document.createElementNS(SVG_NS, 'path')
+    path.setAttribute('d', d)
+    if (fill) path.setAttribute('class', 'rk-fill')
+    svg.appendChild(path)
+  }
+  return svg
+}
 
 export function ReportKindIcon({ kind, size = 20 }) {
   const k = kindOf(kind)
@@ -48,10 +76,9 @@ export function ReportKindIcon({ kind, size = 20 }) {
       aria-hidden="true"
       className={`rk rk-${k}`}
     >
-      {REPORT_KINDS[k].paths.map((p) => {
-        const { d, fill } = typeof p === 'string' ? { d: p, fill: false } : p
-        return <path key={d} d={d} className={fill ? 'rk-fill' : undefined} />
-      })}
+      {partsOf(k).map(({ d, fill }) => (
+        <path key={d} d={d} className={fill ? 'rk-fill' : undefined} />
+      ))}
     </svg>
   )
 }

@@ -7,11 +7,28 @@ import reportsFixture from '../../shared/fixtures/reports.json'
 
 // ---------- real backend ----------
 
-async function request(path, options = {}) {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
+// Give up on a request after `timeoutMs`. On mobile data a request can hang for a
+// minute (cell handoff, tunnel hiccup), and the polls skip their next turn while one
+// is in flight, so without a timeout the dot freezes until the browser gives up.
+const DEFAULT_TIMEOUT_MS = 10000
+
+async function request(path, { timeoutMs = DEFAULT_TIMEOUT_MS, ...options } = {}) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  let res
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+      signal: ctrl.signal,
+    })
+  } catch (cause) {
+    const err = new Error(ctrl.signal.aborted ? 'Request timed out' : 'Network error', { cause })
+    err.code = ctrl.signal.aborted ? 'timeout' : 'network_error'
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
   const body = await res.json().catch(() => null)
   if (!res.ok) {
     const err = new Error(body?.message ?? `HTTP ${res.status}`)
@@ -290,7 +307,8 @@ export async function getNotifications() {
 // Evacuee heartbeat (contract v2): { id, lat, lon, route_id, route_status, shelter_id },
 // upserted by id. Sent every ~2 s while evacuating so the dashboard can show the dot.
 export async function postEvacuee(body) {
-  if (!USE_FIXTURES) return request('/evacuees', { method: 'POST', body: JSON.stringify(body) })
+  // Short timeout: a late position is worthless, the next beat carries a fresh one.
+  if (!USE_FIXTURES) return request('/evacuees', { method: 'POST', body: JSON.stringify(body), timeoutMs: 4000 })
   return { id: body.id, received: true }
 }
 
