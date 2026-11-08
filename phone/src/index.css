@@ -304,12 +304,6 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .shelter-name { font-size: var(--fs-h); font-weight: 700; line-height: 1.25; }
 .trip { font-size: var(--fs-body); color: var(--muted); }
 .trip strong { color: var(--text); font-weight: 700; }
-.next-turn {
-  display: flex; gap: 12px; align-items: center; padding: 12px 0;
-  border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); color: var(--navy);
-}
-.next-turn-text { display: flex; flex-direction: column; color: var(--text); }
-.next-turn-title { font-size: var(--fs-body); font-weight: 600; }
 
 /* Google Maps-style turn banner while evacuating (brief pause on sim drive). */
 .turn-cue {
