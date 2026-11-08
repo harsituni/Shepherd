@@ -57,6 +57,48 @@ export const TurnIcon = (p) => (
   </Svg>
 )
 
+export const TurnLeftIcon = (p) => (
+  <Svg size={28} strokeWidth={2.4} {...p}>
+    <path d="M15 20V10H7" />
+    <path d="m11 6-4 4 4 4" />
+  </Svg>
+)
+
+export const TurnRightIcon = (p) => (
+  <Svg size={28} strokeWidth={2.4} {...p}>
+    <path d="M9 20V10h8" />
+    <path d="m13 6 4 4-4 4" />
+  </Svg>
+)
+
+export const TurnSlightLeftIcon = (p) => (
+  <Svg size={28} strokeWidth={2.4} {...p}>
+    <path d="M14 20V12L8 6" />
+    <path d="M8 11V6h5" />
+  </Svg>
+)
+
+export const TurnSlightRightIcon = (p) => (
+  <Svg size={28} strokeWidth={2.4} {...p}>
+    <path d="M10 20V12l6-6" />
+    <path d="M16 11V6h-5" />
+  </Svg>
+)
+
+export const TurnUturnIcon = (p) => (
+  <Svg size={28} strokeWidth={2.4} {...p}>
+    <path d="M9 20V9a4 4 0 0 1 8 0v5" />
+    <path d="m14 10 3 4 3-4" />
+  </Svg>
+)
+
+export const TurnArriveIcon = (p) => (
+  <Svg size={28} strokeWidth={2.4} {...p}>
+    <path d="M12 21s-6-5.4-6-10a6 6 0 1 1 12 0c0 4.6-6 10-6 10z" />
+    <circle cx="12" cy="11" r="2.2" />
+  </Svg>
+)
+
 export const PinIcon = (p) => (
   <Svg size={18} {...p}>
     <path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" />

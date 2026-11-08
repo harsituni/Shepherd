@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { distanceKm } from './geo.js'
+import { cueForProgress, routeCoords, turnsAlong } from './turns.js'
 
 // Issue #56: "Start evacuating" either drives a simulated dot along the chosen
 // route (in-room demo) or follows the phone's real GPS (hallway / outdoor video).
@@ -8,6 +9,9 @@ import { distanceKm } from './geo.js'
 // drive covers the route's ETA on the same clock as the leave-by countdown.
 const TICK_MS = 2000
 const FRAME_MS = 250
+// Pause the simulated drive so a turn popup can be read (Google Maps-style cue).
+const TURN_PAUSE_MS = 1800
+const TURN_ANNOUNCE_M = 120
 
 // ---------- route geometry ----------
 
@@ -132,8 +136,9 @@ export function locateOnce() {
 
 // ---------- the hook ----------
 
-// trip: null | { mode: 'sim' | 'gps', route, arrived, fraction }
+// trip: null | { mode, route, arrived, fraction, turnCue, coords, turns, totalKm }
 // `route` is a snapshot of the chosen option when Start was pressed.
+// `turnCue` is the brief Google Maps-style popup while approaching a corner.
 // onMove([lon, lat]) is called with every new position; onError(message) when GPS fails.
 export function useEvacuation({ clock, onMove, onError }) {
   const [trip, setTrip] = useState(null)
@@ -141,6 +146,8 @@ export function useEvacuation({ clock, onMove, onError }) {
   const clockRef = useRef(clock)
   const moveRef = useRef(onMove)
   const errorRef = useRef(onError)
+  const announcedRef = useRef(new Set())
+  const pauseUntilRef = useRef(0)
 
   useEffect(() => {
     tripRef.current = trip
@@ -149,17 +156,27 @@ export function useEvacuation({ clock, onMove, onError }) {
     errorRef.current = onError
   }, [trip, clock, onMove, onError])
 
-  const stop = useCallback(() => setTrip(null), [])
+  const stop = useCallback(() => {
+    announcedRef.current = new Set()
+    pauseUntilRef.current = 0
+    setTrip(null)
+  }, [])
 
   const start = useCallback((mode, route) => {
     if (mode === 'gps' && (!window.isSecureContext || !navigator.geolocation)) {
       errorRef.current?.(gpsError())
       return
     }
-    setTrip({ mode, route, arrived: false, fraction: 0 })
+    const coords = routeCoords(route?.geometry)
+    const turns = turnsAlong(route?.geometry)
+    const totalKm = routeLengthKm(coords)
+    announcedRef.current = new Set()
+    pauseUntilRef.current = 0
+    setTrip({ mode, route, arrived: false, fraction: 0, turnCue: null, coords, turns, totalKm })
   }, [])
 
-  // Simulated drive: advance along the route on the sim clock (frozen while paused).
+  // Simulated drive: advance along the route on the sim clock (frozen while paused
+  // by the dashboard clock, or briefly when a turn cue is on screen).
   const simulating = trip?.mode === 'sim' && !trip.arrived
   useEffect(() => {
     if (!simulating) return
@@ -170,18 +187,39 @@ export function useEvacuation({ clock, onMove, onError }) {
       if (t?.mode !== 'sim') return
       const now = Date.now()
       const c = clockRef.current
-      if (c?.state !== 'paused') drivenMin += ((now - last) / TICK_MS) * (c?.speed || 1)
+      const holding = now < pauseUntilRef.current
+      const coords = t.coords?.length ? t.coords : routeCoords(t.route.geometry)
+      const totalKm = t.totalKm || routeLengthKm(coords)
+      const eta = Math.max(t.route.eta_min || 1, 1)
+
+      // Show the cue and hold before rolling past the corner.
+      let fraction = Math.min(drivenMin / eta, 1)
+      let kmAlong = totalKm * fraction
+      const cue = cueForProgress(t.turns || [], kmAlong, announcedRef.current, TURN_ANNOUNCE_M)
+      let turnCue = holding ? t.turnCue : null
+      if (cue && !holding) {
+        announcedRef.current.add(cue.id)
+        pauseUntilRef.current = now + TURN_PAUSE_MS
+        turnCue = cue
+      } else if (!holding) {
+        turnCue = null
+        if (c?.state !== 'paused') drivenMin += ((now - last) / TICK_MS) * (c?.speed || 1)
+        fraction = Math.min(drivenMin / eta, 1)
+        kmAlong = totalKm * fraction
+      }
       last = now
-      const fraction = Math.min(drivenMin / Math.max(t.route.eta_min || 1, 1), 1)
-      moveRef.current?.(pointAlong(t.route.geometry.coordinates, fraction))
-      setTrip((prev) => (prev?.mode === 'sim' ? { ...prev, fraction, arrived: fraction >= 1 } : prev))
+      moveRef.current?.(pointAlong(coords, fraction))
+
+      setTrip((prev) =>
+        prev?.mode === 'sim'
+          ? { ...prev, fraction, arrived: fraction >= 1, turnCue: fraction >= 1 ? null : turnCue }
+          : prev,
+      )
     }, FRAME_MS)
     return () => clearInterval(id)
   }, [simulating])
 
-  // Real GPS: follow the device until stopped.
-  // Only a denied permission ends the trip. "Unavailable" and timeouts are normal
-  // blips while the fix changes (indoors, tunnels), so keep watching and say so once.
+  // Real GPS: follow the device until stopped. Show turn cues without pausing.
   const following = trip?.mode === 'gps'
   useEffect(() => {
     if (!following) return
@@ -189,7 +227,38 @@ export function useEvacuation({ clock, onMove, onError }) {
     const id = navigator.geolocation.watchPosition(
       (p) => {
         warned = false
-        moveRef.current?.([p.coords.longitude, p.coords.latitude])
+        const here = [p.coords.longitude, p.coords.latitude]
+        moveRef.current?.(here)
+        setTrip((prev) => {
+          if (prev?.mode !== 'gps') return prev
+          const coords = prev.coords?.length ? prev.coords : routeCoords(prev.route.geometry)
+          if (!coords.length) return prev
+          // Nearest point on the route → progress along it.
+          let bestI = 0
+          let bestD = Infinity
+          for (let i = 0; i < coords.length; i++) {
+            const d = distanceKm(here, coords[i])
+            if (d < bestD) {
+              bestD = d
+              bestI = i
+            }
+          }
+          let kmAlong = 0
+          for (let i = 1; i <= bestI; i++) kmAlong += distanceKm(coords[i - 1], coords[i])
+          const totalKm = prev.totalKm || routeLengthKm(coords)
+          const fraction = totalKm > 0 ? Math.min(kmAlong / totalKm, 1) : 0
+          const cue = cueForProgress(prev.turns || [], kmAlong, announcedRef.current, TURN_ANNOUNCE_M)
+          let turnCue = prev.turnCue
+          if (cue) {
+            announcedRef.current.add(cue.id)
+            turnCue = cue
+            // Clear after a beat so the popup doesn't stick forever on GPS.
+            setTimeout(() => {
+              setTrip((cur) => (cur?.turnCue?.id === cue.id ? { ...cur, turnCue: null } : cur))
+            }, TURN_PAUSE_MS)
+          }
+          return { ...prev, fraction, arrived: fraction >= 0.98, turnCue }
+        })
       },
       (err) => {
         if (err?.code === 1) {

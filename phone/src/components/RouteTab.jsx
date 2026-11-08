@@ -90,8 +90,23 @@ export function RouteDetails({
 
   let details
   if (trip) {
-    // Evacuating: just the progress and Stop (no switching routes mid-trip).
-    details = controls
+    // Evacuating: progress + Stop. The big turn banner floats on the map; keep a
+    // quiet next-turn line here when a cue is up.
+    const cue = trip.turnCue
+    details = (
+      <>
+        {cue && (
+          <div className="next-turn">
+            <TurnIcon />
+            <div className="next-turn-text">
+              <span className="next-turn-title">{cue.instruction}</span>
+              <span className="muted num">{cue.distanceLabel}</span>
+            </div>
+          </div>
+        )}
+        {controls}
+      </>
+    )
   } else if (!location) {
     details = (
       <div className="notice">

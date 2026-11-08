@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { AlertsTab } from './Notifications.jsx'
+import TurnCue from './TurnCue.jsx'
 import { BellIcon, ChevronUpIcon, CloseIcon, CrookIcon, InfoIcon, WarningIcon } from './icons.jsx'
 
 // The phone app's one screen, map-first (modelled on scooter apps like Lime and
@@ -153,6 +154,8 @@ export default function MapScreen({
         </div>
         <CornerAlert>{alert}</CornerAlert>
       </div>
+
+      {trip?.turnCue && <TurnCue cue={trip.turnCue} />}
 
       <div className="ms-bottom">
         {/* The rail steps aside while the route panel is open, so the panel isn't crowded. */}
