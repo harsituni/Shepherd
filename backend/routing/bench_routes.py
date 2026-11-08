@@ -5,7 +5,7 @@ and times each step against its budget.
 
     python -m backend.routing.bench_routes
 
-Against a running API (start it with SHEPHERD_ROUTING=v3): replays the scenario pins
+Against a running API (v3 is the default): replays the scenario pins
 at 1, 5 and 15 clients, each polling every 2 s. This starts a fire on that server
 unless --no-start is given.
 
@@ -174,7 +174,7 @@ def bench_url(base: str, levels: list, seconds: float, long_seconds: float, star
         print(f"Started a fire at {FIRE['lat']}, {FIRE['lon']} on {base}")
     probe = get(f"{base}/route?lat={PINS[2][0]}&lon={PINS[2][1]}&debug=1")
     if "timings" not in probe:
-        sys.exit("The server is answering routing v2. Start it with SHEPHERD_ROUTING=v3.")
+        sys.exit("The server is answering routing v2. Unset SHEPHERD_ROUTING or set it to v3.")
 
     for clients in levels:
         length = long_seconds if clients == max(levels) else seconds

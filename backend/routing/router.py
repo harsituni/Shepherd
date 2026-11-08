@@ -722,7 +722,7 @@ def check_route(lat: float, lon: float, route_id: str, arrival_min_fn,
     return body
 
 
-# ---------- v3: 2-4 fire-checked road routes (behind SHEPHERD_ROUTING=v3) ----------
+# ---------- v3: 2-4 fire-checked road routes (the API default) ----------
 
 V3_WARNING = ("Road routes with illustrative travel times at 30 km/h. Forecast checks cover every "
               "fire-grid cell on the route; they are not a safety guarantee.")

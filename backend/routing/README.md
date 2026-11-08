@@ -86,10 +86,10 @@ Call `load_graph()` once at startup. The selected mode lasts until restart.
 Calling `find_route()` before startup still raises an error. The routing
 Python dependencies must be installed even when using backup mode.
 
-## Routing v3 (behind `SHEPHERD_ROUTING=v3`)
+## Routing v3 (the default)
 
-Start the API with `SHEPHERD_ROUTING=v3` to serve `find_routes_v3()`; v2 stays
-the default. v3 returns 2-4 road routes from the pin, each checked against the
+`GET /route` serves `find_routes_v3()`; start the API with `SHEPHERD_ROUTING=v2`
+to get the old router back. v3 returns 2-4 road routes from the pin, each checked against the
 fire forecast for the whole trip. Unsafe routes are kept, marked `blocked` with
 a reason and `hazard_intercept`, and never dropped for being unsafe. When every
 modeled path in the declared search scope is demonstrably blocked the answer is still 200, with

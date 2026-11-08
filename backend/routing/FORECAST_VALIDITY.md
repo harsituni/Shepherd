@@ -1,8 +1,8 @@
 # Routing v3 forecast validity and geographic coverage (F01 / F08)
 
 These semantics apply to `find_routes_v3()` and `GET /route` with
-`SHEPHERD_ROUTING=v3`. Routing v2 remains the default and its response semantics
-are unchanged. Frontend/dashboard integration is not included in this change.
+the default routing (`SHEPHERD_ROUTING=v2` restores the old router). Routing v2's response semantics
+are unchanged. The phone reads these statuses (see `shared/route_v3.md`).
 
 ## Route evidence and response contract
 

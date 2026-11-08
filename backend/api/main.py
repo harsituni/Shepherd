@@ -22,8 +22,8 @@ from backend.sim.controller import SimController
 
 log = logging.getLogger(__name__)
 
-# Routing v3 (2-4 fire-checked road routes) stays opt-in until the phone ships.
-ROUTING_VERSION = os.environ.get("SHEPHERD_ROUTING", "v2").strip().lower()
+# Routing v3 (2-4 fire-checked road routes) is the default; SHEPHERD_ROUTING=v2 brings back the old router.
+ROUTING_VERSION = os.environ.get("SHEPHERD_ROUTING", "v3").strip().lower()
 
 controller = SimController()
 dropped_hazards: list[dict] = []
@@ -322,7 +322,7 @@ def get_route(
     check_route_id: Optional[str] = Query(None),
     debug: bool = Query(False),
 ) -> dict:
-    """Multi-option leave-by routes (contract v2; v3 with SHEPHERD_ROUTING=v3)."""
+    """Multi-option leave-by routes (v3 by default; contract v2 with SHEPHERD_ROUTING=v2)."""
     try:
         if ROUTING_VERSION == "v3":
             return find_routes_v3(

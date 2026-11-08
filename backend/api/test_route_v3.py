@@ -1,4 +1,4 @@
-"""SHEPHERD_ROUTING flag: v3 served when set, v2 untouched by default."""
+"""SHEPHERD_ROUTING flag: v3 by default, v2 still served with SHEPHERD_ROUTING=v2."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ class RouteFlagTests(unittest.TestCase):
 
         self.assertEqual(asyncio.run(startup()), api.graph_bbox())
 
-    def test_v2_stays_the_default_path(self):
+    def test_v2_is_still_served_when_asked_for(self):
         with patch.object(api, "ROUTING_VERSION", "v2"), \
                 patch.object(api, "find_routes_v3") as v3, \
                 patch.object(api, "prepare_forecast") as prepare:

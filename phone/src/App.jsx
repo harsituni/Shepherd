@@ -40,7 +40,7 @@ export default function App() {
   const [location, setLocation] = useState(null) // [lon, lat]
   const [route, setRoute] = useState(null)
   const [routeError, setRouteError] = useState(null)
-  const [chosen, setChosen] = useState(null) // shelter_id of the route card the user picked
+  const [chosen, setChosen] = useState(null) // id of the route card the user picked
   const [hazards, setHazards] = useState(null)
   const [shelters, setShelters] = useState(null)
   const [focusKey, setFocusKey] = useState(null)
@@ -53,6 +53,7 @@ export default function App() {
   const seenNotes = useRef(new Set())
   const toastTimer = useRef(null)
   const locationRef = useRef(location)
+  const chosenRef = useRef(chosen)
   const evacuatingRef = useRef(false)
   const [areaName, setAreaName] = useState('Edmonton')
   const areaTimer = useRef(null)
@@ -61,6 +62,9 @@ export default function App() {
   useEffect(() => {
     locationRef.current = location
   }, [location])
+  useEffect(() => {
+    chosenRef.current = chosen
+  }, [chosen])
 
   // Header place name follows the map. Wait until panning/zooming settles,
   // then look it up; keep the previous name if the lookup fails.
@@ -122,7 +126,8 @@ export default function App() {
       // 2 s ago is still the one to show. Otherwise a moved pin makes it stale.
       const stale = () => !evacuatingRef.current && locationRef.current !== loc
       try {
-        const r = await getRoute(loc[1], loc[0])
+        // Send the pick so the backend keeps it in the answer even if it turns unsafe.
+        const r = await getRoute(loc[1], loc[0], chosenRef.current)
         if (stale()) return
         setRoute(r)
         setRouteError(null)
@@ -138,7 +143,8 @@ export default function App() {
         // no fire) should not panic people into calling 911.
         const features = h.status === 'fulfilled' ? (h.value?.features ?? []) : []
         const fireOn = features.some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
-        const outOfArea = /demo area/i.test(err.message ?? '')
+        // v3 answers "everything is blocked" with a 200; its 404s are about place.
+        const outOfArea = /demo area|within 300 m/i.test(err.message ?? '')
         setRouteError(fireOn && !outOfArea ? 'no_route' : 'out_of_area')
       }
     } finally {
@@ -161,6 +167,7 @@ export default function App() {
       setLocation(lngLat)
       setRoute(null)
       setRouteError(null)
+      chosenRef.current = null
       setChosen(null) // a new location starts from the recommended route
       setFocusKey(Date.now())
       refresh()
@@ -254,8 +261,9 @@ export default function App() {
     lost,
     routeError,
     shelters,
-    onChoose: (shelterId) => {
-      setChosen(shelterId)
+    onChoose: (routeId) => {
+      chosenRef.current = routeId
+      setChosen(routeId)
       setFocusKey(Date.now()) // frame the newly picked route
     },
     trip,
