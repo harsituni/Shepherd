@@ -2,7 +2,7 @@ import { hazardSentence } from '../geo.js'
 import { formatMinSec, useSimNow } from '../simClock.js'
 import { WarningIcon } from './icons.jsx'
 
-// The first thing on screen during a wildfire: "Wildfire — evacuate" with the
+// The first thing on screen during a wildfire: "Wildfire evacuation" with the
 // leave-by countdown as the largest text. Leave-by comes from GET /route (contract
 // v2 `leave_by_sim_min`), counted down on the sim clock, so it follows the
 // dashboard's 1× / 4× / 16× speed and stops when the sim is paused.
@@ -85,7 +85,7 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
       <div className="evac-head">
         <WarningIcon className="evac-icon" />
         <h1 className="evac-title" id="evac-title">
-          Wildfire — evacuate
+          Wildfire evacuation
         </h1>
       </div>
       <div className="evac-body" aria-hidden="true">

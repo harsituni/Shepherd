@@ -171,7 +171,26 @@ function leadingEdge(feature, from) {
   return best
 }
 
-export default function MapView({ hazards, shelters, route, location, onTap, onViewChange, focusKey, tall = false }) {
+// Framing padding: an even `fallback` all round, plus whatever a map-first layout
+// says its floating controls cover ({ top, bottom, left, right } in px).
+const pad = (extra, fallback) => ({
+  top: fallback + (extra?.top ?? 0),
+  right: fallback + (extra?.right ?? 0),
+  bottom: fallback + (extra?.bottom ?? 0),
+  left: fallback + (extra?.left ?? 0),
+})
+
+export default function MapView({
+  hazards,
+  shelters,
+  route,
+  location,
+  onTap,
+  onViewChange,
+  focusKey,
+  tall = false,
+  framePadding, // map-first layouts: px hidden behind floating controls
+}) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const youMarker = useRef(null)
@@ -413,18 +432,18 @@ export default function MapView({ hazards, shelters, route, location, onTap, onV
       ...hazards.features.flatMap((f) => f.geometry?.coordinates?.[0] ?? []),
       ...shelters.features.map((f) => f.geometry.coordinates),
     ])
-    if (b) map.fitBounds(b, { padding: 30, maxZoom: 13, duration: 0 })
+    if (b) map.fitBounds(b, { padding: pad(framePadding, 30), maxZoom: 13, duration: 0 })
     framed.current = true
-  }, [hazards, shelters, loaded])
+  }, [hazards, shelters, loaded, framePadding])
 
   // New location or "Start navigation": frame the route once it arrives.
   useEffect(() => {
     const map = mapRef.current
     if (!loaded || !map || !route?.geometry || focusKey == null || lastFocus.current === focusKey) return
     const b = boundsOf([...route.geometry.coordinates, ...(location ? [location] : [])])
-    if (b) map.fitBounds(b, { padding: { top: 40, right: 40, bottom: 40, left: 40 }, maxZoom: 14, duration: 600 })
+    if (b) map.fitBounds(b, { padding: pad(framePadding, 40), maxZoom: 14, duration: 600 })
     lastFocus.current = focusKey
-  }, [route, location, focusKey, loaded])
+  }, [route, location, focusKey, loaded, framePadding])
 
   return (
     <div className={tall ? 'map-wrap map-wrap-tall' : 'map-wrap'}>

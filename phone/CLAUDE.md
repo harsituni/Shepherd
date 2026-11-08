@@ -15,14 +15,13 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
 3. **Report hazards/events.** "Report hazard" opens a sheet: type (fire, flooded road, blocked road, other; `other` requires a note and is not in contract v1 yet, so ask Harsit to add it), uses your current location, optional note, submit → `POST /reports`. Also "I'm safe" and "Need help" buttons, which send the same endpoint and show up on the dashboard. Confirm with a short toast.
 4. **Predicted path of the disaster.** On the map: the hazard now (solid orange) and its predicted spread as a single red dotted ring (no fill) labelled T+60, from `GET /forecast`, plus "Fire is X km west of you, moving east" in the alert. Each wildfire also gets an **evacuation zone** (a perfect circle centred on the current fire, reaching 1 km past its farthest edge; never the predicted path; yellow diagonal stripes, solid darker-yellow border), and a shelter the fire is in or forecast to come within that 1 km of turns **red**; tapping it shows its pop-up in red: capacity, then "Unsafe: Find another shelter". Same rule as the dashboard (`src/evacuation.js`).
 
-## Layout (matches the approved mockup)
-- Mockup: `design/phone-mockup.html` (screenshot `design/phone.png`). Visual reference only; rebuild as React components with MapLibre in place of the sketched SVG map.
-- Header in Alberta's brand dark blue `#005072`: a small placeholder logo (white square, navy crook; same as the dashboard) and "Shepherd" on the left, city name on the right, all vertically centred.
-- Notification / alert banner directly under the header.
-- Tabs: **Route** · **Alerts**. (The survival/safety tips tab was removed.)
-- Route tab: map (taller until a location is set, then ~290px), map key, reroute notice, shelter + ETA line, next turn, Start navigation.
-- The mockup predates the Alberta-style pass: where it differs (big ETA number, pill buttons, tinted notices), follow `/DESIGN.md`.
-- Bottom bar, always visible: **Report hazard** · **I'm safe** · **Need help**.
+## Layout: map-first (like a scooter app)
+- References: `design/LIME-MapView_Device_UK-London.png` and `design/Screenshot 2026-11-07 174454.png` (Lime and Bird). The older stacked mockup (`design/phone-mockup.html`, `design/phone.png`) is superseded for layout; colours and type are unchanged.
+- One screen, `src/components/MapScreen.jsx`: the map fills the screen and every control floats over it.
+- **Top left:** area chip (Shepherd mark + place name). **Top right:** the alert / evacuation card, compact (headline only, e.g. "Wildfire evacuation / No deadline yet") with a small chevron; tapping it opens it to full width with the detail lines.
+- **Right rail** (riding just above the route panel; hidden while the route panel is open, to avoid clutter): **Alerts** (official alerts sheet, with the build version at its foot), **Key** (map key sheet), **Report** (report sheet), **Safe** (I'm safe).
+- **Bottom:** the route panel: shelter route cards you swipe sideways (only the card row scrolls, only sideways; selected = navy border wrapping the whole card; no "no fire forecast" line, and blocked cards just say "Fire forecast on this route"), drive mode + Start evacuating, the "location shared" line, and a subtle × floating just above the panel's corner that closes it to a one-line strip ("Shelter · 13 min · 5.1 km", tap to reopen; a new location reopens it). Under it, a full-width red **Need help** bar.
+- No visible em dashes in UI copy.
 
 ## Design
 - **Visual system: see `/DESIGN.md`** (shared with `dashboard/`; tokens, components, rules). If it and this section disagree, flag it rather than picking one.
