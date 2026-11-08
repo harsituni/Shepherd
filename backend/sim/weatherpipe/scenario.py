@@ -11,6 +11,7 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -44,7 +45,7 @@ class ScenarioConfig(BaseModel):
     integration_step_min: float = Field(default=0.25, ge=0.001, le=60)
     ensemble_seed: int = Field(default=0, ge=0)
     weather_default_source: str
-    wind_shift: WindShift | None = None
+    wind_shift: Optional[WindShift] = None
 
 
 def load_config(path) -> ScenarioConfig:
@@ -83,7 +84,7 @@ def validate_contract_a(scenario: dict) -> dict:
 
 
 def build_scenario(config, weather: list[dict], t0: datetime, run_id: str,
-                   weather_source: dict | None = None) -> dict:
+                   weather_source: Optional[dict] = None) -> dict:
     """Assemble and validate a full Contract A dict."""
     if not isinstance(config, ScenarioConfig):
         config = ScenarioConfig.model_validate(config)
@@ -121,7 +122,7 @@ def check_forecast_update(base: dict, update: dict) -> None:
 
 
 def make_forecast_update(base_scenario: dict, new_weather: list[dict], run_id: str,
-                         weather_source: dict | None = None) -> dict:
+                         weather_source: Optional[dict] = None) -> dict:
     update = copy.deepcopy(base_scenario)
     update["weather"] = copy.deepcopy(new_weather)
     update["run_id"] = run_id

@@ -1,4 +1,6 @@
 """Completed, effectively immutable simulation results. No live simulation state."""
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 import json
 import math
