@@ -13,7 +13,6 @@ export default function EvacuateControls({ route, trip, mode, onMode, onStart, o
     return (
       <div className="trip-status" role="status">
         <strong>You've arrived at {trip.route.shelter_name}.</strong>
-        <span className="muted">Tap “I'm safe” below so responders know.</span>
         <button type="button" className="btn-outline" onClick={onStop}>
           Done
         </button>

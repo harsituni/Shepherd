@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { getNotifications, postNotification } from '../api.js'
 import JoinQr from './JoinQr.jsx'
 
 function shelterCapacityPct(shelters) {
@@ -71,14 +72,57 @@ const TABS = [
 
 const SEVERITY_CLASS = { alert: 'severity-alert', evacuation: 'severity-evac' }
 
+const SEVERITY_LABEL = { advisory: 'Advisory', alert: 'Alert', evacuation: 'Evacuation order' }
+const TARGET_LABEL = { zone: 'Hazard zone', all: 'Everyone' }
+
+function sentTime(iso) {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
 function NotifyForm() {
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
   const [severity, setSeverity] = useState('advisory')
   const [target, setTarget] = useState('zone')
+  const [sent, setSent] = useState([])
+  const [sending, setSending] = useState(false)
+  const [status, setStatus] = useState(null) // { text, error }
+
+  const loadSent = useCallback(async () => {
+    try {
+      setSent(await getNotifications())
+    } catch {
+      // keep the list we have; the next send or tab open refreshes it
+    }
+  }, [])
+
+  useEffect(() => {
+    loadSent()
+  }, [loadSent])
+
+  const canSend = title.trim() !== '' && message.trim() !== '' && !sending
+
+  const onSubmit = async (e) => {
+    e.preventDefault()
+    if (!canSend) return
+    setSending(true)
+    setStatus(null)
+    try {
+      await postNotification({ title: title.trim(), message: message.trim(), severity, target })
+      setTitle('')
+      setMessage('')
+      setStatus({ text: 'Sent. Phones show it within a few seconds.' })
+      await loadSent()
+    } catch (err) {
+      setStatus({ text: `Couldn't send: ${err.message}`, error: true })
+    } finally {
+      setSending(false)
+    }
+  }
 
   return (
-    <form className="stack-14" onSubmit={(e) => e.preventDefault()}>
+    <form className="stack-14" onSubmit={onSubmit}>
       <label className="field">
         <span>Title</span>
         <input className="text-input" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -114,13 +158,35 @@ function NotifyForm() {
           <option value="all">Everyone in Edmonton</option>
         </select>
       </label>
-      <button type="submit" className="btn-primary" disabled>
-        Send update
+      <button type="submit" className="btn-primary" disabled={!canSend}>
+        {sending ? 'Sending…' : 'Send update'}
       </button>
-      <span className="hint">Sending is not connected yet (needs POST /notifications).</span>
+      {status && (
+        <span className={status.error ? 'hint sim-error' : 'hint'} role="status">
+          {status.text}
+        </span>
+      )}
       <div className="stack-8">
         <span className="sent-title">Sent</span>
-        <p className="empty">Nothing sent yet.</p>
+        {sent.length === 0 ? (
+          <p className="empty">Nothing sent yet.</p>
+        ) : (
+          <ul className="report-list">
+            {sent.map((n) => (
+              <li key={n.id} className="sent-item">
+                <span className="report-row">
+                  <strong className="report-kind">{n.title}</strong>
+                  <span className="num report-time">{sentTime(n.time)}</span>
+                </span>
+                <span className="report-note">{n.message}</span>
+                <span className="report-loc">
+                  <span className={`sent-${n.severity}`}>{SEVERITY_LABEL[n.severity] ?? n.severity}</span> ·{' '}
+                  {TARGET_LABEL[n.target] ?? 'Everyone'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </form>
   )

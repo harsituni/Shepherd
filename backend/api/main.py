@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import time
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
@@ -30,6 +31,12 @@ dropped_hazards: list[dict] = []
 reports: list[dict] = []
 _next_hazard_id: int = 1
 _next_report_id: int = 1
+
+# Government updates sent from the dashboard; phones poll GET /notifications.
+notifications: list[dict] = []
+_next_notification_id: int = 1
+NOTIFICATION_SEVERITIES = {"advisory", "alert", "evacuation"}
+NOTIFICATION_TARGETS = {"all", "zone"}
 
 # Phone heartbeats upsert here. Dropped if no POST for STALE_EVACUEE_SEC (wall clock).
 STALE_EVACUEE_SEC = 30
@@ -181,6 +188,13 @@ class ReportIn(BaseModel):
     lat: float
     lon: float
     note: Optional[str] = None
+
+
+class NotificationIn(BaseModel):
+    title: str
+    message: str
+    severity: str = "advisory"  # advisory | alert | evacuation
+    target: str = "all"  # all | zone (residents inside a wildfire evacuation zone)
 
 
 class SimStart(BaseModel):
@@ -382,6 +396,44 @@ def post_report(body: ReportIn) -> dict:
 @app.get("/reports")
 def get_reports() -> dict:
     return {"type": "FeatureCollection", "features": reports}
+
+
+@app.post("/notifications", status_code=201)
+def post_notification(body: NotificationIn):
+    """Dashboard "Send update": stored here and picked up by every phone's poll."""
+    global _next_notification_id
+    title, message = body.title.strip(), body.message.strip()
+    if not title or not message:
+        return JSONResponse(
+            status_code=422,
+            content={"error": "invalid_notification", "message": "Title and message are required."},
+        )
+    if body.severity not in NOTIFICATION_SEVERITIES or body.target not in NOTIFICATION_TARGETS:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "invalid_notification",
+                "message": "severity must be advisory|alert|evacuation and target all|zone.",
+            },
+        )
+    note = {
+        "id": f"nt_{_next_notification_id}",
+        "title": title,
+        "message": message,
+        "severity": body.severity,
+        "target": body.target,
+        "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "sim_time": controller.sim_time,
+    }
+    _next_notification_id += 1
+    notifications.append(note)
+    return note
+
+
+@app.get("/notifications")
+def get_notifications() -> dict:
+    """Every update sent so far, newest first."""
+    return {"notifications": list(reversed(notifications))}
 
 
 @app.get("/forecast")

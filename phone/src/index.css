@@ -25,6 +25,7 @@
   --danger-title: #8a2f06;
   --danger-text: #6b3a1f;
   --danger-icon: #b4400b;
+  --alert-title: #9a6b00; /* severity "Alert" label, same deep yellow as the dashboard */
   /* Gold focus ring, as on Alberta.ca. Focus only; never decoration. */
   --focus: #feba35;
   --font: 'Public Sans', system-ui, sans-serif;
@@ -312,7 +313,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 
 .note-meta { font-size: var(--fs-sm); font-weight: 600; }
 .sev-advisory .note-meta { color: var(--blue); }
-.sev-alert .note-meta { color: var(--navy); }
+.sev-alert .note-meta { color: var(--alert-title); }
 .sev-evacuation .note-meta { color: var(--danger-title); }
 
 /* The pop-up: the one element in the system with a shadow. */

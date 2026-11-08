@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CloseIcon, InfoIcon, WarningIcon } from './icons.jsx'
 
-// Severity → label, icon and colour class (Advisory blue, Alert navy, Evacuation order orange).
+// Severity → label, icon and colour class (Advisory blue, Alert deep yellow, Evacuation order deep red).
 export const SEVERITY = {
   advisory: { label: 'Advisory', rank: 1, Icon: InfoIcon },
   alert: { label: 'Alert', rank: 2, Icon: WarningIcon },
