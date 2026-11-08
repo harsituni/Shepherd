@@ -4,3 +4,10 @@ uvicorn[standard]
 osmnx>=2,<3
 networkx>=3,<4
 scikit-learn>=1.5,<2
+# Wildfire spread engine + OpenWeather forecast (Dviviz) — needed by backend.sim.wildfire
+numpy>=1.22
+pyproj>=3.1
+shapely>=2.1
+rasterio>=1.3
+pydantic>=2
+requests>=2

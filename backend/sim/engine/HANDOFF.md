@@ -204,7 +204,14 @@ A separate integration task must modify these application components:
   Flooring known arrivals may avoid upward time-rounding, but does not remove spatial
   approximation error. The 30-minute policy buffer remains outside this engine.
 
-No controller, API, routing, legacy WildfireSim, or frontend changes are included.
+The engine itself includes no controller, API, routing or frontend changes.
+
+**Live adapter (done):** `backend/sim/wildfire.py` now runs `WildfireSim` on this engine
+behind the unchanged contract interface, and `backend/sim/controller.py` feeds it the
+OpenWeather forecast (`weatherpipe/live.py`), falling back to the dashboard's wind. It keeps
+the contract's single 33-point Polygon outlines rather than passing MultiPolygons to the
+frontends, holds one result reaching past now + 120 min, recomputes in full on wind
+changes and look-ahead, and floors `arrival_min`. See those module docstrings.
 
 ## Physical limitations
 
