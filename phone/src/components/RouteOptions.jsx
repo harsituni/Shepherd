@@ -26,9 +26,11 @@ function ordered(options, bestId) {
 }
 
 export function clearLine(o) {
-  // Greyed: one short line. The backend's reason (roads, arrival minutes) is too
-  // much to read at a glance on a card.
-  if (o.status === 'blocked') return 'Fire forecast on this route'
+  // Greyed: one short line. Prefer a short shelter-zone reason when present.
+  if (o.status === 'blocked') {
+    if (/evacuation zone|already near/i.test(o.reason ?? '')) return 'Shelter is in the evacuation zone'
+    return 'Fire forecast on this route'
+  }
   if (o.status === 'indeterminate') return "The forecast can't confirm this route is safe"
   // No threat: say nothing (the "Clear" status already says it).
   if (o.margin_min == null) return null

@@ -77,3 +77,57 @@ export function unsafeShelterIds(shelters, rings) {
   }
   return ids
 }
+
+// Match the dashboard: never keep a yellow-zone centre as Clear / Recommended,
+// even if /route briefly still says ok (road cell clear, building in the circle).
+export function demoteUnsafeRoute(route, unsafeIds) {
+  if (!route?.options?.length || !unsafeIds?.size) return route
+  const options = route.options.map((o) => {
+    if (!unsafeIds.has(o.shelter_id) || (o.status !== 'ok' && o.status !== 'tight')) return o
+    const name = o.shelter_name || 'this shelter'
+    return {
+      ...o,
+      status: 'blocked',
+      leave_by_sim_min: null,
+      clear_until_sim_min: null,
+      clear_until_label: null,
+      reason: `Fire is already near ${name} (inside the evacuation zone).`,
+    }
+  })
+  const usable = (o) => o.status === 'ok' || o.status === 'tight'
+  const best = options.find((o) => usable(o) && o.id === route.best_route_id) ?? options.find(usable)
+  const leaveBy = best?.leave_by_sim_min ?? null
+  const sim = route.sim_time ?? 0
+  return {
+    ...route,
+    options,
+    best_route_id: best?.id ?? null,
+    route_status: best ? 'viable' : options.some((o) => o.status === 'indeterminate') ? 'indeterminate' : 'blocked',
+    no_safe_route: best ? false : options.some((o) => o.status === 'indeterminate') ? null : true,
+    leave_by_sim_min: leaveBy,
+    leave_by_label: leaveBy == null ? null : `Leave within ${Math.max(0, leaveBy - sim)} min (sim)`,
+    ...(best
+      ? {
+          shelter_id: best.shelter_id,
+          shelter_name: best.shelter_name,
+          distance_km: best.distance_km,
+          eta_min: best.eta_min,
+          geometry: best.geometry,
+          status: best.status,
+          margin_min: best.margin_min,
+          reason: best.reason,
+          route_id: best.id,
+        }
+      : {
+          shelter_id: undefined,
+          shelter_name: undefined,
+          distance_km: undefined,
+          eta_min: undefined,
+          geometry: undefined,
+          status: undefined,
+          margin_min: undefined,
+          reason: undefined,
+          route_id: null,
+        }),
+  }
+}
