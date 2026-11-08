@@ -3,7 +3,7 @@ import { evacueeId, routeLengthKm } from '../evacuate.js'
 // Issue #56: under the route cards. Before leaving: pick Simulated drive (in-room
 // demo) or Real GPS, then Start evacuating. While evacuating: progress and Stop.
 
-const MODES = [
+export const MODES = [
   ['sim', 'Simulated drive', 'Moves your dot along the route, so you can demo without walking.'],
   ['gps', 'Real GPS', "Follows your phone's location. Your browser will ask for permission."],
 ]
