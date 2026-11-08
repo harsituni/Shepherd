@@ -36,6 +36,23 @@ function deviceLocation() {
   })
 }
 
+// Keep leave-by from drifting later on the same pin (cleared when the pin changes).
+function ratchetLeaveBy(prev, next) {
+  if (!next) return next
+  const was = prev?.leave_by_sim_min
+  if (was == null) return next
+  const now = next.leave_by_sim_min
+  if (now == null || now > was) {
+    const sim = next.sim_time ?? prev.sim_time ?? was
+    return {
+      ...next,
+      leave_by_sim_min: was,
+      leave_by_label: `Leave within ${Math.max(0, was - sim)} min (sim)`,
+    }
+  }
+  return next
+}
+
 export default function App() {
   const [location, setLocation] = useState(null) // [lon, lat]
   const [route, setRoute] = useState(null)
@@ -129,7 +146,9 @@ export default function App() {
         // Send the pick so the backend keeps it in the answer even if it turns unsafe.
         const r = await getRoute(loc[1], loc[0], chosenRef.current)
         if (stale()) return
-        setRoute(r)
+        // Leave-by must never jump upward for the same pin: once we've told someone
+        // "leave by T+X", a later poll can't push that deadline out while the fire grows.
+        setRoute((prev) => ratchetLeaveBy(prev, r))
         setRouteError(null)
       } catch (err) {
         if (stale()) return
