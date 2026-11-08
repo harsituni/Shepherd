@@ -67,12 +67,29 @@ def build_grid(bbox, cell_m=DEFAULT_CELL_M) -> Grid:
     )
 
 
+def _xy_transform(transformer):
+    """Adapt pyproj Transformer to shapely 2.0's (N, 2) coordinate callback.
+
+    shapely>=2.1 accepts ``interleaved=False`` and a (x, y) → (x, y) callable;
+    2.0 (Python 3.9 wheels) only takes an (N, 2) ndarray callback.
+    """
+
+    def apply(coords):
+        x, y = transformer.transform(coords[:, 0], coords[:, 1])
+        out = np.empty_like(coords)
+        out[:, 0] = x
+        out[:, 1] = y
+        return out
+
+    return apply
+
+
 def to_utm(geom):
-    return shapely.transform(geom, TO_UTM.transform, interleaved=False)
+    return shapely.transform(geom, _xy_transform(TO_UTM))
 
 
 def to_wgs84(geom):
-    return shapely.transform(geom, TO_WGS84.transform, interleaved=False)
+    return shapely.transform(geom, _xy_transform(TO_WGS84))
 
 
 def seed_mask(perimeter_utm, grid) -> np.ndarray:
