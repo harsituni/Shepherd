@@ -105,6 +105,17 @@ SHELTERS: list[dict] = [
         },
         "geometry": {"type": "Point", "coordinates": [-113.582, 53.522]},
     },
+    {
+        "type": "Feature",
+        "id": "sh_castle_downs",
+        "properties": {
+            "name": "Castle Downs Rec Centre",
+            "capacity": 3000,
+            "occupancy": 0,
+            "open": True,
+        },
+        "geometry": {"type": "Point", "coordinates": [-113.520, 53.612]},
+    },
 ]
 
 
