@@ -86,6 +86,38 @@ Call `load_graph()` once at startup. The selected mode lasts until restart.
 Calling `find_route()` before startup still raises an error. The routing
 Python dependencies must be installed even when using backup mode.
 
+## Routing v3 (the default)
+
+`GET /route` serves `find_routes_v3()`; start the API with `SHEPHERD_ROUTING=v2`
+to get the old router back. v3 returns 2-4 road routes from the pin, each checked against the
+fire forecast for the whole trip. Unsafe routes are kept, marked `blocked` with
+a reason and `hazard_intercept`, and never dropped for being unsafe. When every
+modeled path in the declared search scope is demonstrably blocked the answer is still 200, with
+`no_safe_route: true` and `best_route_id: null`. If no route is established as
+viable and any generated candidate is indeterminate, `no_safe_route` is `null`
+and `route_status` is `"indeterminate"`; no route is recommended. See
+[forecast validity and coverage](FORECAST_VALIDITY.md) for the engine/API
+semantics and [feasibility search](FEASIBILITY.md) for search scope, exactness,
+parallel-road identity, and API implications. 404 is only for outside the demo area, no road within
+300 m, or no open shelter reachable by road.
+
+- `road_graph.py`: the graph as arrays (`RoadGraph`), a SciPy CSR matrix, a
+  `cKDTree` snap, and the exact road-to-fire-cell table (grid traversal).
+- `safety.py`: per-forecast road deadlines (`EdgeFire`), and `judge()`, which
+  gives ok / tight / blocked / indeterminate with the 30-minute buffer, cell by cell, from the
+  person's own cell through both road endpoints.
+- `candidates.py`: the usual road to every eligible reachable shelter, the
+  compiled safe search with an exact heap fallback plus a roomier pass (`safest`), and penalty-search
+  `alternative`s. The route named in `check_route_id` is always rebuilt.
+- `select.py`: ranking, 80% overlap dedup, and the 2-4 options shown.
+- The sim side is `backend/sim/oracle.py`: `controller.oracle()` returns a frozen,
+  read-only `ForecastOracle` that covers the whole road graph and at least the
+  next 240 minutes.
+
+`GET /route?debug=1` adds `timings`. `python -m backend.routing.bench_routes`
+checks the speed budgets in-process; add `--url http://localhost:8000` to
+replay the scenarios at 1, 5 and 15 polling clients against a running v3 API.
+
 ## Try backup mode without touching the real graph
 
 From the repository root, point a fresh demo process at a nonexistent file:
@@ -127,6 +159,9 @@ python -B -m unittest discover -s backend/routing -v
 The tests use tiny NetworkX/XML fixtures, real OSMnx nearest-node lookups,
 and temporary GraphML files. Download calls are mocked or blocked. They do
 not load the large Edmonton graph. No internet is needed once packages are installed.
+
+The v3 scenario tests (`test_routing_v3_scenarios.py`) do load the saved
+Edmonton graph and run the real sim; run everything with `python -m pytest backend`.
 
 ## Real Edmonton demo (run separately)
 
@@ -370,3 +405,9 @@ The API owner must catch `NoRouteError` and return the contract's HTTP 404 JSON.
 API references used:
 - https://osmnx.readthedocs.io/en/stable/user-reference.html
 - https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.shortest_paths.generic.shortest_path.html
+
+Phase 3 geographic access and API semantics: [ACCESS.md](ACCESS.md). For the
+demo, journeys run between road points: the person's nearest reachable road
+point and each centre's designated road point. The gaps to the person and the
+building are reported (`unmodeled_m`), never driven or drawn, and shelter
+coordinates are kept as metadata, not replaced.

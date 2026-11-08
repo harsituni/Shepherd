@@ -51,7 +51,8 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
 
 ## API this app uses (from `shared/contract.md` v1)
 - Backend `http://localhost:8000` (laptop LAN IP for real phones; backend runs with `--host 0.0.0.0`) · this app runs on port **5174** · map starts at `[-113.4938, 53.5461]`, zoom `11`.
-- `GET /route?lat=&lon=` → `{ shelter_id, shelter_name, distance_km, eta_min, rerouted, reroute_reason, steps: [{ instruction, distance_km }], geometry: LineString }`. Show the reroute notice only when `rerouted` is true; `steps` may be `[]` (hide next turn). 404 `{ error: "no_route" }` → show "No safe shelter reachable, call 911".
+- `GET /route?lat=&lon=&check_route_id=` (v3, see `shared/route_v3.md`): 2 to 4 `options` with stable ids, `best_route_id` (null when nothing is safe or confirmable), `route_status`, `no_safe_route`. Only `ok`/`tight` options can be picked; `blocked`/`indeterminate` are greyed. Send the picked id as `check_route_id` on every poll. The best option is also copied to the top level (the v1 fields below).
+- v1 fields: `{ shelter_id, shelter_name, distance_km, eta_min, rerouted, reroute_reason, steps: [{ instruction, distance_km }], geometry: LineString }`. Show the reroute notice only when `rerouted` is true; `steps` may be `[]` (hide next turn). 404 `{ error: "no_route" }` → show "No safe shelter reachable, call 911".
 - `GET /hazards`: draw `zone: core` solid orange, `buffer` lighter.
 - `GET /shelters`: `occupancy / capacity` for "% full".
 - `GET /forecast` (contract v2): `outlines` at `t_min` 15, 30 … 120 minutes from now; only the 60 min one is drawn as the predicted path (merged into the hazards as `predicted_min` features in `src/api.js`). Empty when idle.

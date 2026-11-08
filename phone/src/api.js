@@ -22,8 +22,8 @@ async function request(path, options = {}) {
 }
 
 // ---------- fixture mode: a tiny in-memory stand-in for the backend ----------
-// Hazards grow a little on each poll; /route returns contract v2 options as
-// straight lines to the nearest open shelters.
+// Hazards grow a little on each poll; /route returns v3 options (shared/route_v3.md)
+// as straight lines to the nearest open shelters.
 
 const GROWTH_PER_TICK = 0.04
 const MAX_SCALE = 3.5
@@ -45,12 +45,10 @@ function grownFeature(h) {
 }
 
 // Fixture fire forecast: minutes for the fire to spread one km, the contract's
-// 30-minute road-closing buffer and 120-minute forecast horizon, and the backend's
-// "no threat" margin sentinel (backend/routing/router.py).
+// 30-minute road-closing buffer and 120-minute forecast horizon.
 const FAKE_FIRE_MIN_PER_KM = 12
 const BUFFER_MIN = 30
 const HORIZON_MIN = 120
-const NO_THREAT = 999
 const SAMPLES = 8
 let fakeForecast = { key: null, arrivals: null }
 
@@ -65,12 +63,12 @@ function fakeArrival(point, at) {
   return best - at > HORIZON_MIN ? null : Math.round(best)
 }
 
-// One v2 option, scored like the backend: a sample is blocked if you'd reach it
-// later than BUFFER_MIN before the fire does.
-function fakeOption(id, here, shelter, arrivals) {
+// One v3 option, scored like the backend: a sample is blocked if you'd reach it
+// later than BUFFER_MIN before the fire does. margin null = no threat.
+function fakeOption(here, shelter, arrivals) {
   const km = distanceKm(here, shelter.geometry.coordinates)
   const eta = Math.max(1, Math.round((km / FAKE_SPEED_KMH) * 60))
-  let margin = NO_THREAT
+  let margin = null
   let clearUntil = null
   let reason = null
   arrivals.forEach((arrival, i) => {
@@ -78,15 +76,16 @@ function fakeOption(id, here, shelter, arrivals) {
     const reach = fakeSimTime + (eta * i) / (SAMPLES - 1)
     const spare = Math.floor(arrival - BUFFER_MIN - reach)
     clearUntil = clearUntil == null ? arrival - BUFFER_MIN : Math.min(clearUntil, arrival - BUFFER_MIN)
-    if (spare < margin) margin = spare
+    if (margin == null || spare < margin) margin = spare
     if (spare < 0 && !reason) {
       reason = `Roads on this route close at T+${arrival - BUFFER_MIN}, ${BUFFER_MIN} min before the fire arrives. You'd reach them at T+${Math.round(reach)}.`
     }
   })
-  const status = margin >= 60 ? 'ok' : margin >= 0 ? 'tight' : 'blocked'
+  const status = margin == null || margin >= 60 ? 'ok' : margin >= 0 ? 'tight' : 'blocked'
   const usable = status !== 'blocked'
   return {
-    id,
+    id: `rt_${shelter.id}_fastest`,
+    role: 'fastest',
     shelter_id: shelter.id,
     shelter_name: shelter.properties.name,
     distance_km: Math.round(km * 10) / 10,
@@ -100,7 +99,7 @@ function fakeOption(id, here, shelter, arrivals) {
   }
 }
 
-// Fixture /route in the contract v2 shape: up to 3 nearest open shelters, each
+// Fixture /route in the v3 shape: up to 3 nearest open shelters, each
 // ok / tight / blocked against the fake fire. The forecast is snapshotted per
 // location (like a real forecast it only changes when conditions do), so margins
 // shrink as sim time passes and a route can turn tight, then blocked.
@@ -127,26 +126,31 @@ function fakeRoute(lat, lon) {
     fakeForecast = { key, arrivals }
   }
 
-  const options = open.map(({ f }, i) => fakeOption(`rt_${i + 1}`, here, f, fakeForecast.arrivals[i]))
-  const usable = options.filter((o) => o.status !== 'blocked')
-  if (usable.length === 0) throw noRoute('No usable evacuation route under the current fire forecast')
-  const best = usable.reduce((a, b) => (b.margin_min > a.margin_min || (b.margin_min === a.margin_min && b.eta_min < a.eta_min) ? b : a))
-  const leaveBy = best.margin_min === NO_THREAT ? null : fakeSimTime + best.margin_min
+  const spare = (o) => (o.margin_min == null ? Infinity : o.margin_min)
+  const rank = { ok: 0, tight: 1, blocked: 2 }
+  const options = open
+    .map(({ f }, i) => fakeOption(here, f, fakeForecast.arrivals[i]))
+    .sort((a, b) => rank[a.status] - rank[b.status] || (a.status === 'ok' ? a.eta_min - b.eta_min : spare(b) - spare(a)))
+  const best = options[0].status === 'blocked' ? null : options[0]
+  const leaveBy = best?.margin_min == null ? null : fakeSimTime + best.margin_min
   return {
     lat,
     lon,
     sim_time: fakeSimTime,
+    route_status: best ? 'viable' : 'blocked',
+    best_route_id: best?.id ?? null,
+    no_safe_route: !best,
     leave_by_sim_min: leaveBy,
     leave_by_label: leaveBy == null ? null : `Leave within ${best.margin_min} min (sim)`,
-    best_route_id: best.id,
     options,
-    excluded: options.filter((o) => o.status === 'blocked').map((o) => ({ shelter_id: o.shelter_id, reason: o.reason })),
+    excluded: [],
   }
 }
 
-// /route comes back as contract v2 (`options` + `leave_by_*`) or, until the backend
-// migrates, the Step 0 flat shape. Flatten v2's best option onto the top level so the
-// map and route details read one shape; `leave_by_sim_min` is undefined for v1.
+// /route comes back as v3 (`route_status`, shared/route_v3.md), contract v2 or the
+// Step 0 flat shape. Flatten the best option onto the top level so the map and route
+// details read one shape. v3 can have no best (nothing safe, or nothing confirmed):
+// then nothing is flattened and there is no route line, only greyed options.
 const roundKm = (km) => (km == null || Number.isNaN(Number(km)) ? km : Math.round(Number(km) * 10) / 10)
 
 export function normalizeRoute(body) {
@@ -155,7 +159,9 @@ export function normalizeRoute(body) {
     return { ...body, distance_km: roundKm(body.distance_km) }
   }
   const options = body.options.map((o) => ({ ...o, distance_km: roundKm(o.distance_km) }))
-  const best = options.find((o) => o.id === body.best_route_id) ?? options.find((o) => o.status !== 'blocked')
+  const v3 = body.route_status != null
+  const best =
+    options.find((o) => o.id === body.best_route_id) ?? (v3 ? undefined : options.find((o) => o.status !== 'blocked'))
   return {
     rerouted: false,
     reroute_reason: null,
@@ -169,20 +175,26 @@ export function normalizeRoute(body) {
   }
 }
 
-// The route to show: the option the user picked (by shelter, since option ids can be
-// renumbered between polls) or the backend's best. If their pick has since become
-// blocked, fall back to the best and return it as `lost` so the UI can say why.
-export function withChoice(route, shelterId) {
-  const picked = shelterId ? route?.options?.find((o) => o.shelter_id === shelterId) : null
+// Only these can be picked, recommended or driven; blocked and indeterminate
+// routes are shown greyed.
+export const usable = (o) => o?.status === 'ok' || o?.status === 'tight'
+
+// The route to show: the option the user picked (by its stable id; the backend keeps
+// it in `options` because the phone sends check_route_id) or the backend's best. If
+// their pick is no longer usable, fall back to the best and return it as `lost`.
+export function withChoice(route, routeId) {
+  const picked = routeId ? route?.options?.find((o) => o.id === routeId) : null
   if (!picked) return { shown: route, lost: null }
-  if (picked.status === 'blocked') return { shown: route, lost: picked }
+  if (!usable(picked)) return { shown: route, lost: picked }
   return { shown: { ...route, ...picked, id: undefined, route_id: picked.id }, lost: null }
 }
 
 // ---------- public API ----------
 
-export async function getRoute(lat, lon) {
-  if (!USE_FIXTURES) return normalizeRoute(await request(`/route?lat=${lat}&lon=${lon}`))
+// checkRouteId: the id of the route the person picked, so it stays in the answer.
+export async function getRoute(lat, lon, checkRouteId = null) {
+  const check = checkRouteId ? `&check_route_id=${encodeURIComponent(checkRouteId)}` : ''
+  if (!USE_FIXTURES) return normalizeRoute(await request(`/route?lat=${lat}&lon=${lon}${check}`))
   return normalizeRoute(fakeRoute(lat, lon))
 }
 

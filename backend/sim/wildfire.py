@@ -7,8 +7,10 @@ outlines point by point, so the count must never change).
 
 How it spreads:
     Canadian FBP System, M-1 boreal mixedwood (50% conifer), BUI 90, flat ground,
-    on a 100 m grid filling a 10 x 10 km square around the ignition. The fire
-    starts as a 300 m circle. fuel_dryness sets the fine fuel moisture code (FFMC).
+    on a 100 m grid filling a 10 x 10 km square around the ignition, widened to
+    cover domain_bbox when one is given (the API passes the road graph's box so
+    routing has a forecast everywhere it routes). The fire starts as a 300 m
+    circle. fuel_dryness sets the fine fuel moisture code (FFMC).
 
 Weather:
     An hourly series from sim minute 0: the OpenWeather forecast when the caller
@@ -19,9 +21,10 @@ Weather:
 How it runs:
     The engine always computes the whole fire from minute 0 (it has no
     continuation), so the sim holds one finished result that reaches past
-    "now + forecast horizon" and swaps in a fresh one when it needs to see further
-    ahead or the wind changes. A run on this domain takes tens of milliseconds.
-    Reads use whichever result is current; they never wait for a run.
+    "now + ROUTE_WINDOW_MIN" and swaps in a fresh one when it needs to see further
+    ahead or the wind changes. A run takes tens of milliseconds on the 10 km square
+    and 0.1-0.2 s across the whole city. Reads use whichever result is current;
+    they never wait for a run. oracle() hands routing a frozen snapshot of it.
 
 Usage:
     python -m backend.sim.wildfire                   # ASCII animation, default wind
@@ -30,6 +33,7 @@ Usage:
 
 from __future__ import annotations
 
+import itertools
 import math
 import threading
 from datetime import datetime, timezone
@@ -40,15 +44,17 @@ from shapely.geometry import Point, mapping
 
 from backend.sim.engine import run_simulation
 from backend.sim.engine.contracts import WeatherEntry
-from backend.sim.engine.grid import TO_WGS84, to_utm, to_wgs84
+from backend.sim.engine.grid import TO_WGS84, domain_mask, to_utm, to_wgs84
 from backend.sim.engine.weather import KMH_PER_MS, interpolate_wind
+from backend.sim.oracle import ForecastOracle
 
 START_RADIUS_M = 300
 MAX_RADIUS_M = 5000           # half-width of the square fire domain around the ignition
 CELL_M = 100
 OUTLINE_POINTS = 32
 FORECAST_STEP_MIN = 15
-HORIZON_MIN = 120             # contract default forecast horizon
+HORIZON_MIN = 120             # contract default forecast horizon (/forecast, arrival_min)
+ROUTE_WINDOW_MIN = 240        # routing judges whole trips: longest drive (~110 min) + 30 buffer + 60
 LOOKAHEAD_MIN = 240           # each run reaches this far past what is needed, so runs are rare
 INTEGRATION_STEP_MIN = 1.0    # weather only changes hourly or on whole minutes
 MAX_WIND_KMH = 60 * KMH_PER_MS
@@ -64,13 +70,19 @@ def ffmc_for_dryness(fuel_dryness: float) -> float:
     return round(min(max(92 + (dryness - 0.7) * 20, 80), 98), 1)
 
 
+# Fire runs are numbered across every sim in the process, so a forecast version
+# never repeats after /sim/reset and routing caches can't mix two fires.
+_VERSIONS = itertools.count(1)
+
+
 class WildfireSim:
     def __init__(self, lat: float, lon: float, wind_kmh: float = 20,
                  wind_from_deg: float = 315, fuel_dryness: float = 0.7, *,
                  weather: Optional[list[dict]] = None, t0: Optional[datetime] = None,
-                 weather_source: Optional[dict] = None):
+                 weather_source: Optional[dict] = None, domain_bbox: Optional[list] = None):
         """weather: hourly Contract A entries from sim minute 0 (t_min 0, 60, ...).
-        Without it, wind_kmh / wind_from_deg blow constantly."""
+        Without it, wind_kmh / wind_from_deg blow constantly.
+        domain_bbox: [min_lon, min_lat, max_lon, max_lat] the fire must also cover."""
         self.lat = float(lat)
         self.lon = float(lon)
         self.fuel_dryness = fuel_dryness
@@ -88,10 +100,18 @@ class WildfireSim:
 
         centre = to_utm(Point(self.lon, self.lat))
         self._bbox = list(to_wgs84(centre.buffer(MAX_RADIUS_M, cap_style="square")).bounds)
+        if domain_bbox is not None:
+            d = [float(v) for v in domain_bbox]
+            self._bbox = [min(self._bbox[0], d[0]), min(self._bbox[1], d[1]),
+                          max(self._bbox[2], d[2]), max(self._bbox[3], d[3])]
         self._perimeter = mapping(to_wgs84(centre.buffer(START_RADIUS_M, quad_segs=16)))
         self._lock = threading.RLock()
         self._runs = 0
-        self._run(HORIZON_MIN + LOOKAHEAD_MIN)
+        self._version = 0
+        self._oracle = None
+        self._oracle_arrival = (0, None)   # (version, read-only arrival array)
+        self._in_domain = None
+        self._run(ROUTE_WINDOW_MIN + LOOKAHEAD_MIN)
 
     # ---------- wind ----------
 
@@ -126,14 +146,14 @@ class WildfireSim:
                 kept.append(_entry(now + 1, kmh, from_deg, like=kept[-1]))
                 self._weather = kept
             self._override = (kmh, from_deg)
-            self._run(max(self._result.horizon_min, now + HORIZON_MIN + LOOKAHEAD_MIN))
+            self._run(max(self._result.horizon_min, now + ROUTE_WINDOW_MIN + LOOKAHEAD_MIN))
 
     # ---------- time ----------
 
     def step(self, minutes: int) -> None:
         with self._lock:
             self.minutes += minutes
-            self._covering(self.minutes + HORIZON_MIN)
+            self._covering(self.minutes + ROUTE_WINDOW_MIN)
 
     def _covering(self, until_min):
         """The current result, first recomputed further ahead if it ends before until_min."""
@@ -162,6 +182,42 @@ class WildfireSim:
             "fbp": {**FUEL, "ffmc": self.ffmc},
             "weather_source": self.weather_source,
         })
+        self._version = next(_VERSIONS)
+
+    # ---------- routing ----------
+
+    def oracle(self) -> ForecastOracle:
+        """Frozen snapshot of the forecast now, covering at least now + ROUTE_WINDOW_MIN.
+
+        The same object comes back until the sim moves on or reruns, so a paused sim
+        hands out one snapshot. Arrays are shared by every snapshot of a run.
+        """
+        with self._lock:
+            result = self._covering(self.minutes + ROUTE_WINDOW_MIN)
+            snap = self._oracle
+            if snap is not None and snap.version == self._version and snap.sim_time == self.minutes:
+                return snap
+            if self._oracle_arrival[0] != self._version:
+                arrival = np.array(result.arrival_grid("p50"), dtype=np.float64).reshape(-1)
+                arrival[np.isnan(arrival)] = np.inf
+                arrival.flags.writeable = False
+                self._oracle_arrival = (self._version, arrival)
+            grid = result.grid
+            if self._in_domain is None:
+                # The cells the engine can burn: the lon/lat domain box, rasterised.
+                mask = domain_mask(self._bbox, grid).reshape(-1).copy()
+                mask.flags.writeable = False
+                self._in_domain = mask
+            kmh, from_deg = self._wind_now()
+            self._oracle = ForecastOracle(
+                version=self._version, run_id=f"live-{self._runs}", band="p50",
+                sim_time=self.minutes, covers_until_sim_min=float(result.horizon_min),
+                wind_kmh=round(kmh, 1), wind_from_deg=round(from_deg, 1),
+                x0=float(grid.origin_x), y0=float(grid.origin_y), cell_m=float(grid.cell_m),
+                nrows=int(grid.rows), ncols=int(grid.cols),
+                arrival=self._oracle_arrival[1], in_domain=self._in_domain,
+            )
+            return self._oracle
 
     # ---------- contract reads ----------
 
@@ -202,6 +258,18 @@ class WildfireSim:
         if query.status != "arrival" or query.arrival_min > now + horizon_min:
             return None
         return int(math.floor(query.arrival_min))
+
+    def arrival_status(self, lat: float, lon: float, horizon_min: int = HORIZON_MIN) -> tuple:
+        """Like arrival_min, but says why there is no minute:
+        ("arrival", minute), ("not_reached", None) = clear for the window, or
+        ("outside_domain", None) = no forecast here at all."""
+        now = self.minutes
+        query = self._covering(now + horizon_min).arrival_at(lat, lon)
+        if query.status == "arrival" and query.arrival_min <= now + horizon_min:
+            return "arrival", int(math.floor(query.arrival_min))
+        if query.status in ("arrival", "not_reached"):
+            return "not_reached", None
+        return "outside_domain", None
 
     def _outline(self, result, minute) -> list[list[float]]:
         """Ring around the cells burned by `minute`: from the burned area's centre, the
