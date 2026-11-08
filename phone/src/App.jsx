@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   getHazards,
+  getReports,
   getNotifications,
   getRoute,
   getShelters,
@@ -11,7 +12,7 @@ import {
   deletePriority,
   withChoice,
 } from './api.js'
-import { POLL_MS } from './config.js'
+import { MAP_CENTER, POLL_MS } from './config.js'
 import { evacueeId, locateOnce, useEvacuation, useHeartbeat } from './evacuate.js'
 import { dangerRings, demoteUnsafeRoute, evacZones, unsafeShelterIds } from './evacuation.js'
 import { isCurrentCore, nearestHazard, pointInRing } from './geo.js'
@@ -92,7 +93,11 @@ export default function App() {
   const [hazards, setHazards] = useState(null)
   const [shelters, setShelters] = useState(null)
   const [focusKey, setFocusKey] = useState(null)
-  const [sheetOpen, setSheetOpen] = useState(false)
+  // Reporting a hazard is two steps: 'place' (tap the map where it is), then
+  // 'details' (the sheet: type + note). reportAt is the placed spot.
+  const [reportStep, setReportStep] = useState(null) // null | 'place' | 'details'
+  const [reportAt, setReportAt] = useState(null) // [lon, lat]
+  const [reports, setReports] = useState(null) // public hazard reports from every phone
   const [priorityOpen, setPriorityOpen] = useState(false)
   const [priority, setPriority] = useState(loadPriority) // { id_type, id_last4, needs, note } | null
   const [prioritySending, setPrioritySending] = useState(false)
@@ -120,7 +125,9 @@ export default function App() {
 
   // Header place name follows the map. Wait until panning/zooming settles,
   // then look it up; keep the previous name if the lookup fails.
+  const mapCenterRef = useRef(MAP_CENTER) // where a new report pin starts
   const onViewChange = useCallback((center, zoom) => {
+    mapCenterRef.current = center
     clearTimeout(areaTimer.current)
     areaTimer.current = setTimeout(async () => {
       areaAbort.current?.abort()
@@ -166,7 +173,14 @@ export default function App() {
     if (refreshBusy.current) return
     refreshBusy.current = true
     try {
-      const [h, s, n, st] = await Promise.allSettled([getHazards(), getShelters(), getNotifications(), getSimState()])
+      const [h, s, n, st, rp] = await Promise.allSettled([
+        getHazards(),
+        getShelters(),
+        getNotifications(),
+        getSimState(),
+        getReports(),
+      ])
+      if (rp.status === 'fulfilled') setReports(rp.value)
       if (h.status === 'fulfilled') setHazards(h.value)
       // Sim clock from /sim/state; older backends without it fall back to /hazards' sim_time at 1x.
       if (st.status === 'fulfilled' && st.value) setClock((c) => nextClock(c, st.value))
@@ -448,7 +462,49 @@ export default function App() {
   // pending pin. A confirmed tap is a pretend location, so it switches to
   // Simulated drive; picking Real GPS again jumps back to the phone's location.
   const [pendingTap, setPendingTap] = useState(null) // [lon, lat] awaiting confirmation
-  const tapMap = useCallback((lngLat) => setPendingTap(lngLat), [])
+  const tapMap = useCallback(
+    (lngLat) => {
+      // While placing a report, a tap moves the report pin there instead.
+      if (reportStep === 'place') {
+        setReportAt(lngLat)
+        return
+      }
+      setPendingTap(lngLat)
+    },
+    [reportStep],
+  )
+
+  // Report a hazard anywhere: Report drops a pin in the middle of the map, the person
+  // drags it (or taps the map) to the incident and drops it, then the sheet takes the
+  // type and a short message for responders. Everyone's map shows it on the next poll.
+  const startReport = useCallback(() => {
+    setPendingTap(null)
+    setReportAt(mapCenterRef.current)
+    setReportStep('place')
+  }, [])
+  const cancelReport = useCallback(() => {
+    setReportStep(null)
+    setReportAt(null)
+  }, [])
+  const sendHazardReport = useCallback(
+    async ({ kind, note }) => {
+      if (!reportAt) return
+      setSending(true)
+      try {
+        await postReport({ kind, lat: reportAt[1], lon: reportAt[0], note })
+        cancelReport()
+        showToast('Report sent. Everyone using Shepherd can see it on their map.')
+        getReports()
+          .then(setReports)
+          .catch(() => {})
+      } catch {
+        showToast("Couldn't send. Check your connection and try again.")
+      } finally {
+        setSending(false)
+      }
+    },
+    [reportAt, cancelReport, showToast],
+  )
   const confirmTap = useCallback(() => {
     if (!pendingTap) return
     evacModeRef.current = 'sim'
@@ -464,8 +520,9 @@ export default function App() {
   const [confirmHelp, setConfirmHelp] = useState(false)
   const askHelp = useCallback(() => {
     setPendingTap(null)
+    cancelReport()
     setConfirmHelp(true)
-  }, [])
+  }, [cancelReport])
   const sendHelp = useCallback(() => {
     setConfirmHelp(false)
     sendReport('sos')
@@ -538,7 +595,11 @@ export default function App() {
             route={driveRoute}
             location={location}
             pending={pendingTap}
-            onTap={evacuating ? undefined : tapMap}
+            reports={reports}
+            reportPin={reportStep ? reportAt : null}
+            reportStep={reportStep}
+            onReportPinMove={setReportAt}
+            onTap={evacuating && !reportStep ? undefined : tapMap}
             onViewChange={onViewChange}
             focusKey={focusKey}
             framePadding={framePadding}
@@ -560,7 +621,7 @@ export default function App() {
         }
         details={<RouteDetails {...detailProps} />}
         more={<RouteMore route={driveRoute} shelters={shelters} trip={trip} evacMode={evacMode} />}
-        mapKey={<MapKey hazards={hazards} shelters={shelters} route={driveRoute} location={location} />}
+        mapKey={<MapKey hazards={hazards} shelters={shelters} route={driveRoute} location={location} reports={reports} />}
         areaName={areaName}
         notifications={notifications}
         location={location}
@@ -570,11 +631,11 @@ export default function App() {
         trip={trip}
         version={SHEPHERD_VERSION}
         actions={{
-          report: () => setSheetOpen(true),
+          report: startReport,
           priority: () => setPriorityOpen(true),
           isPriority: priority != null,
           help: askHelp,
-          canReport: !!location && !sending,
+          canReport: !sending,
           sending,
         }}
       />
@@ -594,6 +655,19 @@ export default function App() {
             </button>
             <button type="button" className="btn-help" onClick={sendHelp} autoFocus>
               Send request
+            </button>
+          </div>
+        </div>
+      ) : reportStep === 'place' ? (
+        <div className="confirm-box" role="dialog" aria-labelledby="place-title" aria-describedby="place-desc">
+          <strong id="place-title">Where is the hazard?</strong>
+          <span id="place-desc">Drag the pin to the spot, or tap the map.</span>
+          <div className="confirm-actions">
+            <button type="button" className="btn-outline" onClick={cancelReport}>
+              Cancel
+            </button>
+            <button type="button" className="btn-primary" disabled={!reportAt} onClick={() => setReportStep('details')}>
+              Drop pin here
             </button>
           </div>
         </div>
@@ -637,14 +711,12 @@ export default function App() {
         />
       )}
 
-      {sheetOpen && (
+      {reportStep === 'details' && (
         <ReportSheet
           sending={sending}
-          onClose={() => setSheetOpen(false)}
-          onSubmit={async ({ kind, note }) => {
-            if (await sendReport(kind, note)) setSheetOpen(false)
-            else if (!locationRef.current) setSheetOpen(false)
-          }}
+          onClose={cancelReport}
+          onMovePin={() => setReportStep('place')}
+          onSubmit={sendHazardReport}
         />
       )}
     </div>

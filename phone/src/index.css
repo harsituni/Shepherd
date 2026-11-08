@@ -172,6 +172,35 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .shelter-marker.is-unsafe .shelter-popup { color: var(--closed); border-color: var(--closed); }
 .shelter-popup-warning { width: 200px; margin-top: 4px; white-space: normal; font-weight: 600; }
 
+/* Hazard report from any phone: DESIGN's report pin (white circle, hazard-orange
+   stroke) carrying its kind's stroke symbol. 26px, with a 44px invisible tap area. */
+.report-marker {
+  position: relative; width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface); border: 2px solid currentColor; color: var(--hazard);
+}
+.report-marker::before { content: ''; position: absolute; inset: -9px; border-radius: 50%; }
+.report-marker.is-open { z-index: 5; }
+.report-marker.is-open .shelter-popup { display: block; }
+.report-marker.popup-start .shelter-popup { left: -4px; transform: none; }
+.report-marker.popup-end .shelter-popup { left: auto; right: -4px; transform: none; }
+.report-popup { color: var(--text); }
+.report-popup .shelter-popup-title { color: var(--text); }
+.report-popup-time { color: var(--muted-2); }
+/* The pin being dropped for a new report: a hazard-orange teardrop with a white
+   centre and a white edge, anchored at its tip. While placing it's draggable, with
+   a 44px grab area; once dropped it sits still under the sheet. */
+.report-pin { position: relative; width: 32px; height: 42px; pointer-events: none; }
+.report-pin.is-placing { pointer-events: auto; cursor: grab; touch-action: none; }
+.report-pin.is-placing:active { cursor: grabbing; }
+.report-pin.is-placing::before { content: ''; position: absolute; inset: -6px -6px 0; }
+.report-pin svg { position: relative; display: block; overflow: visible; }
+.report-pin-body { fill: var(--hazard); stroke: #fff; stroke-width: 2; }
+.report-pin-dot { fill: #fff; }
+.swatch-report {
+  width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 2px solid var(--muted);
+}
+
 /* Map key (in its own sheet), listing only what is drawn. */
 .map-key {
   display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 0; padding: 0;
@@ -627,6 +656,41 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   background: #fff; color: var(--text); font-size: var(--fs-sm); font-weight: 500;
 }
 .choice[aria-checked='true'] { border-color: var(--navy); background: var(--navy); color: #fff; font-weight: 600; }
+
+/* Report sheet: where the report goes (the placed pin), and type tiles that carry
+   the same symbol everyone sees on the map. */
+.sheet .muted { text-wrap: pretty; }
+.field-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.char-count { color: var(--muted-2); }
+.char-count.is-full { color: var(--text); font-weight: 600; }
+.text-input::placeholder { color: var(--muted-2); }
+.report-where { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--muted); }
+.report-where-icon { flex: 0 0 18px; color: var(--hazard); }
+.report-where span { flex: 1; min-width: 0; }
+.link-btn {
+  min-height: 44px; padding: 0 4px; border: 0; background: none; cursor: pointer;
+  font: 600 var(--fs-sm) var(--font); color: var(--navy);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+/* Symbol, space, word: left-aligned from the same inset in every tile, so the
+   symbols line up in one column and the words in another. */
+.choice.choice-icon { display: flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 0 14px; text-align: left; }
+.choice-icon svg { flex: 0 0 20px; }
+.choice-icon[aria-checked='true'] svg { color: #fff; }
+
+/* Report kind colours, on symbols and their map markers (requested, and an
+   exception to the hazard/route/evacuation colour rules in DESIGN.md):
+   fire orange, flooded road blue, blocked road a yellow barrier, other a black
+   caution sign. */
+.rk-fire { color: var(--hazard); }
+.rk-flooded_road { color: var(--blue); }
+.rk-blocked_road { color: var(--evac-edge); }
+.rk-other { color: var(--text); }
+.rk-fill { fill: none; }
+.rk-blocked_road .rk-fill { fill: var(--evac-stripe); }
+
+/* Placing a report: the instruction card over the map. */
+.confirm-box .confirm-actions.single { grid-template-columns: 1fr; }
 
 /* Priority resident sheet: taller than the report sheet, so it scrolls. */
 .priority-sheet { max-height: calc(100% - 24px); overflow-y: auto; overscroll-behavior: contain; }

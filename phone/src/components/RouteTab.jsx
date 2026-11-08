@@ -35,7 +35,7 @@ function lostLine(lost, route) {
 }
 
 // One-row key for what's actually drawn on the map right now.
-export function MapKey({ hazards, shelters, route, location }) {
+export function MapKey({ hazards, shelters, route, location, reports }) {
   const features = hazards?.features ?? []
   const evac = evacZones(hazards).features.length > 0
   const outlines = hazards?.forecast ?? features.filter(isPredicted)
@@ -49,6 +49,7 @@ export function MapKey({ hazards, shelters, route, location }) {
     ['swatch-shelter', 'Shelter'],
     anyUnsafe && ['swatch-shelter-unsafe', 'Unsafe shelter'],
     location && ['swatch-you', 'You'],
+    reports?.features?.length > 0 && ['swatch-report', 'Reported hazard'],
   ].filter(Boolean)
   return (
     <ul className="map-key" aria-label="Map key">

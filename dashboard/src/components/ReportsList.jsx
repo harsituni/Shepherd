@@ -1,11 +1,4 @@
-const REPORT_KINDS = {
-  fire: 'Fire',
-  flooded_road: 'Flooded road',
-  blocked_road: 'Blocked road',
-  safe: "I'm safe",
-  sos: 'SOS',
-  other: 'Other',
-}
+import { ReportKindIcon, reportLabel } from '../reportKinds.jsx'
 
 // Newest first: highest sim_time, then highest id number as a tie-break.
 function sortedReports(reports) {
@@ -28,7 +21,8 @@ export default function ReportsList({ reports, onSelect }) {
             <button type="button" className="report-item" onClick={() => onSelect(f)}>
               <span className="report-row">
                 <strong className={kind === 'sos' ? 'report-kind sos' : 'report-kind'}>
-                  {REPORT_KINDS[kind] ?? kind}
+                  <ReportKindIcon kind={kind} />
+                  {reportLabel(kind)}
                 </strong>
                 <span className="num report-time">{t == null ? '' : `T+${t}`}</span>
               </span>
