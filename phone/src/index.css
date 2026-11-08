@@ -15,6 +15,8 @@
   --surface: #ffffff;
   --hazard: #d9480f;
   --closed: #c62828;
+  /* Clear route status only (label + swatch): 5.3:1 on white. */
+  --clear: #1e7b34;
   --predicted: #c62828;
   --evac-stripe: #ffd400; /* evacuation zone: diagonal stripes */
   --evac-edge: #9a6b00; /* evacuation zone: solid border */ /* dotted predicted-path outline (same red as closed roads, which are solid) */
@@ -227,7 +229,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .route-card-trip strong { color: var(--text); font-weight: 700; }
 .route-card-clear { font-size: var(--fs-sm); color: var(--muted); }
 
-.status-ok .route-card-status { color: var(--blue); }
+.status-ok .route-card-status,
+.route-more-status.status-ok { color: var(--clear); }
 .status-tight .route-card-status { color: var(--danger-title); }
 .status-tight .route-card-clear { color: var(--danger-text); }
 .status-blocked { background: var(--map-bg); color: var(--muted); cursor: not-allowed; }
@@ -411,14 +414,57 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   font-size: var(--fs-sm); font-weight: 600; line-height: 20px; text-align: center;
 }
 
-/* Route panel: shelter cards you swipe sideways, then Start evacuating. The panel
-   itself never scrolls: it sizes to its content, and only the card row scrolls,
-   only sideways. Its close button floats just above the top-right corner (the
-   rail is hidden while the panel is open, so that spot is free). */
+/* Route panel: shelter cards you swipe sideways, then Start evacuating. It opens
+   at the height of that main content (measured as --main-h), with the "Route
+   details" heading peeking under it; scroll the panel down for the details. The
+   card row scrolls sideways. Its close button floats just above the top-right
+   corner (the rail is hidden while the panel is open, so that spot is free), so
+   the scrolling happens in an inner box that can't clip it. */
 .ms-panel {
-  position: relative; display: flex; flex-direction: column; gap: 10px; padding: 12px;
+  position: relative;
   background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--float-shadow);
 }
+.ms-panel.is-sliding { animation: panel-up 320ms cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes panel-up {
+  from { transform: translateY(calc(100% + 80px)); }
+  to { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ms-panel.is-sliding { animation: none; }
+}
+.ms-panel-scroll {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px;
+  /* 12px top padding + main + 10px gap + 36px of the details heading peeking. */
+  max-height: min(calc(var(--main-h, 100dvh) + 58px), calc(100dvh - 200px));
+  overflow-y: auto; overscroll-behavior: contain; border-radius: 8px;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.ms-panel-main { display: flex; flex-direction: column; gap: 10px; }
+
+/* Below the fold: details for the picked route. */
+.route-more { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; border-top: 1px solid var(--divider); }
+.route-more-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0;
+  font-size: var(--fs-body); font-weight: 700; line-height: 24px; color: var(--text);
+}
+.route-more-head svg { color: var(--muted-2); transform: rotate(180deg); }
+.route-more-list { display: flex; flex-direction: column; margin: 0; }
+.route-more-list > div {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px;
+  padding: 10px 0; border-top: 1px solid var(--divider);
+}
+.route-more-list > div:first-child { border-top: 0; padding-top: 0; }
+.route-more-list dt { font-size: var(--fs-sm); color: var(--muted); line-height: 1.45; }
+.route-more-list dd {
+  display: flex; flex-direction: column; gap: 2px; margin: 0; min-width: 0;
+  font-size: var(--fs-sm); color: var(--muted); line-height: 1.45;
+}
+.route-more-list dd strong { font-size: var(--fs-body); font-weight: 700; color: var(--text); }
+.route-more-status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body); font-weight: 600; }
+.route-more-status.status-tight { color: var(--danger-title); }
+.route-more-steps { display: flex; flex-direction: column; gap: 6px; margin: 0; padding-left: 18px; color: var(--text); }
+.route-more-steps li span:last-child { display: block; color: var(--muted); }
+.route-more-note { margin: 0; font-size: var(--fs-sm); line-height: 1.45; color: var(--muted-2); }
 .ms-panel-close {
   position: absolute; right: 0; bottom: calc(100% + 8px); width: 44px; height: 44px; padding: 0;
   display: flex; align-items: center; justify-content: center;
@@ -431,7 +477,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
    so Safari sizes each button at its real width and the border wraps all of it. */
 .ms-panel .route-options {
   flex-direction: row; align-items: stretch; gap: 8px;
-  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x;
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x pan-y;
   scroll-snap-type: x mandatory; scrollbar-width: none;
 }
 .ms-panel .route-options::-webkit-scrollbar { display: none; }
