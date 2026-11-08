@@ -119,10 +119,8 @@ function gpsError(err) {
 
 // ---------- the hook ----------
 
-// trip: null | { id, mode: 'sim' | 'gps', route, arrived, fraction }
-// `route` is a snapshot of the chosen option when Start was pressed. Calling start
-// again mid-trip (switching routes after a wind change, issue #58) begins a new leg
-// from wherever the dot is now.
+// trip: null | { mode: 'sim' | 'gps', route, arrived, fraction }
+// `route` is a snapshot of the chosen option when Start was pressed.
 // onMove([lon, lat]) is called with every new position; onError(message) when GPS fails.
 export function useEvacuation({ clock, onMove, onError }) {
   const [trip, setTrip] = useState(null)
@@ -145,13 +143,13 @@ export function useEvacuation({ clock, onMove, onError }) {
       errorRef.current?.(gpsError())
       return
     }
-    setTrip({ id: Date.now(), mode, route, arrived: false, fraction: 0 })
+    setTrip({ mode, route, arrived: false, fraction: 0 })
   }, [])
 
   // Simulated drive: advance along the route on the sim clock (frozen while paused).
-  const simLeg = trip?.mode === 'sim' && !trip.arrived ? trip.id : null
+  const simulating = trip?.mode === 'sim' && !trip.arrived
   useEffect(() => {
-    if (simLeg == null) return
+    if (!simulating) return
     let last = Date.now()
     let drivenMin = 0
     const id = setInterval(() => {
@@ -166,7 +164,7 @@ export function useEvacuation({ clock, onMove, onError }) {
       setTrip((prev) => (prev?.mode === 'sim' ? { ...prev, fraction, arrived: fraction >= 1 } : prev))
     }, FRAME_MS)
     return () => clearInterval(id)
-  }, [simLeg])
+  }, [simulating])
 
   // Real GPS: follow the device until stopped.
   // Only a denied permission ends the trip. "Unavailable" and timeouts are normal
