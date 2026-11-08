@@ -153,6 +153,8 @@ class RoutePath:
     approximate: bool = False
     access: Optional[dict] = None
     access_verified: bool = False
+    # When set (traffic-aware search), fire margins use congested duration.
+    duration_min: Optional[float] = None
 
     @property
     def connector_m(self) -> float:
@@ -164,6 +166,8 @@ class RoutePath:
 
     @property
     def total_min(self) -> float:
+        if self.duration_min is not None:
+            return float(self.duration_min)
         return self.total_m / 1000.0 / SPEED_KM_PER_MIN
 
 

@@ -226,9 +226,12 @@ def build_candidates(rg: RoadGraph, edge_fire: Optional[EdgeFire], oracle, lat: 
             for s in shelters if s not in designated}
     # The nearest start that reaches any shelter (a one-way road may lead away).
     base, searched = rg, 0.
+    from backend.routing.traffic import engine as traffic_engine
     for origin in starts:
         road_ends = designated_road_endpoints(base, (lon, lat), designated, origin) if designated else {}
         rg = JourneyGraph(base, (lon, lat), shelters, origin, {**ends, **road_ends})
+        # When traffic is on, BPR scales free-flow weights from current edge volumes.
+        traffic_engine.apply_journey_weights(rg)
         tick = time.perf_counter()
         plain = shortest_paths(rg.n_nodes, rg.edge_u, rg.edge_v, rg.edge_weight, rg.start, rg.edge_permitted)
         searched += time.perf_counter() - tick
@@ -263,10 +266,12 @@ def build_candidates(rg: RoadGraph, edge_fire: Optional[EdgeFire], oracle, lat: 
                 "building_point": list(shelter["geometry"]["coordinates"]),
                 "building_access_verified": False, "point": [s_lon, s_lat],
                 "unmodeled_m": float(math.hypot(b_x - r_x, b_y - r_y))})
+        duration = float(rg.edge_weight[edges].sum()) if len(edges) else 0.0
         return RoutePath(pin_ll, pin_xy, join_ll, join_xy, edges, float(rg.edge_len_m[edges].sum()),
                          (s_lon, s_lat), tuple(float(c) for c in TO_GRID.transform(s_lon, s_lat)),
                          shelter["properties"].get("name", shelter["id"]),
-                         access=access, access_verified=access["complete"])
+                         access=access, access_verified=access["complete"],
+                         duration_min=duration)
 
     def judged(c: Candidate) -> Candidate:
         tick = time.perf_counter()
