@@ -1,9 +1,10 @@
-# Shepherd — API Contract (v2)
+# Shepherd — API Contract (v2.1)
 
 The single source of truth for how every piece talks to every other piece.
 **Change nothing here without telling the team first, and log it in the Changelog.**
 
-**v2 is frozen for the final-vision build** unless the whole team agrees in chat.
+**v2 was frozen for the final-vision build.** **v2.1** adds evacuation traffic
+(BPR delays, anti-gridlock, `/traffic*`) as agreed by the team.
 
 ---
 
@@ -212,12 +213,18 @@ Clears **dropped** hazards (not necessarily the whole sim — see `/sim/reset`).
 | `clear_until_sim_min` | Sim minute until which this route stays clear under current forecast |
 | `reason` | Required when `status` is `"blocked"`; otherwise `null` |
 | `excluded` | Optional extra blocked attempts with reasons (may be `[]`) |
+| `traffic_delay_min` | **v2.1** Extra minutes vs free-flow on this option (`0` when traffic is off) |
+| `traffic_free_min` | **v2.1** Free-flow travel minutes for the same geometry |
+
+When **traffic is enabled** (`POST /traffic/config`), `eta_min` / `modeled_duration_min` use congested (BPR) travel times, so jams can push a route from `ok`/`tight` to `blocked` against the fire buffer rule.
 
 **Compatibility (Step 0):** until frontends migrate, the API **may also** include the old flat fields copying `options[0]` when present (`shelter_id`, `geometry`, `eta_min`, …) plus `rerouted` / `steps`. New phone/dashboard **must** read `options` + `leave_by_*`.
 
 - No usable route → `404` `{ "error": "no_route", "message": "..." }`.
 
 **Optional v2 query:** `GET /route?lat=&lon=&check_route_id=rt_1` — re-check a chosen route after wind change (same response shape; `best_route_id` may change).
+
+**Optional v2.1 query:** `GET /route/traffic_hint?lat=&lon=&route_id=rt_1` — phone banner helper when a faster traffic-aware route exists (see Traffic below).
 
 ---
 
@@ -302,12 +309,31 @@ Returns `/sim/state` shape (below), after forecast rebuild has been kicked off (
   "sim_time": 30,
   "speed": 4,
   "wind_kmh": 35,
-  "wind_from_deg": 315
+  "wind_from_deg": 315,
+  "traffic": {
+    "enabled": false,
+    "anti_gridlock": true,
+    "simulated_count": 80,
+    "real_count": 0,
+    "active_count": 0,
+    "metrics": {
+      "clearance_min": null,
+      "avg_eta_min": null,
+      "max_vc": 0,
+      "jammed_edges": 0,
+      "agents_active": 0,
+      "agents_arrived": 0,
+      "reroutes": 0
+    },
+    "compare": null,
+    "last_rebalance_sim_min": null
+  }
 }
 ```
 `state`: `"idle"` · `"running"` · `"paused"`.  
 `speed`: `1` · `4` · `16`.  
-`scenario`: `"wildfire"` or `null` when idle.
+`scenario`: `"wildfire"` · `"tornado"` or `null` when idle.  
+`traffic`: **v2.1** summary (same shape as `GET /traffic/state` without `sim_time`). Always present; volumes are empty while `enabled` is false.
 
 #### POST /sim/start
 ```json
@@ -321,7 +347,124 @@ Returns `/sim/state` shape (below), after forecast rebuild has been kicked off (
   "humidity_pct": 22
 }
 ```
-`humidity_pct` optional. `"scenario": "flood"` → `400` `{ "error": "unsupported_scenario", "message": "Flood deferred" }`.
+`humidity_pct` optional. `"scenario": "flood"` → `400` `{ "error": "unsupported_scenario", "message": "Flood deferred" }`.  
+`"scenario": "tornado"` accepted (dashboard path direction uses `wind_kmh` / `wind_from_deg`; optional `ef_rating` 0–5). Starting a sim recentres the traffic crowd on `(lat, lon)`.
+
+---
+
+### Traffic  · **v2.1 new**
+
+Evacuation traffic for demos: each road has a capacity from its OSM class and lanes;
+travel time follows the Bureau of Public Roads (BPR) formula
+\(t = t_0\,(1 + 0.15\,(v/c)^4)\). A crowd of **simulated cars** plus **real phone**
+pins (`POST /evacuees`) loads the network. With **anti-gridlock** on, cars are
+routed one at a time, rebalanced every **5 sim-minutes**, and switched only when the
+new route saves **≥ 3 minutes** (with a cooldown so routes do not flip-flop).
+
+| Endpoint | Body | Returns |
+|---|---|---|
+| `GET /traffic` | none | state + `edges` FeatureCollection (map colouring) |
+| `GET /traffic/state` | none | compact state (no geometries) |
+| `POST /traffic/config` | config body below | state |
+| `POST /traffic/compare` | none | compare payload + state |
+| `POST /traffic/rebalance` | none | state (force reassignment) |
+| `GET /route/traffic_hint?lat=&lon=&route_id=` | none | `{ "hint": …, "sim_time": … }` |
+
+#### POST /traffic/config
+```json
+{ "enabled": true, "anti_gridlock": true, "simulated_count": 200 }
+```
+All fields optional; omitted keys stay unchanged. `simulated_count` is clamped to `0…500`.
+
+#### GET /traffic (and `/traffic/state`)
+```json
+{
+  "enabled": true,
+  "anti_gridlock": true,
+  "simulated_count": 200,
+  "real_count": 3,
+  "active_count": 203,
+  "sim_time": 30,
+  "metrics": {
+    "clearance_min": 41.0,
+    "avg_eta_min": 18.2,
+    "max_vc": 1.6,
+    "jammed_edges": 24,
+    "agents_active": 203,
+    "agents_arrived": 0,
+    "reroutes": 12
+  },
+  "compare": {
+    "without_min": 74.0,
+    "with_min": 41.0,
+    "saved_min": 33.0,
+    "label": "Clearance time 74 → 41 min"
+  },
+  "last_rebalance_sim_min": 30,
+  "edges": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "id": "tr_42",
+        "properties": {
+          "edge": 42,
+          "name": "Whyte Avenue",
+          "highway": "primary",
+          "lanes": 2,
+          "volume": 28.0,
+          "capacity": 22.0,
+          "vc_ratio": 1.27,
+          "level": "jammed",
+          "free_min": 0.4,
+          "travel_min": 0.9
+        },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-113.500, 53.518], [-113.495, 53.518]]
+        }
+      }
+    ]
+  }
+}
+```
+`GET /traffic/state` is the same object **without** `edges`.  
+`level`: `"free"` · `"busy"` · `"jammed"` · `"gridlock"` from `vc_ratio`.  
+`compare` is `null` until `POST /traffic/compare` has been called this session.
+
+#### POST /traffic/compare
+Runs a naive pile-up assignment, then anti-gridlock, and returns:
+```json
+{
+  "ok": true,
+  "without_min": 74.0,
+  "with_min": 41.0,
+  "saved_min": 33.0,
+  "label": "Clearance time 74 → 41 min",
+  "enabled": true,
+  "anti_gridlock": true,
+  "metrics": { "clearance_min": 41.0 }
+}
+```
+Leaves anti-gridlock **on** afterward (the “after” state) when traffic remains enabled.
+
+#### GET /route/traffic_hint
+```json
+{
+  "sim_time": 30,
+  "hint": {
+    "route_id": "rt_sh_terwillegar_fastest",
+    "shelter_id": "sh_terwillegar",
+    "saves_min": 5,
+    "message": "Faster route available, saves 5 min",
+    "reason": "traffic"
+  }
+}
+```
+`hint` is `null` when traffic is off, no better route exists, or the saving is under 3 minutes.
+
+**Dashboard (v2.1):** colour roads from `GET /traffic` → `edges`, evacuee-count slider + anti-gridlock switch via `POST /traffic/config`, metrics from `traffic.metrics` / `/sim/state`, Compare button → `POST /traffic/compare`.  
+**Phone (v2.1):** show `+N min traffic` from `traffic_delay_min` on route cards; poll `/route/traffic_hint` for the faster-route banner; when the phone swaps routes for traffic, surface `reason: "traffic"`.
 
 ---
 
@@ -374,8 +517,8 @@ Still as in v1 fixtures. Not required for Saturday demo if time-aware routing us
 ## 2. Live updates
 
 **Hackathon default: polling every 2 seconds.**
-- Phone: `/route` (or check), `/hazards`, `POST /evacuees`
-- Dashboard: `/hazards`, `/reports`, `/forecast`, `/evacuees`, `/sim/state`
+- Phone: `/route` (or check), `/hazards`, `POST /evacuees`; with traffic on, also `/route/traffic_hint`
+- Dashboard: `/hazards`, `/reports`, `/forecast`, `/evacuees`, `/sim/state`; with traffic on, also `/traffic` or `/traffic/state`
 
 **Later:** WebSocket `ws://localhost:8000/ws` with `{ "type", "sim_time", "changed": [...] }` — unchanged idea from v1; not required for Saturday.
 
@@ -460,6 +603,7 @@ shared/fixtures/sim_state.json     # GET /sim/state example
 4. Phone shows leave-by + cards and offers a new route when blocked.
 5. Dashboard shows **evacuee dots** from all phones.
 6. Judges join via **QR / public URL**.
+7. **v2.1 Traffic:** BPR road delays, anti-gridlock assignment, dashboard compare / phone delay cues.
 
 ---
 
@@ -469,3 +613,4 @@ shared/fixtures/sim_state.json     # GET /sim/state example
 |---|---|---|
 | Fri (hackathon start) | Harsit | v1 agreed by team |
 | Sat (final vision) | Harsit | **v2:** multi-option `/route`, `/forecast`, `/sim/wind`, `/evacuees`, wind units (`wind_kmh` + `wind_from_deg` FROM), road block = arrive after `arrival_min − 30`, flood deferred, sim control required for dashboard, Python `find_routes` / `arrival_min` / `set_wind` |
+| Sun | Harsit | **v2.1:** evacuation traffic — BPR capacities, simulated crowd + phones, anti-gridlock rebalance, `/traffic*` + `/route/traffic_hint`, route `traffic_delay_min` / `traffic_free_min`, `/sim/state.traffic` |
