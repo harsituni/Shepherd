@@ -22,7 +22,7 @@ const ITEMS = [
 // button; minimised, the list folds down into the header (CSS height transition),
 // leaving just the header docked at the bottom of the map with a plus to expand.
 export default function MapLegend() {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   return (
     <section className={open ? 'legend' : 'legend is-collapsed'} aria-labelledby="legend-title">
       <div className="legend-head">

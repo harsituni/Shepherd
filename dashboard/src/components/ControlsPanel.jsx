@@ -63,7 +63,7 @@ export default function ControlsPanel({
   const [windFrom, setWindFrom] = useState(270)
   const [humidity, setHumidity] = useState(22)
   const [efRating, setEfRating] = useState(3)
-  const [speed, setSpeed] = useState(4)
+  const [speed, setSpeed] = useState(1)
 
   const idle = !sim || sim.state === 'idle'
   const running = sim?.state === 'running'
