@@ -15,8 +15,8 @@ function tornadoLine(sim, core) {
   return bits.join(' · ')
 }
 
-// Built from /hazards (+ /sim/state for tornado EF stats).
-export default function IncidentBanner({ hazards, mode, sim }) {
+// Built from /hazards (+ /sim/state for tornado EF stats) and forecast cut-off warnings.
+export default function IncidentBanner({ hazards, mode, sim, cutoff = null, closedCount = null }) {
   const features = (hazards?.features ?? []).filter((f) => f.properties?.predicted_min == null)
   const modeLabel = mode === 'drill' ? 'simulation' : 'live'
 
@@ -37,20 +37,27 @@ export default function IncidentBanner({ hazards, mode, sim }) {
   const zones = features.length
   const core = features.find((f) => f.properties?.kind === 'tornado' && f.properties?.zone === 'core')
   const tornado = tornadoLine(sim, core)
+  const closedBit =
+    closedCount > 0 ? `${closedCount.toLocaleString()} road${closedCount === 1 ? '' : 's'} closed` : null
+  const warn = cutoff?.message
 
   return (
-    <div className={`banner${core ? ' banner-tornado' : ''}`}>
-      <span className={`banner-dot${core ? ' tornado' : ''}`} aria-hidden="true" />
+    <div className={`banner${core ? ' banner-tornado' : ''}${warn ? ' banner-cutoff' : ''}`}>
+      <span className={`banner-dot${core ? ' tornado' : ''}${warn ? ' warn' : ''}`} aria-hidden="true" />
       <strong>
         {core?.properties?.ef_label ? `${core.properties.ef_label} tornado` : title} {modeLabel}
       </strong>
       <span className="banner-sub num">
-        {tornado
-          ? tornado
-          : `${zones} active ${zones === 1 ? 'zone' : 'zones'}${
-              hazards.sim_time != null ? ` · T+${hazards.sim_time} min` : ''
-            }`}
-        {tornado && hazards.sim_time != null ? ` · T+${hazards.sim_time} min` : ''}
+        {warn
+          ? warn
+          : tornado
+            ? tornado
+            : `${zones} active ${zones === 1 ? 'zone' : 'zones'}${
+                hazards.sim_time != null ? ` · T+${hazards.sim_time} min` : ''
+              }`}
+        {!warn && tornado && hazards.sim_time != null ? ` · T+${hazards.sim_time} min` : ''}
+        {warn && hazards.sim_time != null ? ` · T+${hazards.sim_time} min` : ''}
+        {closedBit ? ` · ${closedBit}` : ''}
       </span>
     </div>
   )

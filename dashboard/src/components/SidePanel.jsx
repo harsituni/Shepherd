@@ -17,12 +17,19 @@ function Tile({ label, value, tone }) {
   )
 }
 
-// Phone join QR + live numbers. When traffic is on, the tiles show clearance /
-// jam metrics from GET /traffic instead of empty placeholders.
-export default function SidePanel({ shelters, traffic }) {
+// Phone join QR + live numbers. Traffic metrics win when Simulate traffic is on;
+// otherwise fire-closed roads and phone mid-trip reroutes fill the tiles.
+export default function SidePanel({
+  shelters,
+  traffic,
+  closedCount = null,
+  phoneReroutes = null,
+  peopleAtRisk = null,
+}) {
   const capacity = shelterCapacityPct(shelters)
   const m = traffic?.metrics
   const compare = traffic?.compare
+  const trafficOn = !!traffic?.enabled
 
   return (
     <aside className="side" aria-label="Status">
@@ -36,23 +43,23 @@ export default function SidePanel({ shelters, traffic }) {
 
       <div className="tiles">
         <Tile
-          label={traffic?.enabled ? 'Cars evacuating' : 'People at risk'}
-          value={traffic?.enabled ? (m?.agents_active ?? traffic.active_count) : null}
+          label={trafficOn ? 'Cars evacuating' : 'People at risk'}
+          value={trafficOn ? (m?.agents_active ?? traffic.active_count) : peopleAtRisk}
         />
         <Tile
-          label={traffic?.enabled ? 'Jammed roads' : 'Roads closed'}
-          value={traffic?.enabled ? m?.jammed_edges : null}
+          label={trafficOn ? 'Jammed roads' : 'Roads closed'}
+          value={trafficOn ? m?.jammed_edges : closedCount}
           tone="red"
         />
         <Tile
-          label={traffic?.enabled ? 'Traffic reroutes' : 'Active reroutes'}
-          value={traffic?.enabled ? m?.reroutes : null}
+          label={trafficOn ? 'Traffic reroutes' : 'Active reroutes'}
+          value={trafficOn ? m?.reroutes : phoneReroutes}
           tone="blue"
         />
         <Tile
-          label={traffic?.enabled ? 'Clearance time' : 'Shelter capacity used'}
+          label={trafficOn ? 'Clearance time' : 'Shelter capacity used'}
           value={
-            traffic?.enabled
+            trafficOn
               ? m?.clearance_min != null
                 ? `${Math.round(m.clearance_min)} min`
                 : null

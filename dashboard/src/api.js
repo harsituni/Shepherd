@@ -223,6 +223,12 @@ export async function getEvacuees() {
   return structuredClone(evacueesFixture)
 }
 
+// GET /roads/closed (contract v2.1): OSM edges past the fire close deadline.
+export async function getClosedRoads() {
+  if (!USE_FIXTURES) return request('/roads/closed')
+  return { type: 'FeatureCollection', sim_time: 0, count: 0, features: [] }
+}
+
 export async function getShelters() {
   if (!USE_FIXTURES) return request('/shelters')
   return structuredClone(sheltersFixture)

@@ -601,12 +601,15 @@ export default function App() {
     if (!loc) return null
     const driving = tripRef.current?.route
     const r = driving ?? shownRef.current
+    const coords = r?.geometry?.coordinates
     return {
       lat: loc[1],
       lon: loc[0],
       route_id: r?.route_id ?? r?.id ?? null,
       route_status: r?.status ?? null,
       shelter_id: r?.shelter_id ?? null,
+      // So the dashboard can draw this phone's path and show live mid-trip reroutes.
+      route_coords: Array.isArray(coords) && coords.length >= 2 ? coords : null,
     }
   }, [])
   const beatNow = useHeartbeat({

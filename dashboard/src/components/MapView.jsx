@@ -26,6 +26,7 @@ const KIND_COLOR = ['match', ['get', 'kind'], 'tornado', TORNADO, HAZARD]
 const MAP_BG = cssVar('--map-bg', '#F3F7FB')
 const SURFACE = cssVar('--surface', '#FFFFFF')
 const BLUE = cssVar('--blue', '#0070C4')
+const CLOSED = cssVar('--closed', '#C62828')
 const EVAC_STRIPE = cssVar('--evac-stripe', '#FFD400')
 const EVAC_EDGE = cssVar('--evac-edge', '#9A6B00')
 
@@ -278,6 +279,7 @@ export default function MapView({
   startPoint,
   showPredicted = true,
   traffic = null,
+  closedRoads = null, // GET /roads/closed — fire-blocked OSM edges
   onMapClick,
 }) {
   const containerRef = useRef(null)
@@ -359,6 +361,33 @@ export default function MapView({
             2.5,
             8,
           ],
+          'line-opacity': 0.85,
+        },
+      })
+      // Fire-closed OSM edges (arrival_min − 30). Drawn above traffic so red
+      // corridors read clearly as "don't drive here" during the demo.
+      map.addSource('closed-roads', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'closed-roads',
+        type: 'line',
+        source: 'closed-roads',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': CLOSED,
+          'line-width': 4,
+          'line-opacity': 0.9,
+        },
+      })
+      // Live phone evacuation routes (from heartbeat route_coords).
+      map.addSource('evacuee-routes', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'evacuee-routes',
+        type: 'line',
+        source: 'evacuee-routes',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': BLUE,
+          'line-width': 4,
           'line-opacity': 0.85,
         },
       })
@@ -471,13 +500,48 @@ export default function MapView({
     framed.current = true
   }, [hazards, shelters, loaded])
 
-  // Traffic roads (when Simulate traffic is on).
+  // Traffic roads (only while Simulate traffic is on — never leave jam colours
+  // on an idle "not started" map).
   useEffect(() => {
     const map = mapRef.current
     if (!loaded || !map) return
-    const edges = traffic?.enabled ? traffic.edges ?? EMPTY : EMPTY
+    const edges =
+      traffic?.enabled && (traffic.edges?.features?.length ?? 0) > 0
+        ? traffic.edges
+        : EMPTY
     map.getSource('traffic')?.setData(edges)
   }, [traffic, loaded])
+
+  // Fire-closed roads (GET /roads/closed) — grow red as the wind-driven fire spreads.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map) return
+    map.getSource('closed-roads')?.setData(closedRoads ?? EMPTY)
+  }, [closedRoads, loaded])
+
+  // Live phone routes so mid-trip reroutes are visible on the ops map.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map) return
+    const features = (evacuees?.features ?? [])
+      .filter((f) => !onlyPriority || f.properties?.priority)
+      .map((f) => {
+        const coords = f.properties?.route_coords
+        if (!Array.isArray(coords) || coords.length < 2) return null
+        return {
+          type: 'Feature',
+          id: `route_${f.id}`,
+          properties: {
+            route_id: f.properties?.route_id,
+            route_status: f.properties?.route_status,
+            reroutes: f.properties?.reroutes ?? 0,
+          },
+          geometry: { type: 'LineString', coordinates: coords },
+        }
+      })
+      .filter(Boolean)
+    map.getSource('evacuee-routes')?.setData({ type: 'FeatureCollection', features })
+  }, [evacuees, onlyPriority, loaded])
 
   // Hazards: polygons + a "Now" label on each core zone.
   useEffect(() => {

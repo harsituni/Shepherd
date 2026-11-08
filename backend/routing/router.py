@@ -439,8 +439,60 @@ def find_route(lat: float, lon: float,
 
 
 def closed_roads(hazards: list[dict]) -> list[dict]:
-    """Placeholder for Step 2; an empty list does not mean roads are safe."""
+    """Legacy stub — prefer `fire_closed_road_features` with the live oracle."""
     return []
+
+
+def fire_closed_road_features(oracle, sim_time: int = 0, limit: int = 500) -> dict:
+    """GeoJSON LineStrings for OSM edges past the fire/tornado close deadline.
+
+    Contract rule: a road is closed once drivers would reach it after
+    `arrival_min − 30`. Uses the same EdgeFire deadlines as /route.
+    """
+    empty = {
+        "type": "FeatureCollection",
+        "sim_time": int(sim_time),
+        "count": 0,
+        "features": [],
+    }
+    if oracle is None or validation_error(oracle) or _graph is None or len(_graph) == 0:
+        return empty
+    rg = _road_graph()
+    try:
+        edge_fire = EdgeFire.for_oracle(rg, _cell_table(rg, oracle), oracle)
+    except ValueError:
+        return empty
+    t = float(sim_time)
+    deadlines = edge_fire.edge_deadline
+    closed = np.flatnonzero(np.isfinite(deadlines) & (deadlines < t))
+    if len(closed) == 0:
+        return empty
+    overdue = t - deadlines[closed]
+    order = closed[np.argsort(-overdue)][: max(1, int(limit))]
+    features = []
+    for e in order:
+        coords = rg.edge_coords_ll(int(e)).tolist()
+        if len(coords) < 2:
+            continue
+        name = rg.edge_name[int(e)] if int(e) < len(rg.edge_name) else "Road"
+        features.append({
+            "type": "Feature",
+            "id": f"rd_closed_{int(e)}",
+            "properties": {
+                "kind": "closed_road",
+                "name": name,
+                "edge": int(e),
+                "closed_at_sim_min": int(floor(float(deadlines[int(e)]))),
+                "reason": "fire",
+            },
+            "geometry": {"type": "LineString", "coordinates": coords},
+        })
+    return {
+        "type": "FeatureCollection",
+        "sim_time": int(sim_time),
+        "count": int(len(closed)),
+        "features": features,
+    }
 
 
 def _line_samples(coordinates, minutes, elapsed=0.0):
