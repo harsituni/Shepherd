@@ -40,7 +40,8 @@ def require_utc(dt: datetime, name: str = "t0") -> datetime:
 
 
 def parse_utc(text: str, name: str = "t0") -> datetime:
-    return require_utc(datetime.fromisoformat(text), name)
+    # Python < 3.11 fromisoformat rejects a trailing "Z".
+    return require_utc(datetime.fromisoformat(text.replace("Z", "+00:00")), name)
 
 
 def floor_hour(dt: datetime) -> datetime:
