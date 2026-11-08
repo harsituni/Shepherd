@@ -636,11 +636,12 @@ def post_sim_start(body: SimStart) -> dict:
         state = controller.start(body.model_dump())
     except ValueError:
         return _unsupported_flood()
-    # Crowd the simulated cars around the ignition / touchdown point.
+    # Crowd the simulated cars around the ignition / touchdown point (async assign).
     traffic_engine.set_cluster(body.lat, body.lon)
     if traffic_engine.enabled:
-        traffic_engine.configure(enabled=True)  # respawn + reassign near the hazard
+        traffic_engine.configure(enabled=True)
     _prepare_routing()
+    state = controller.status()
     state["traffic"] = traffic_engine.status()
     return state
 

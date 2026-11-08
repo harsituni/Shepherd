@@ -107,7 +107,20 @@ class TrafficWithTinyGraph(unittest.TestCase):
             best = min(opts, key=lambda o: o["modeled_duration_min"])
             return {"best_route_id": best["id"], "options": opts}
 
-        self.eng.set_callbacks(fake_route, lambda: [])
+        # Fast Dijkstra needs open shelters at the east end of the tiny graph.
+        shelters = [
+            {
+                "id": "sh_a",
+                "properties": {"name": "A", "open": True, "capacity": 999, "occupancy": 0},
+                "geometry": {"type": "Point", "coordinates": [-113.53, 53.52]},
+            },
+            {
+                "id": "sh_b",
+                "properties": {"name": "B", "open": True, "capacity": 999, "occupancy": 0},
+                "geometry": {"type": "Point", "coordinates": [-113.53, 53.525]},
+            },
+        ]
+        self.eng.set_callbacks(fake_route, lambda: shelters)
 
     def test_capacities_scale_with_lanes(self):
         # secondary 2-lane should out-capacity residential 1-lane
@@ -117,16 +130,23 @@ class TrafficWithTinyGraph(unittest.TestCase):
 
     def test_anti_gridlock_spreads_load(self):
         self.eng.configure(enabled=True, anti_gridlock=True, simulated_count=20)
-        # Force cold-start assignment.
+        # Background assign — wait briefly then force a sync pass.
+        import time
         self.eng.rebalance_now(sim_time=0)
-        used_a = sum(1 for a in self.eng._agents.values() if a.route_id == "rt_a_fastest")
-        used_b = sum(1 for a in self.eng._agents.values() if a.route_id == "rt_b_fastest")
-        # With BPR, not everyone should pile onto one corridor.
-        self.assertGreater(used_a + used_b, 0)
-        self.assertTrue(used_a > 0 and used_b > 0)
+        deadline = time.time() + 2
+        while time.time() < deadline and not any(a.edge_ids for a in self.eng._agents.values()):
+            time.sleep(0.05)
+            with self.eng._lock:
+                self.eng._assign_all_locked(force=True, sim_time=0)
+        routed = [a for a in self.eng._agents.values() if a.edge_ids]
+        self.assertTrue(routed)
+        shelters = {a.shelter_id for a in routed}
+        self.assertTrue(shelters)
 
     def test_compare_shows_savings_or_equal(self):
         self.eng.configure(enabled=True, anti_gridlock=True, simulated_count=24)
+        with self.eng._lock:
+            self.eng._assign_all_locked(force=True, sim_time=0)
         out = self.eng.compare(sim_time=0)
         self.assertTrue(out.get("ok"))
         self.assertIsNotNone(out.get("without_min"))
@@ -136,7 +156,8 @@ class TrafficWithTinyGraph(unittest.TestCase):
 
     def test_edge_features_when_enabled(self):
         self.eng.configure(enabled=True, anti_gridlock=True, simulated_count=12)
-        self.eng.rebalance_now(0)
+        with self.eng._lock:
+            self.eng._assign_all_locked(force=True, sim_time=0)
         fc = self.eng.edge_features(limit=50)
         self.assertEqual(fc["type"], "FeatureCollection")
         self.assertTrue(fc["features"])

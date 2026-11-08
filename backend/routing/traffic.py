@@ -17,9 +17,13 @@ from typing import Any, Optional
 
 import numpy as np
 
-from backend.routing.road_graph import SPEED_KM_PER_MIN, RoadGraph
+from backend.routing.road_graph import SPEED_KM_PER_MIN, RoadGraph, shortest_paths
 
 log = logging.getLogger(__name__)
+
+# Full /route for every simulated car freezes the API. Crowd cars use a free-flow
+# Dijkstra on the road graph; only this many get a unique path, the rest clone.
+MAX_UNIQUE_ROUTES = 48
 
 # BPR (Bureau of Public Roads) — standard volume-delay.
 BPR_ALPHA = 0.15
@@ -155,11 +159,13 @@ class TrafficEngine:
         self._metrics = TrafficMetrics()
         self._compare: Optional[dict] = None
         self._rng = np.random.default_rng(42)
-        self._route_fn = None  # set by API: (lat, lon) -> route body
+        self._route_fn = None  # optional; phones may still use full /route
         self._shelters_fn = None
         # Spawn cluster centre (hazard origin). Defaults to central Edmonton.
         self.cluster_lat = 53.5461
         self.cluster_lon = -113.4938
+        self._assign_thread: Optional[threading.Thread] = None
+        self._assign_pending: Optional[tuple] = None  # (force, sim_time)
 
     # ----- graph binding -----
 
@@ -226,11 +232,40 @@ class TrafficEngine:
                 self.simulated_count = max(0, min(MAX_SIMULATED, int(simulated_count)))
             if self.enabled and self._rg is not None:
                 self._ensure_crowd_locked()
-                self._assign_all_locked(force=True)
+                # Never block the HTTP thread on hundreds of routes.
+                self._schedule_assign_locked(force=True, sim_time=0)
             elif not self.enabled:
                 self._volume[:] = 0
                 self._metrics = TrafficMetrics()
             return self.status_locked()
+
+    def _schedule_assign_locked(self, force: bool = False, sim_time: int = 0) -> None:
+        """Queue a background reassignment (caller holds the lock)."""
+        self._assign_pending = (bool(force), int(sim_time))
+        t = self._assign_thread
+        if t is not None and t.is_alive():
+            return
+
+        def worker() -> None:
+            while True:
+                with self._lock:
+                    pending = self._assign_pending
+                    self._assign_pending = None
+                if pending is None:
+                    return
+                force_f, sim_t = pending
+                try:
+                    with self._lock:
+                        if not self.enabled or self._rg is None:
+                            continue
+                        self._ensure_crowd_locked()
+                        self._assign_all_locked(force=force_f, sim_time=sim_t)
+                        self._last_rebalance_sim = int(sim_t)
+                except Exception:  # noqa: BLE001
+                    log.exception("traffic assignment failed")
+
+        self._assign_thread = threading.Thread(target=worker, daemon=True, name="traffic-assign")
+        self._assign_thread.start()
 
     def status_locked(self) -> dict:
         phones = sum(1 for a in self._agents.values() if a.kind == "phone" and not a.arrived)
@@ -360,27 +395,23 @@ class TrafficEngine:
     # ----- assignment -----
 
     def on_sim_tick(self, sim_time: int) -> None:
-        if not self.enabled or self._rg is None or self._route_fn is None:
+        if not self.enabled or self._rg is None:
             return
         with self._lock:
             self._ensure_crowd_locked()
             if not self._agents:
                 return
             if sim_time - self._last_rebalance_sim >= REBALANCE_EVERY_MIN or self._last_rebalance_sim < 0:
-                self._assign_all_locked(force=False, sim_time=sim_time)
-                self._last_rebalance_sim = int(sim_time)
+                self._schedule_assign_locked(force=False, sim_time=sim_time)
 
     def rebalance_now(self, sim_time: int = 0) -> dict:
         with self._lock:
             if self.enabled and self._rg is not None:
                 self._ensure_crowd_locked()
-                self._assign_all_locked(force=True, sim_time=sim_time)
-                self._last_rebalance_sim = int(sim_time)
+                self._schedule_assign_locked(force=True, sim_time=sim_time)
             return self.status_locked()
 
     def _assign_all_locked(self, force: bool = False, sim_time: int = 0) -> None:
-        if self._route_fn is None:
-            return
         agents = [a for a in self._agents.values() if not a.arrived]
         if not agents:
             self._recompute_metrics_locked()
@@ -388,44 +419,50 @@ class TrafficEngine:
 
         if self.anti_gridlock:
             if force or any(not a.edge_ids for a in agents):
-                # Cold start: load cars one-at-a-time so each sees the jam forming.
                 for a in agents:
                     self._unload_agent_locked(a)
                 order = sorted(agents, key=lambda a: (a.kind != "phone", a.lat + a.lon))
-                for agent in order:
-                    pick = self._pick_route_locked(agent.lat, agent.lon)
+                # Unique BPR-aware routes for a capped set of leaders; followers clone
+                # so we paint volume without 250 full Dijkstras every click.
+                leaders = order[:MAX_UNIQUE_ROUTES]
+                followers = order[MAX_UNIQUE_ROUTES:]
+                leader_picks = []
+                for agent in leaders:
+                    pick = self._pick_route_fast_locked(agent.lat, agent.lon)
                     if pick is None:
                         continue
                     self._load_agent_locked(
                         agent, pick["edge_ids"], pick["route_id"], pick["shelter_id"],
                         pick["eta_min"], pick["free_eta_min"], sim_time,
                     )
+                    leader_picks.append(pick)
+                if leader_picks:
+                    for i, agent in enumerate(followers):
+                        pick = leader_picks[i % len(leader_picks)]
+                        self._load_agent_locked(
+                            agent, pick["edge_ids"], pick["route_id"], pick["shelter_id"],
+                            pick["eta_min"], pick["free_eta_min"], sim_time,
+                        )
             else:
-                # Periodic rebalance: switch only when it saves SWITCH_SAVE_MIN + cooldown.
                 order = sorted(agents, key=lambda a: (a.kind != "phone", -a.eta_min))
-                for agent in order:
+                for agent in order[:MAX_UNIQUE_ROUTES]:
                     self._maybe_switch_locked(agent, sim_time)
         else:
-            # Naive gridlock: everyone piles onto the single free-flow best corridor
-            # from the first agent (typical "follow the blue line" panic).
             for a in agents:
                 self._unload_agent_locked(a)
-            seed = self._pick_route_locked(agents[0].lat, agents[0].lon)
-            scratch = []
+            seed = self._pick_route_fast_locked(agents[0].lat, agents[0].lon)
             for agent in agents:
                 pick = seed
                 if pick is None or not pick.get("edge_ids"):
-                    pick = self._pick_route_locked(agent.lat, agent.lon)
-                scratch.append((agent, pick))
-            for agent, pick in scratch:
+                    pick = self._pick_route_fast_locked(agent.lat, agent.lon)
                 if pick is None:
                     continue
                 self._load_agent_locked(
                     agent, pick["edge_ids"], pick["route_id"], pick["shelter_id"],
                     pick["eta_min"], pick["free_eta_min"], sim_time,
                 )
-            for agent, pick in scratch:
-                if pick is None or not agent.edge_ids:
+            for agent in agents:
+                if not agent.edge_ids:
                     continue
                 agent.eta_min = self._travel_min_unlocked(agent.edge_ids)
                 agent.free_eta_min = self.free_min_for_edges(agent.edge_ids)
@@ -433,7 +470,7 @@ class TrafficEngine:
 
     def _maybe_switch_locked(self, agent: Agent, sim_time: int) -> None:
         if not agent.edge_ids:
-            pick = self._pick_route_locked(agent.lat, agent.lon)
+            pick = self._pick_route_fast_locked(agent.lat, agent.lon)
             if pick:
                 self._load_agent_locked(
                     agent, pick["edge_ids"], pick["route_id"], pick["shelter_id"],
@@ -445,9 +482,8 @@ class TrafficEngine:
         old_shelter = agent.shelter_id
         old_free = agent.free_eta_min
         current_eta = self._travel_min_unlocked(old_edges)
-        # Peek at an alternate with this car removed from its current roads.
         self._unload_agent_locked(agent)
-        pick = self._pick_route_locked(agent.lat, agent.lon)
+        pick = self._pick_route_fast_locked(agent.lat, agent.lon)
         if pick is None:
             self._load_agent_locked(
                 agent, old_edges, old_route, old_shelter, current_eta, old_free, sim_time,
@@ -476,34 +512,57 @@ class TrafficEngine:
             return float(free.sum())
         return float((free * bpr_factor(self._volume, self._capacity)[ids]).sum())
 
-    def _pick_route_locked(self, lat: float, lon: float) -> Optional[dict]:
-        """Ask the live router for a best option; map journey edges → base edges."""
-        try:
-            body = self._route_fn(lat, lon)
-        except Exception as exc:  # noqa: BLE001 — crowd must not kill the sim loop
-            log.debug("traffic route failed: %s", exc)
+    def _pick_route_fast_locked(self, lat: float, lon: float) -> Optional[dict]:
+        """BPR-weighted Dijkstra to the nearest open shelter — no full /route call."""
+        rg = self._rg
+        if rg is None or rg.n_nodes == 0:
             return None
-        if not body:
+        start, _ = rg.nearest_node(lat, lon)
+        if self.enabled and len(self._volume) == rg.n_edges:
+            weights = rg.edge_time_min * bpr_factor(self._volume, self._capacity)
+        else:
+            weights = rg.edge_time_min
+        tree = shortest_paths(
+            rg.n_nodes, rg.edge_u, rg.edge_v, weights, start, rg.edge_permitted,
+        )
+        shelters = self._shelters_fn() if self._shelters_fn else []
+        best = None
+        for shelter in shelters:
+            props = shelter.get("properties") or {}
+            if not props.get("open", True):
+                continue
+            if props.get("occupancy", 0) >= props.get("capacity", 10**9):
+                continue
+            coords = shelter.get("geometry", {}).get("coordinates")
+            if not coords or len(coords) < 2:
+                continue
+            end, _ = rg.nearest_node(float(coords[1]), float(coords[0]))
+            dist = float(tree.distance[end])
+            if not math.isfinite(dist):
+                continue
+            edges = tree.edges_to(start, end)
+            if edges is None:
+                continue
+            if best is None or dist < best[0]:
+                best = (dist, shelter, edges)
+        if best is None:
             return None
-        best_id = body.get("best_route_id")
-        options = body.get("options") or []
-        opt = next((o for o in options if o.get("id") == best_id), None)
-        if opt is None and options:
-            opt = next((o for o in options if o.get("status") in ("ok", "tight")), options[0])
-        if opt is None:
-            return None
-        edge_ids = opt.get("_traffic_edge_ids") or ()
-        eta = float(opt.get("modeled_duration_min") or opt.get("eta_min") or 0)
-        free = float(opt.get("traffic_free_min") or eta)
-        delay = max(0.0, eta - free)
+        dist, shelter, edges = best
+        edge_ids = [int(e) for e in edges]
+        free = float(rg.edge_time_min[np.asarray(edge_ids, dtype=np.int64)].sum()) if edge_ids else 0.0
+        sid = shelter["id"]
         return {
-            "route_id": opt.get("id"),
-            "shelter_id": opt.get("shelter_id"),
+            "route_id": f"rt_{sid}_fastest",
+            "shelter_id": sid,
             "edge_ids": edge_ids,
-            "eta_min": eta,
+            "eta_min": dist,
             "free_eta_min": free,
-            "delay_min": delay,
+            "delay_min": max(0.0, dist - free),
         }
+
+    def _pick_route_locked(self, lat: float, lon: float) -> Optional[dict]:
+        """Compat alias — crowd assignment always uses the fast graph path."""
+        return self._pick_route_fast_locked(lat, lon)
 
     def _recompute_metrics_locked(self) -> None:
         active = [a for a in self._agents.values() if not a.arrived and a.edge_ids]
@@ -531,8 +590,8 @@ class TrafficEngine:
     def compare(self, sim_time: int = 0) -> dict:
         """Run naive vs anti-gridlock assignment and return clearance times."""
         with self._lock:
-            if self._rg is None or self._route_fn is None:
-                return {"error": "traffic_unavailable", "message": "Road graph or router not ready"}
+            if self._rg is None:
+                return {"error": "traffic_unavailable", "message": "Road graph not ready"}
             was_enabled = self.enabled
             was_anti = self.anti_gridlock
             self.enabled = True
@@ -555,9 +614,8 @@ class TrafficEngine:
                     if without is not None and with_ag is not None else None
                 ),
             }
-            # Leave anti-gridlock on (the "after" state) and restore enabled flag.
-            self.anti_gridlock = True if was_enabled else was_anti
             self.enabled = was_enabled
+            self.anti_gridlock = True if was_enabled else was_anti
             if self.enabled:
                 self.anti_gridlock = True
                 self._assign_all_locked(force=True, sim_time=sim_time)
