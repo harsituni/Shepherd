@@ -141,6 +141,50 @@ function textElement(className, text) {
 
 const nowElement = () => textElement('now-label', '')
 
+// Priority resident (a phone registered with an Alberta disability ID): navy
+// diamond, with a pop-up of what responders need: needs, ID type, note.
+const PRIORITY_ID_LABEL = {
+  dats: 'DATS (Edmonton)',
+  parking_placard: 'Accessible parking placard',
+  aish: 'AISH card',
+  adap: 'ADAP client ID',
+  pdd: 'PDD program',
+  cnib: 'CNIB card',
+  other: 'Other ID',
+}
+const PRIORITY_NEED_LABEL = {
+  mobility: 'Wheelchair or mobility aid',
+  no_vehicle: 'No vehicle',
+  vision: 'Blind or low vision',
+  hearing: 'Deaf or hard of hearing',
+  medical: 'Medical equipment or oxygen',
+  cognitive: 'Cognitive or developmental',
+  other: 'Other needs',
+}
+
+function priorityElement() {
+  const el = document.createElement('div')
+  el.className = 'priority-marker'
+  el.tabIndex = 0
+  const mark = document.createElement('span')
+  mark.className = 'priority-diamond'
+  const popup = document.createElement('div')
+  popup.className = 'shelter-popup priority-popup'
+  popup.setAttribute('role', 'tooltip')
+  el.append(mark, popup)
+  return el
+}
+
+function updatePriority(el, p) {
+  const needs = (p.priority_needs ?? []).map((n) => PRIORITY_NEED_LABEL[n] ?? n)
+  const lines = [['shelter-popup-title', 'Priority resident']]
+  if (needs.length) lines.push(['priority-popup-line', needs.join(', ')])
+  lines.push(['priority-popup-line', `ID: ${PRIORITY_ID_LABEL[p.priority_id_type] ?? 'Disability ID'}`])
+  if (p.priority_note) lines.push(['priority-popup-line', `Note: ${p.priority_note}`])
+  el.querySelector('.priority-popup').replaceChildren(...lines.map(([cls, text]) => textElement(cls, text)))
+  el.setAttribute('aria-label', lines.map(([, t]) => t).join('. '))
+}
+
 function startElement() {
   const el = document.createElement('div')
   el.className = 'start-marker'
@@ -200,6 +244,7 @@ export default function MapView({
   shelters,
   unsafeShelters = NO_IDS, // Set of shelter ids the fire is forecast to reach (evacuation.js)
   evacuees, // GET /evacuees FeatureCollection
+  onlyPriority = false, // hide ordinary phones, keep priority residents
   reports,
   focus,
   startPoint,
@@ -212,6 +257,7 @@ export default function MapView({
   const nowMarkers = useRef(new Map())
   const predictedMarkers = useRef(new Map())
   const startMarkers = useRef(new Map())
+  const priorityMarkers = useRef(new Map())
   const clickRef = useRef(onMapClick)
   const framed = useRef(false)
   const [loaded, setLoaded] = useState(false)
@@ -323,7 +369,7 @@ export default function MapView({
 
     map.on('click', (e) => clickRef.current?.(e.lngLat))
 
-    const stores = [shelterMarkers, nowMarkers, predictedMarkers, startMarkers].map((r) => r.current)
+    const stores = [shelterMarkers, nowMarkers, predictedMarkers, startMarkers, priorityMarkers].map((r) => r.current)
     return () => {
       stores.forEach((s) => s.clear())
       map.remove()
@@ -416,8 +462,20 @@ export default function MapView({
   useEffect(() => {
     const map = mapRef.current
     if (!loaded || !map) return
-    map.getSource('evacuees')?.setData(evacuees ?? EMPTY)
-  }, [evacuees, loaded])
+    // Ordinary phones are blue dots; priority residents are diamond markers on top.
+    const all = evacuees?.features ?? []
+    const plain = onlyPriority ? [] : all.filter((f) => !f.properties?.priority)
+    map.getSource('evacuees')?.setData({ type: 'FeatureCollection', features: plain })
+    const items = all
+      .filter((f) => f.properties?.priority)
+      .map((f) => ({
+        id: f.id,
+        lngLat: f.geometry.coordinates,
+        build: priorityElement,
+        update: (el) => updatePriority(el, f.properties),
+      }))
+    syncMarkers(map, priorityMarkers.current, items)
+  }, [evacuees, onlyPriority, loaded])
 
   // Reports: pins redrawn on every poll.
   useEffect(() => {

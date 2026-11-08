@@ -280,6 +280,18 @@ export async function postEvacuee(body) {
   return { id: body.id, received: true }
 }
 
+// Priority residents (not in the contract yet): { id, id_type, id_last4, needs, note? }.
+// Only the last 4 characters of the ID ever leave the phone.
+export async function postPriority(body) {
+  if (!USE_FIXTURES) return request('/priority', { method: 'POST', body: JSON.stringify(body) })
+  return { id: body.id, priority: true }
+}
+
+export async function deletePriority(id) {
+  if (!USE_FIXTURES) return request(`/priority/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  return { id, priority: false }
+}
+
 // kind: fire | flooded_road | blocked_road | safe | sos | other (other: not in contract v1 yet)
 export async function postReport({ kind, lat, lon, note }) {
   const body = { kind, lat, lon, ...(note ? { note } : {}) }

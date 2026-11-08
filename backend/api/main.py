@@ -42,6 +42,13 @@ NOTIFICATION_TARGETS = {"all", "zone"}
 STALE_EVACUEE_SEC = 30
 evacuees: dict[str, dict[str, Any]] = {}
 
+# Priority residents: phones whose owner registered a disability ID, keyed by the
+# evacuee id. Only the ID type and its last 4 characters are kept, never the full
+# number. Survives missed heartbeats; the dot shows while the phone is sharing.
+priority_residents: dict[str, dict[str, Any]] = {}
+PRIORITY_ID_TYPES = {"dats", "parking_placard", "aish", "adap", "pdd", "cnib", "other"}
+PRIORITY_NEEDS = {"mobility", "no_vehicle", "vision", "hearing", "medical", "cognitive", "other"}
+
 # Large Edmonton reception centres (approx. coords). Capacities are demo-scale.
 SHELTERS: list[dict] = [
     {
@@ -216,6 +223,14 @@ class SimWind(BaseModel):
     wind_from_deg: float
 
 
+class PriorityIn(BaseModel):
+    id: str  # the phone's evacuee id (ev_...)
+    id_type: str  # one of PRIORITY_ID_TYPES
+    id_last4: str  # last 4 characters of the ID number only
+    needs: list[str] = Field(default_factory=list)  # PRIORITY_NEEDS
+    note: Optional[str] = None
+
+
 class EvacueeIn(BaseModel):
     id: str
     lat: float
@@ -249,6 +264,19 @@ def prune_evacuees(now: Optional[float] = None) -> None:
         del evacuees[eid]
 
 
+def priority_properties(eid: str) -> dict:
+    """What responders see for a priority resident (no full ID number)."""
+    row = priority_residents.get(eid)
+    if not row:
+        return {"priority": False}
+    return {
+        "priority": True,
+        "priority_id_type": row["id_type"],
+        "priority_needs": row["needs"],
+        "priority_note": row["note"],
+    }
+
+
 def evacuee_features() -> list[dict]:
     prune_evacuees()
     features: list[dict] = []
@@ -262,6 +290,7 @@ def evacuee_features() -> list[dict]:
                     "route_status": row.get("route_status"),
                     "shelter_id": row.get("shelter_id"),
                     "updated_sim_time": row.get("updated_sim_time"),
+                    **priority_properties(eid),
                 },
                 "geometry": {
                     "type": "Point",
@@ -461,6 +490,43 @@ def post_evacuee(body: EvacueeIn, response: Response) -> dict:
     }
     response.status_code = 201 if created else 200
     return {"id": body.id, "received": True}
+
+
+def _invalid_priority(message: str) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": "invalid_priority", "message": message})
+
+
+@app.post("/priority")
+def post_priority(body: PriorityIn, response: Response):
+    """Phone "Priority" sheet: mark this phone as a priority resident. Upserts by id."""
+    last4 = body.id_last4.strip()
+    if not body.id.startswith("ev_"):
+        return _invalid_priority("id must be the phone's evacuee id (ev_...).")
+    if body.id_type not in PRIORITY_ID_TYPES:
+        return _invalid_priority("Unknown ID type.")
+    if len(last4) != 4 or not last4.isalnum():
+        return _invalid_priority("id_last4 must be the last 4 letters or digits of the ID.")
+    needs = [n for n in dict.fromkeys(body.needs) if n in PRIORITY_NEEDS]
+    if len(needs) != len(set(body.needs)):
+        return _invalid_priority("Unknown need.")
+    note = (body.note or "").strip()[:200] or None
+    created = body.id not in priority_residents
+    priority_residents[body.id] = {
+        "id_type": body.id_type,
+        "id_last4": last4.upper(),
+        "needs": needs,
+        "note": note,
+        "sim_time": controller.sim_time,
+    }
+    response.status_code = 201 if created else 200
+    return {"id": body.id, "priority": True}
+
+
+@app.delete("/priority/{evacuee_id}")
+def delete_priority(evacuee_id: str) -> dict:
+    """Phone removes its own priority status."""
+    priority_residents.pop(evacuee_id, None)
+    return {"id": evacuee_id, "priority": False}
 
 
 @app.get("/evacuees")

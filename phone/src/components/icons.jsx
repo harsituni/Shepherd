@@ -113,6 +113,14 @@ export const CloseIcon = (p) => (
 )
 
 // Map screen controls.
+// Priority resident: a person with a raised hand, asking for extra help.
+export const PriorityIcon = (p) => (
+  <Svg size={20} {...p}>
+    <circle cx="12" cy="5" r="2" />
+    <path d="M12 8v6m0 0-3 6m3-6 3 6M8.5 11h7" />
+  </Svg>
+)
+
 export const BellIcon = (p) => (
   <Svg size={20} {...p}>
     <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z" />

@@ -39,6 +39,7 @@ export default function App() {
   const [hazardKind, setHazardKind] = useState('wildfire')
   const [startPoint, setStartPoint] = useState(null) // { lng, lat } picked on the map
   const [showPredicted, setShowPredicted] = useState(true)
+  const [onlyPriority, setOnlyPriority] = useState(false) // map shows only priority residents
   const [hazards, setHazards] = useState(null)
   const [shelters, setShelters] = useState(null)
   const [reports, setReports] = useState(null)
@@ -220,6 +221,8 @@ export default function App() {
           reportCount={reports?.features?.length ?? 0}
           onOpenReports={() => setPopup('reports')}
           onOpenNotify={() => setPopup('notify')}
+          onlyPriority={onlyPriority}
+          onOnlyPriorityChange={setOnlyPriority}
         />
         <main className="centre">
           <MapView
@@ -228,6 +231,7 @@ export default function App() {
             shelters={shelters}
             unsafeShelters={unsafeShelters}
             evacuees={evacuees}
+            onlyPriority={onlyPriority}
             reports={reports}
             focus={focus}
             startPoint={startPoint}
