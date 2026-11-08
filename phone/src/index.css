@@ -372,6 +372,13 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .ms-alert .evac { border-bottom: 0; padding: 10px 30px 10px 12px; gap: 8px; }
 .ms-alert .alert-icon,
 .ms-alert .evac-icon { flex-basis: 18px; width: 18px; height: 18px; }
+/* Compact (one line): icon, title and chevron share one centre line. The banner's
+   top alignment and 2px icon nudge are for its two-line form. */
+.ms-alert:not(.is-open) .alert { align-items: center; }
+.ms-alert:not(.is-open) .alert-icon { margin-top: 0; }
+.ms-alert .alert-text strong,
+.ms-alert .evac-title { line-height: 20px; }
+.ms-alert:not(.is-open) .ms-alert-toggle { align-items: center; padding-bottom: 0; }
 .ms-alert .evac-head { gap: 6px; }
 .ms-alert .evac-title,
 .ms-alert .alert-text strong { font-size: var(--fs-sm); }
@@ -424,10 +431,19 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   position: relative;
   background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--float-shadow);
 }
+/* Opens from where the strip was: it starts with only a strip-high slice showing,
+   in the strip's spot, then lifts and opens upward to full height. The clip's
+   negative insets keep the close button (above the panel) and shadow visible. */
 .ms-panel.is-sliding { animation: panel-up 320ms cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes panel-up {
-  from { transform: translateY(calc(100% + 80px)); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(calc(100% - 56px));
+    clip-path: inset(-60px -16px calc(100% - 56px) -16px round 8px);
+  }
+  to {
+    transform: translateY(0);
+    clip-path: inset(-60px -16px -16px -16px round 8px);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .ms-panel.is-sliding { animation: none; }
