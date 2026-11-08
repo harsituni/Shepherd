@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PauseIcon, PlayIcon, ResetIcon } from './icons.jsx'
+import TrafficPanel from './TrafficPanel.jsx'
 
 // Compass degrees the wind blows FROM (matches wind_from_deg in the contract).
 // Labels read start → finish: where the wind comes from, then where it heads.
@@ -51,6 +52,10 @@ export default function ControlsPanel({
   onOpenNotify,
   onlyPriority,
   onOnlyPriorityChange,
+  traffic,
+  trafficBusy,
+  onTrafficConfig,
+  onTrafficCompare,
 }) {
   const windTimer = useRef(null)
   useEffect(() => () => clearTimeout(windTimer.current), [])
@@ -250,6 +255,14 @@ export default function ControlsPanel({
           Notify
         </button>
       </div>
+
+      <TrafficPanel
+        traffic={traffic}
+        canSimulate={canSimulate}
+        busy={trafficBusy}
+        onConfig={onTrafficConfig}
+        onCompare={onTrafficCompare}
+      />
     </aside>
   )
 }

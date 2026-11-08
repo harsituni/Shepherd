@@ -6,6 +6,7 @@ import {
   getRoute,
   getShelters,
   getSimState,
+  getTrafficHint,
   postEvacuee,
   postReport,
   postPriority,
@@ -164,6 +165,8 @@ export default function App() {
   const tripRef = useRef(null)
   const rerouteRef = useRef(null)
   const noSafeToastAt = useRef(0)
+  const trafficHintAt = useRef(0)
+  const [trafficBanner, setTrafficBanner] = useState(null)
 
   const refreshBusy = useRef(false)
 
@@ -247,6 +250,23 @@ export default function App() {
         // "leave by T+X", a later poll can't push that deadline out while the fire grows.
         setRoute((prev) => ratchetLeaveBy(prev, r))
         setRouteError(null)
+        // Banner when a faster traffic-aware route exists (contract v2.1).
+        try {
+          const hintBody = await getTrafficHint(loc[1], loc[0], chosenRef.current ?? r?.best_route_id)
+          const hint = hintBody?.hint
+          if (hint?.saves_min >= 3) {
+            setTrafficBanner(hint)
+            const now = Date.now()
+            if (now - trafficHintAt.current > 20000) {
+              trafficHintAt.current = now
+              showToastRef.current?.(hint.message, 5000)
+            }
+          } else {
+            setTrafficBanner(null)
+          }
+        } catch {
+          setTrafficBanner(null)
+        }
       } catch (err) {
         if (stale()) return
         if (err.code !== 'no_route') {
@@ -606,18 +626,28 @@ export default function App() {
           />
         )}
         alert={
-          wildfire ? (
-            <EvacCard
-              location={location}
-              route={driveRoute}
-              routeError={routeError}
-              near={location ? nearestHazard(location, hazards) : null}
-              clock={clock}
-              trip={trip}
-            />
-          ) : (
-            <AlertBanner hazards={hazards} location={location} notifications={notifications} />
-          )
+          <>
+            {trafficBanner && (
+              <div className="alert alert-advisory traffic-faster" role="status">
+                <div className="alert-text">
+                  <strong>{trafficBanner.message}</strong>
+                  <span className="num">Switch routes to skip the jam.</span>
+                </div>
+              </div>
+            )}
+            {wildfire ? (
+              <EvacCard
+                location={location}
+                route={driveRoute}
+                routeError={routeError}
+                near={location ? nearestHazard(location, hazards) : null}
+                clock={clock}
+                trip={trip}
+              />
+            ) : (
+              <AlertBanner hazards={hazards} location={location} notifications={notifications} />
+            )}
+          </>
         }
         details={<RouteDetails {...detailProps} />}
         more={<RouteMore route={driveRoute} shelters={shelters} trip={trip} evacMode={evacMode} />}

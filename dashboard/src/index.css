@@ -130,6 +130,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tornado-stat-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
 .tornado-stats strong { font-weight: 650; color: var(--text); text-transform: capitalize; }
 
+.traffic-panel {
+  display: flex; flex-direction: column; gap: 12px;
+  padding-top: 8px; border-top: 1px solid var(--divider); margin-top: 4px;
+}
+.traffic-metrics {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: color-mix(in srgb, var(--blue) 6%, var(--surface));
+  font-size: var(--fs-sm);
+}
+.traffic-metric { display: flex; flex-direction: column; gap: 2px; }
+.traffic-metric-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
+.traffic-metrics strong { font-weight: 650; color: var(--text); }
+.traffic-compare-btn { min-height: 44px; width: 100%; }
+.traffic-compare-label, .traffic-side-compare {
+  margin: 0; padding: 10px 12px; border-radius: 8px; font-weight: 650;
+  background: color-mix(in srgb, #6B8F71 18%, var(--surface));
+  border: 1px solid color-mix(in srgb, #6B8F71 40%, var(--border));
+  color: var(--text);
+}
+.traffic-side-compare { margin-bottom: 12px; }
+
 /* ---------- left panel ---------- */
 
 .controls {
@@ -282,6 +304,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Orange edge, dark red centre: solid colours, no gradient. */
 .swatch-hazard { width: 12px; height: 12px; border-radius: 3px; background: var(--hazard-high); border: 3px solid var(--hazard); }
 .swatch-predicted { width: 12px; height: 12px; border-radius: 3px; border: 2px dotted var(--predicted); }
+.swatch-traffic-free { width: 14px; height: 3px; background: #6B8F71; }
+.swatch-traffic-busy { width: 14px; height: 3px; background: #E6A817; }
+.swatch-traffic-jammed { width: 14px; height: 3px; background: #D9480F; }
+.swatch-traffic-gridlock { width: 14px; height: 3px; background: #8B1A1A; }
 .swatch-closed { width: 14px; height: 3px; background: var(--closed); }
 .swatch-route { width: 14px; height: 3px; background: var(--blue); }
 .swatch-shelter { width: 12px; height: 12px; border-radius: 3px; background: var(--navy); }

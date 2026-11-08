@@ -67,7 +67,7 @@ DEFAULT_LANES = {
 REBALANCE_EVERY_MIN = 5
 SWITCH_SAVE_MIN = 3.0
 SWITCH_COOLDOWN_MIN = 10
-DEFAULT_SIMULATED = 80
+DEFAULT_SIMULATED = 250
 MAX_SIMULATED = 500
 # How many congested edges to return for the dashboard map (sorted by v/c).
 MAP_EDGE_LIMIT = 2500
@@ -406,12 +406,17 @@ class TrafficEngine:
                 for agent in order:
                     self._maybe_switch_locked(agent, sim_time)
         else:
-            # Naive gridlock: assign everyone against an empty map, then dump on at once.
+            # Naive gridlock: everyone piles onto the single free-flow best corridor
+            # from the first agent (typical "follow the blue line" panic).
             for a in agents:
                 self._unload_agent_locked(a)
+            seed = self._pick_route_locked(agents[0].lat, agents[0].lon)
             scratch = []
             for agent in agents:
-                scratch.append((agent, self._pick_route_locked(agent.lat, agent.lon)))
+                pick = seed
+                if pick is None or not pick.get("edge_ids"):
+                    pick = self._pick_route_locked(agent.lat, agent.lon)
+                scratch.append((agent, pick))
             for agent, pick in scratch:
                 if pick is None:
                     continue

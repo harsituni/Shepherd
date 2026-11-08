@@ -74,6 +74,7 @@ export default function RouteOptions({ options, bestId, chosenId, shelters, onCh
               <span className="route-card-trip num">
                 <strong>{o.eta_min} min</strong> · {formatKm(o.distance_km)} km
                 {full != null && ` · ${full}% full`}
+                {o.traffic_delay_min > 0 && ` · +${o.traffic_delay_min} min traffic`}
                 {o.id === bestId && ' · Recommended'}
               </span>
             )}

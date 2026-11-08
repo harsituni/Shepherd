@@ -40,6 +40,10 @@ function shortReason(prev, next, currentOpt) {
   if (next.shelter_id !== prev.shelter_id) {
     return `Heading to ${next.shelter_name} instead`
   }
+  const saves = (currentOpt?.eta_min ?? 0) - (next.eta_min ?? 0)
+  if (saves >= 3 && (currentOpt?.traffic_delay_min > 0 || next.traffic_delay_min >= 0)) {
+    return `Traffic: faster route saves ${Math.round(saves)} min`
+  }
   return 'Taking a safer path'
 }
 
@@ -60,15 +64,27 @@ export function shouldReroute(trip, routeBody) {
   const best = optionOf(routeBody, routeBody.best_route_id)
   if (!best || !usable(best)) return null
 
-  // Still Clear on the same route → keep driving it.
+  // Still Clear on the same route → keep driving it (unless traffic saves 3+ min).
   if (current && usable(current) && current.status === 'ok' && current.id === best.id) return null
-  if (current && usable(current) && current.status === 'ok') return null
+  if (current && usable(current) && current.status === 'ok' && current.id !== best.id) {
+    const saves = (current.eta_min ?? 0) - (best.eta_min ?? 0)
+    if (saves >= 3) {
+      const next = flattenOption(routeBody, best)
+      if (next?.geometry) return { route: next, reason: `Traffic: faster route saves ${Math.round(saves)} min` }
+    }
+    return null
+  }
 
   // Same usable recommendation (tight is fine to keep if it's still the best).
   if (current && usable(current) && current.id === best.id) return null
 
   // Current is missing, blocked, indeterminate, or no longer best while unsafe-ish.
   if (current && usable(current) && current.id !== best.id) {
+    const saves = (current.eta_min ?? 0) - (best.eta_min ?? 0)
+    if (saves >= 3) {
+      const next = flattenOption(routeBody, best)
+      if (next?.geometry) return { route: next, reason: `Traffic: faster route saves ${Math.round(saves)} min` }
+    }
     // Tight but still usable and not the best: only hop if the shelter changed
     // (destination itself is the problem) or margin got much worse.
     if (current.shelter_id === best.shelter_id) return null
