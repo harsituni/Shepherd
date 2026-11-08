@@ -10,7 +10,7 @@ import {
   withChoice,
 } from './api.js'
 import { POLL_MS } from './config.js'
-import { useEvacuation, useHeartbeat } from './evacuate.js'
+import { locateOnce, useEvacuation, useHeartbeat } from './evacuate.js'
 import { isCurrentCore, nearestHazard } from './geo.js'
 import { placeName } from './placeName.js'
 import { nextClock } from './simClock.js'
@@ -55,6 +55,7 @@ function ratchetLeaveBy(prev, next) {
 
 export default function App() {
   const [location, setLocation] = useState(null) // [lon, lat]
+  const [autoLocation, setAutoLocation] = useState(null) // the launch GPS fix, shown with the panel collapsed
   const [route, setRoute] = useState(null)
   const [routeError, setRouteError] = useState(null)
   const [chosen, setChosen] = useState(null) // id of the route card the user picked
@@ -64,6 +65,7 @@ export default function App() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [toast, setToast] = useState(null)
+  const [locating, setLocating] = useState(false) // waiting on a GPS fix
   const [notifications, setNotifications] = useState([])
   const [popup, setPopup] = useState(null)
   const [clock, setClock] = useState(null) // sim clock for the leave-by countdown
@@ -251,6 +253,59 @@ export default function App() {
     evacuatingRef.current = evacuating
   }, [evacuating])
 
+  // Picking Real GPS moves the pin to the phone's actual location right away (and
+  // routes from there), instead of waiting for Start evacuating. Simulated drive
+  // keeps whatever location was tapped, for demos.
+  const evacModeRef = useRef(evacMode)
+  const chooseEvacMode = useCallback(
+    async (mode) => {
+      evacModeRef.current = mode
+      setEvacMode(mode)
+      if (mode !== 'gps') return
+      setToast(null)
+      setLocating(true)
+      const { lngLat, error } = await locateOnce()
+      setLocating(false)
+      // Ignore a late fix if the user switched back or already started a trip.
+      if (evacModeRef.current !== 'gps' || evacuatingRef.current) return
+      if (error) return showToast(error, 6000)
+      showToast('Showing your real location.')
+      setLocationAndRoute(lngLat)
+    },
+    [showToast, setLocationAndRoute],
+  )
+
+  // On launch, start from the phone's real location (Real GPS selected). If location
+  // is unavailable or denied, stay quiet: the user can tap the map instead.
+  useEffect(() => {
+    let cancelled = false
+    setLocating(true)
+    locateOnce().then(({ lngLat }) => {
+      if (!cancelled) setLocating(false)
+      // Skip if the user already tapped the map while we waited.
+      if (cancelled || !lngLat || locationRef.current) return
+      evacModeRef.current = 'gps'
+      setEvacMode('gps')
+      setAutoLocation(lngLat) // keeps the route panel collapsed for this fix
+      setLocationAndRoute(lngLat)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [setLocationAndRoute])
+
+  // Tapping the map picks a pretend location, so switch to Simulated drive.
+  // Picking Real GPS again jumps back to the phone's location.
+  const tapMap = useCallback(
+    (lngLat) => {
+      evacModeRef.current = 'sim'
+      setEvacMode('sim')
+      setLocating(false) // a tap wins over a GPS fix still on its way
+      setLocationAndRoute(lngLat)
+    },
+    [setLocationAndRoute],
+  )
+
   // Heartbeat to POST /evacuees every ~2 s once the user has set a location (by tapping
   // the map, a preset, or Need help) and while evacuating (simulated or GPS), so the
   // dashboard marks where they are. The backend drops a phone after 30 s without a
@@ -287,7 +342,7 @@ export default function App() {
     },
     trip,
     evacMode,
-    onEvacMode: setEvacMode,
+    onEvacMode: chooseEvacMode,
     onStartEvacuating: () => {
       setFocusKey(Date.now()) // frame the route the dot will follow
       startTrip(evacMode, shown)
@@ -305,7 +360,7 @@ export default function App() {
             shelters={shelters}
             route={shown}
             location={location}
-            onTap={evacuating ? undefined : setLocationAndRoute}
+            onTap={evacuating ? undefined : tapMap}
             onViewChange={onViewChange}
             focusKey={focusKey}
             framePadding={framePadding}
@@ -331,6 +386,7 @@ export default function App() {
         areaName={areaName}
         notifications={notifications}
         location={location}
+        autoLocation={autoLocation}
         route={shown}
         routeError={routeError}
         trip={trip}
@@ -344,10 +400,21 @@ export default function App() {
         }}
       />
 
-      {toast && (
+      {toast ? (
         <div className="toast" role="status">
           {toast}
         </div>
+      ) : (
+        locating && (
+          <div className="toast" role="status">
+            Finding your location
+            <span className="loading-dots" aria-hidden="true">
+              <span>.</span>
+              <span>.</span>
+              <span>.</span>
+            </span>
+          </div>
+        )
       )}
 
       {sheetOpen && (
