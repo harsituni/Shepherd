@@ -5,10 +5,12 @@ eta_min is illustrative at 30 km/h, not an actual traffic estimate.
 """
 
 from math import ceil, floor
+import gzip
 import heapq
 import logging
 import os
 from pathlib import Path
+import tempfile
 
 import networkx as nx
 import osmnx as ox
@@ -18,6 +20,7 @@ from shapely.geometry import LineString, Point, shape
 
 ROUTING_DIR = Path(__file__).resolve().parent
 GRAPH_PATH = ROUTING_DIR / "data" / "edmonton_demo_drive.graphml"
+GRAPH_GZ_PATH = ROUTING_DIR / "data" / "edmonton_demo_drive.graphml.gz"
 # West, south, east, north. Includes contract shelters; a bit larger than the
 # downloaded graph so east/south pins still get backup routes instead of 404.
 DEMO_BBOX = (-113.75, 53.40, -113.32, 53.62)
@@ -34,28 +37,52 @@ class NoRouteError(Exception):
     """Used when no eligible shelter can be reached on the demo roads."""
 
 
+def _resolve_graph_path() -> Path:
+    """Prefer SHEPHERD_GRAPH_PATH, then unpacked GraphML, then the shipped .gz."""
+    saved_path = os.environ.get("SHEPHERD_GRAPH_PATH")
+    if saved_path is not None:
+        return Path(saved_path)
+    if GRAPH_PATH.is_file():
+        return GRAPH_PATH
+    if GRAPH_GZ_PATH.is_file():
+        return GRAPH_GZ_PATH
+    return GRAPH_PATH
+
+
+def _load_graphml(graph_path: Path):
+    """Load GraphML from a plain or gzip-compressed file."""
+    if graph_path.suffix == ".gz" or str(graph_path).endswith(".graphml.gz"):
+        with gzip.open(graph_path, "rb") as compressed:
+            payload = compressed.read()
+        with tempfile.NamedTemporaryFile(suffix=".graphml", delete=False) as tmp:
+            tmp.write(payload)
+            tmp_path = Path(tmp.name)
+        try:
+            return ox.load_graphml(tmp_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+    return ox.load_graphml(graph_path)
+
+
 def load_graph() -> None:
     """Load saved roads once, or use estimate-only backup mode. Never download."""
     global _graph, _backup_mode
     if _graph is not None or _backup_mode:
         return
 
-    saved_path = os.environ.get("SHEPHERD_GRAPH_PATH")
-    graph_path = GRAPH_PATH
+    graph_path = _resolve_graph_path()
     try:
-        if saved_path is not None:
-            graph_path = Path(saved_path)
         if not graph_path.is_file():
             raise FileNotFoundError(f"Saved road graph is missing or not a file: {graph_path}")
-        graph = ox.load_graphml(graph_path)
+        graph = _load_graphml(graph_path)
         if len(graph) == 0 or graph.number_of_edges() == 0:
             raise ValueError("Saved graph contains no usable roads")
         graph.graph["routing_bbox"] = (
-    min(float(n["x"]) for _, n in graph.nodes(data=True)),
-    min(float(n["y"]) for _, n in graph.nodes(data=True)),
-    max(float(n["x"]) for _, n in graph.nodes(data=True)),
-    max(float(n["y"]) for _, n in graph.nodes(data=True)),
-)
+            min(float(n["x"]) for _, n in graph.nodes(data=True)),
+            min(float(n["y"]) for _, n in graph.nodes(data=True)),
+            max(float(n["x"]) for _, n in graph.nodes(data=True)),
+            max(float(n["y"]) for _, n in graph.nodes(data=True)),
+        )
     except Exception as error:
         # Only loading errors enable the backup, never routing failures.
         _backup_mode = True
@@ -231,6 +258,38 @@ def _path_roads(graph, path):
     return roads
 
 
+def _road_name(edge) -> str:
+    name = edge.get("name")
+    if isinstance(name, list):
+        name = next((part for part in name if part), None)
+    if name:
+        return str(name)
+    highway = edge.get("highway")
+    if isinstance(highway, list):
+        highway = highway[0] if highway else None
+    if highway:
+        return str(highway).replace("_", " ")
+    return "Unnamed road"
+
+
+def _steps_from_roads(graph, roads) -> list[dict]:
+    """Collapse consecutive same-named edges into turn-by-turn style steps."""
+    steps = []
+    for start, end, key in roads:
+        edge = graph[start][end][key]
+        name = _road_name(edge)
+        distance_km = float(edge["length"]) / 1000.0
+        instruction = f"Continue on {name}"
+        if steps and steps[-1]["instruction"] == instruction:
+            steps[-1]["distance_km"] = round(steps[-1]["distance_km"] + distance_km, 2)
+        else:
+            steps.append({
+                "instruction": instruction,
+                "distance_km": round(distance_km, 2),
+            })
+    return steps
+
+
 def _choose_route(graph, lat, lon, hazards, shelters):
     """Find the shortest reachable shelter on the given roads."""
 
@@ -311,7 +370,7 @@ def find_route(lat: float, lon: float,
         "eta_min": ceil(best_distance / ILLUSTRATIVE_SPEED_KMH * 60),
         "rerouted": rerouted,
         "reroute_reason": reason,
-        "steps": [],
+        "steps": _steps_from_roads(available_graph, roads),
         "geometry": {"type": "LineString", "coordinates": best_coordinates},
     }
 
@@ -514,7 +573,7 @@ def find_routes(lat: float, lon: float, arrival_min_fn,
                 changed = (coordinates != option["geometry"]["coordinates"]
                            or distance != option["distance_km"])
                 option["geometry"]["coordinates"] = coordinates
-                option["distance_km"] = distance
+                option["distance_km"] = round(distance, 1)
                 option["eta_min"] = ceil(distance / ILLUSTRATIVE_SPEED_KMH * 60)
                 option["rerouted"] = changed
                 if changed:

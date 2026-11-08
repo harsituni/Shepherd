@@ -248,7 +248,10 @@ class RoutingTests(unittest.TestCase):
         self.assertIsInstance(result["eta_min"], int)
         self.assertFalse(result["rerouted"])
         self.assertIsNone(result["reroute_reason"])
-        self.assertEqual(result["steps"], [])
+        self.assertIsInstance(result["steps"], list)
+        self.assertGreaterEqual(len(result["steps"]), 1)
+        self.assertIn("instruction", result["steps"][0])
+        self.assertIn("distance_km", result["steps"][0])
         json.dumps(result, allow_nan=False)
 
     def test_closed_full_and_overfull_shelters(self):
@@ -436,7 +439,9 @@ class GraphLoadingTests(unittest.TestCase):
     def test_missing_default_file_never_downloads_or_retries(self):
         with tempfile.TemporaryDirectory() as folder:
             saved_file = Path(folder) / "roads.graphml"
+            missing_gz = Path(folder) / "roads.graphml.gz"
             with patch.object(router, "GRAPH_PATH", saved_file), \
+                 patch.object(router, "GRAPH_GZ_PATH", missing_gz), \
                  patch.object(router.ox, "load_graphml") as load:
                 with self.assertLogs(router.__name__, level="WARNING") as logs:
                     load_graph()
@@ -452,7 +457,9 @@ class GraphLoadingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             saved_file = Path(folder) / "roads.graphml"
             saved_file.touch()
+            missing_gz = Path(folder) / "roads.graphml.gz"
             with patch.object(router, "GRAPH_PATH", saved_file), \
+                 patch.object(router, "GRAPH_GZ_PATH", missing_gz), \
                  patch.object(router.ox, "load_graphml", side_effect=PermissionError("denied")):
                 with self.assertLogs(router.__name__, level="WARNING"):
                     load_graph()
