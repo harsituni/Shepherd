@@ -14,6 +14,7 @@
   --on-navy-muted: #bfd7ee;
   --map-bg: #f3f7fb;
   --hazard: #d9480f;
+  --tornado: #4a3a6b;
   --predicted: #c62828; /* dotted predicted-path outline (same red as closed roads, which are solid) */
   --hazard-high: #7a1f0a;
   --evac-stripe: #ffd400; /* evacuation zone: diagonal stripes */
@@ -113,8 +114,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .banner-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hazard); }
 .banner-dot.idle { background: var(--muted-2); }
+.banner-dot.tornado { background: var(--tornado); }
+.banner-tornado { background: color-mix(in srgb, var(--tornado) 12%, var(--surface)); }
 .banner strong { font-weight: 600; }
 .banner-sub { color: var(--muted); }
+
+.ef-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tornado-stats {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: color-mix(in srgb, var(--tornado) 8%, var(--surface));
+  font-size: var(--fs-sm);
+}
+.tornado-stats > div { display: flex; flex-direction: column; gap: 2px; }
+.tornado-stat-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
+.tornado-stats strong { font-weight: 650; color: var(--text); text-transform: capitalize; }
 
 /* ---------- left panel ---------- */
 

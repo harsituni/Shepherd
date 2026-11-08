@@ -44,15 +44,15 @@ function pointInRing([x, y], ring) {
   return inside
 }
 
-const isFireNow = (f) =>
-  f.properties?.kind === 'wildfire' &&
+const isHazardNow = (f) =>
+  (f.properties?.kind === 'wildfire' || f.properties?.kind === 'tornado') &&
   f.properties?.zone === 'core' &&
   f.properties?.predicted_min == null &&
   f.geometry?.type === 'Polygon'
 
-// One evacuation circle per wildfire drawn on the map (current fire only).
+// One evacuation circle per active core hazard (wildfire or tornado funnel).
 export function evacZones(hazards) {
-  const features = (hazards?.features ?? []).filter(isFireNow).map((f) => ({
+  const features = (hazards?.features ?? []).filter(isHazardNow).map((f) => ({
     type: 'Feature',
     id: `${f.id}:evac`,
     properties: { fire_id: f.id },
@@ -61,12 +61,17 @@ export function evacZones(hazards) {
   return { type: 'FeatureCollection', features }
 }
 
-// Circles that count for shelter safety: around the fire now and every forecast outline.
+// Circles / rings that count for shelter safety: around the hazard now and every
+// forecast outline. Tornado forecasts are long corridors — wrapping those in
+// evacCircle() would paint a city-sized disc around the corridor centroid.
 export function dangerRings(hazards, forecastOutlines = []) {
-  return [
-    ...(hazards?.features ?? []).filter(isFireNow),
-    ...forecastOutlines.filter((o) => o.geometry?.type === 'Polygon'),
-  ].map((f) => evacCircle(f.geometry.coordinates[0]))
+  const now = (hazards?.features ?? []).filter(isHazardNow).map((f) => evacCircle(f.geometry.coordinates[0]))
+  const forecast = forecastOutlines
+    .filter((o) => o.geometry?.type === 'Polygon')
+    .map((o) =>
+      o.properties?.kind === 'tornado' ? o.geometry.coordinates[0] : evacCircle(o.geometry.coordinates[0]),
+    )
+  return [...now, ...forecast]
 }
 
 // Ids of shelters inside any danger circle.

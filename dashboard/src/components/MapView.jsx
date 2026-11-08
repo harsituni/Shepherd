@@ -19,7 +19,9 @@ const cssVar = (name, fallback) =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 const HAZARD = cssVar('--hazard', '#D9480F')
 const HAZARD_HIGH = cssVar('--hazard-high', '#7A1F0A')
+const TORNADO = cssVar('--tornado', '#4A3A6B')
 const PREDICTED_COLOR = cssVar('--predicted', '#C62828')
+const KIND_COLOR = ['match', ['get', 'kind'], 'tornado', TORNADO, HAZARD]
 const MAP_BG = cssVar('--map-bg', '#F3F7FB')
 const SURFACE = cssVar('--surface', '#FFFFFF')
 const BLUE = cssVar('--blue', '#0070C4')
@@ -306,19 +308,40 @@ export default function MapView({
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': PREDICTED_COLOR, 'line-opacity': 0.9, 'line-width': 2, 'line-dasharray': [0, 2] },
       })
+      // Tornado damage scar: faint fill + edge so it reads as a path, not a purple lake.
+      map.addLayer({
+        id: 'hazard-scar',
+        type: 'fill',
+        source: 'hazards',
+        filter: ['all', CURRENT, ['==', ['get', 'role'], 'damage_path']],
+        paint: { 'fill-color': KIND_COLOR, 'fill-opacity': 0.14 },
+      })
+      map.addLayer({
+        id: 'hazard-scar-outline',
+        type: 'line',
+        source: 'hazards',
+        filter: ['all', CURRENT, ['==', ['get', 'role'], 'damage_path']],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': KIND_COLOR, 'line-width': 2, 'line-opacity': 0.75 },
+      })
       map.addLayer({
         id: 'hazard-buffer',
         type: 'fill',
         source: 'hazards',
-        filter: ['all', CURRENT, ['==', ['get', 'zone'], 'buffer']],
-        paint: { 'fill-color': HAZARD, 'fill-opacity': 0.3 },
+        filter: [
+          'all',
+          CURRENT,
+          ['==', ['get', 'zone'], 'buffer'],
+          ['!=', ['get', 'role'], 'damage_path'],
+        ],
+        paint: { 'fill-color': KIND_COLOR, 'fill-opacity': 0.22 },
       })
       map.addLayer({
         id: 'hazard-core',
         type: 'fill',
         source: 'hazards',
         filter: ['all', CURRENT, ['==', ['get', 'zone'], 'core']],
-        paint: { 'fill-color': HAZARD, 'fill-opacity': 0.85 },
+        paint: { 'fill-color': KIND_COLOR, 'fill-opacity': 0.85 },
       })
       map.addSource('hazard-intensity', { type: 'geojson', data: EMPTY })
       map.addLayer({
@@ -335,7 +358,7 @@ export default function MapView({
         type: 'line',
         source: 'hazards',
         filter: CURRENT,
-        paint: { 'line-color': HAZARD, 'line-width': 1.5 },
+        paint: { 'line-color': KIND_COLOR, 'line-width': 1.5 },
       })
       // Phone reports: white dot with an orange ring (matches the legend swatch).
       map.addSource('reports', { type: 'geojson', data: EMPTY })

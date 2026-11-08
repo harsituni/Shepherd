@@ -30,7 +30,7 @@ import NotifyForm from './components/NotifyForm.jsx'
 // Backend errors come back as { error, message } (contract). The raw message can be
 // misleading (a tornado start says "Flood deferred"), so known codes get plain text.
 function simErrorText(err) {
-  if (err.code === 'unsupported_scenario') return "The backend can't simulate this hazard yet. Only wildfire runs for now."
+  if (err.code === 'unsupported_scenario') return "The backend can't simulate this hazard yet."
   return `The backend refused this: ${err.message}`
 }
 
@@ -123,7 +123,13 @@ export default function App() {
         // as the storm's travel speed and direction.
         await startSim(
           hazardKind === 'tornado'
-            ? { scenario: 'tornado', ...where, wind_kmh: conditions.windKmh, wind_from_deg: conditions.windFrom }
+            ? {
+                scenario: 'tornado',
+                ...where,
+                wind_kmh: conditions.windKmh,
+                wind_from_deg: conditions.windFrom,
+                ef_rating: conditions.efRating,
+              }
             : {
                 scenario: 'wildfire',
                 ...where,
@@ -203,7 +209,7 @@ export default function App() {
         connectionError={connectionError}
         sampleData={USE_FIXTURES}
       />
-      <IncidentBanner hazards={hazards} mode={mode} />
+      <IncidentBanner hazards={hazards} mode={mode} sim={sim} />
       <div className="layout">
         <ControlsPanel
           canSimulate={canSimulate}

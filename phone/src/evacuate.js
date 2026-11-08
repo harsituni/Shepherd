@@ -136,9 +136,11 @@ export function locateOnce() {
 
 // ---------- the hook ----------
 
-// trip: null | { mode, route, arrived, fraction, turnCue, coords, turns, totalKm }
-// `route` is a snapshot of the chosen option when Start was pressed.
+// trip: null | { mode, route, arrived, fraction, turnCue, coords, turns, totalKm,
+//                notice, driveKey }
+// `route` is the path currently being driven (updated on mid-trip reroute).
 // `turnCue` is the brief Google Maps-style popup while approaching a corner.
+// `notice` is a short "Rerouted: …" line after a mid-trip switch.
 // onMove([lon, lat]) is called with every new position; onError(message) when GPS fails.
 export function useEvacuation({ clock, onMove, onError }) {
   const [trip, setTrip] = useState(null)
@@ -148,6 +150,7 @@ export function useEvacuation({ clock, onMove, onError }) {
   const errorRef = useRef(onError)
   const announcedRef = useRef(new Set())
   const pauseUntilRef = useRef(0)
+  const drivenMinRef = useRef(0)
 
   useEffect(() => {
     tripRef.current = trip
@@ -159,29 +162,70 @@ export function useEvacuation({ clock, onMove, onError }) {
   const stop = useCallback(() => {
     announcedRef.current = new Set()
     pauseUntilRef.current = 0
+    drivenMinRef.current = 0
     setTrip(null)
   }, [])
 
-  const start = useCallback((mode, route) => {
-    if (mode === 'gps' && (!window.isSecureContext || !navigator.geolocation)) {
-      errorRef.current?.(gpsError())
-      return
-    }
+  const beginDrive = useCallback((mode, route, notice = null) => {
     const coords = routeCoords(route?.geometry)
     const turns = turnsAlong(route?.geometry)
     const totalKm = routeLengthKm(coords)
     announcedRef.current = new Set()
     pauseUntilRef.current = 0
-    setTrip({ mode, route, arrived: false, fraction: 0, turnCue: null, coords, turns, totalKm })
+    drivenMinRef.current = 0
+    return {
+      mode,
+      route: {
+        ...route,
+        route_id: route.route_id ?? route.id,
+        ...(notice
+          ? { rerouted: true, reroute_reason: notice }
+          : { rerouted: false, reroute_reason: null }),
+      },
+      arrived: false,
+      fraction: 0,
+      turnCue: null,
+      coords,
+      turns,
+      totalKm,
+      notice,
+      driveKey: Date.now(),
+    }
   }, [])
+
+  const start = useCallback(
+    (mode, route) => {
+      if (mode === 'gps' && (!window.isSecureContext || !navigator.geolocation)) {
+        errorRef.current?.(gpsError())
+        return
+      }
+      if (!route?.geometry) return
+      setTrip(beginDrive(mode, route))
+    },
+    [beginDrive],
+  )
+
+  // Swap onto a new path from the current pin (fire moved / shelter went unsafe).
+  const reroute = useCallback(
+    (route, reason) => {
+      if (!route?.geometry) return
+      setTrip((prev) => {
+        if (!prev || prev.arrived) return prev
+        return beginDrive(prev.mode, route, reason)
+      })
+    },
+    [beginDrive],
+  )
 
   // Simulated drive: advance along the route on the sim clock (frozen while paused
   // by the dashboard clock, or briefly when a turn cue is on screen).
+  // `driveKey` restarts the clock when we mid-trip reroute onto a new path.
   const simulating = trip?.mode === 'sim' && !trip.arrived
+  const driveKey = trip?.driveKey
   useEffect(() => {
     if (!simulating) return
     let last = Date.now()
-    let drivenMin = 0
+    drivenMinRef.current = 0
     const id = setInterval(() => {
       const t = tripRef.current
       if (t?.mode !== 'sim') return
@@ -193,7 +237,7 @@ export function useEvacuation({ clock, onMove, onError }) {
       const eta = Math.max(t.route.eta_min || 1, 1)
 
       // Show the cue and hold before rolling past the corner.
-      let fraction = Math.min(drivenMin / eta, 1)
+      let fraction = Math.min(drivenMinRef.current / eta, 1)
       let kmAlong = totalKm * fraction
       const cue = cueForProgress(t.turns || [], kmAlong, announcedRef.current, TURN_ANNOUNCE_M)
       let turnCue = holding ? t.turnCue : null
@@ -203,8 +247,10 @@ export function useEvacuation({ clock, onMove, onError }) {
         turnCue = cue
       } else if (!holding) {
         turnCue = null
-        if (c?.state !== 'paused') drivenMin += ((now - last) / TICK_MS) * (c?.speed || 1)
-        fraction = Math.min(drivenMin / eta, 1)
+        if (c?.state !== 'paused') {
+          drivenMinRef.current += ((now - last) / TICK_MS) * (c?.speed || 1)
+        }
+        fraction = Math.min(drivenMinRef.current / eta, 1)
         kmAlong = totalKm * fraction
       }
       last = now
@@ -217,7 +263,7 @@ export function useEvacuation({ clock, onMove, onError }) {
       )
     }, FRAME_MS)
     return () => clearInterval(id)
-  }, [simulating])
+  }, [simulating, driveKey])
 
   // Real GPS: follow the device until stopped. Show turn cues without pausing.
   const following = trip?.mode === 'gps'
@@ -274,5 +320,5 @@ export function useEvacuation({ clock, onMove, onError }) {
     return () => navigator.geolocation.clearWatch(id)
   }, [following])
 
-  return { trip, start, stop }
+  return { trip, start, stop, reroute }
 }

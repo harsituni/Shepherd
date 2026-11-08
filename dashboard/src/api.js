@@ -45,14 +45,54 @@ function advanceFake() {
   fake.lastTs = now
 }
 
+const EF_FAKE = [
+  { wind_kmh: 121, wind_mph: 75, peak_m: 45 },
+  { wind_kmh: 158, wind_mph: 98, peak_m: 80 },
+  { wind_kmh: 198, wind_mph: 123, peak_m: 130 },
+  { wind_kmh: 241, wind_mph: 150, peak_m: 190 },
+  { wind_kmh: 295, wind_mph: 183, peak_m: 260 },
+  { wind_kmh: 354, wind_mph: 220, peak_m: 340 },
+]
+
+function fakeTornadoStats(minutes, params) {
+  const peak = Math.max(0, Math.min(5, params?.ef_rating ?? 3))
+  const inten =
+    minutes < 8 ? 0.15 + (minutes / 8) * 0.55 : minutes < 35 ? 0.85 : Math.max(0.08, 1 - ((minutes - 35) / 35) * 0.92)
+  const ef = Math.max(0, Math.min(peak, Math.round(peak * inten)))
+  const band = EF_FAKE[ef]
+  const phase = minutes <= 8 ? 'organizing' : minutes <= 35 ? 'mature' : minutes <= 70 ? 'dissipating' : 'remnant'
+  const kmh = Math.min(85, Math.max(32, (params?.wind_kmh ?? 40) * 0.65))
+  return {
+    ef_rating: ef,
+    ef_label: `EF${ef}`,
+    ef_peak: peak,
+    ef_peak_label: `EF${peak}`,
+    ef_desc: ['Light damage', 'Moderate damage', 'Considerable damage', 'Severe damage', 'Devastating damage', 'Incredible damage'][ef],
+    phase,
+    intensity: Math.round(inten * 100) / 100,
+    wind_est_mph: band.wind_mph,
+    wind_est_kmh: band.wind_kmh,
+    path_width_m: Math.round((40 + band.peak_m * inten) * 2),
+    forward_speed_kmh: Math.round(kmh * 10) / 10,
+    track_km: Math.round(((kmh * 1000 * minutes) / 60 / 1000) * 10) / 10,
+    heading_deg: ((params?.wind_from_deg ?? 270) + 180) % 360,
+  }
+}
+
 function fakeState() {
   advanceFake()
-  return {
+  const body = {
     state: fake.state,
     scenario: fake.scenario,
     sim_time: fake.state === 'idle' ? null : Math.floor(fake.minutes),
     speed: fake.speed,
+    wind_kmh: fake.params?.wind_kmh,
+    wind_from_deg: fake.params?.wind_from_deg,
   }
+  if (fake.state !== 'idle' && fake.scenario === 'tornado') {
+    body.tornado = fakeTornadoStats(fake.minutes, fake.params)
+  }
+  return body
 }
 
 // Offset a point by metres east/north.
@@ -70,14 +110,30 @@ function fakeShape(minutes) {
   const steps = 48
   const toward = ((p.wind_from_deg + 180) * Math.PI) / 180 // compass bearing it blows toward
   if (fake.scenario === 'tornado') {
-    // Tornado: a compact damage circle that travels downwind and widens slowly.
-    const travel = (p.wind_kmh * 1000 * 0.6 * minutes) / 60 // metres moved
-    const centre = offset(origin, travel * Math.sin(toward), travel * Math.cos(toward))
-    const r = 200 + 2 * minutes
+    // Fixture stand-in for TornadoSim: storm-speed track, right-flank offset, slight curve.
+    const kmh = Math.min(85, Math.max(32, p.wind_kmh * 0.65))
+    const travel = (kmh * 1000 * minutes) / 60
+    const right = toward + Math.PI / 2
+    const curve = (travel / 1000) * 55
+    const sine = 380 * Math.sin(travel * ((2 * Math.PI) / 6500))
+    const centre = offset(
+      origin,
+      travel * Math.sin(toward) + 900 * Math.sin(right) - 600 * Math.sin(toward) + (curve + sine) * Math.sin(right),
+      travel * Math.cos(toward) + 900 * Math.cos(right) - 600 * Math.cos(toward) + (curve + sine) * Math.cos(right),
+    )
+    const peak = Math.max(0, Math.min(5, p.ef_rating ?? 3))
+    const inten = minutes < 8 ? 0.2 + (minutes / 8) * 0.5 : minutes < 35 ? 0.85 : Math.max(0.1, 1 - (minutes - 35) / 40)
+    const r = 40 + EF_FAKE[peak].peak_m * inten
+    const along = r * 1.25
+    const across = r * 0.85
+    const ca = Math.cos(toward)
+    const sa = Math.sin(toward)
     return ring(
       Array.from({ length: steps }, (_, i) => {
         const a = (i / steps) * 2 * Math.PI
-        return offset(centre, r * Math.cos(a), r * Math.sin(a))
+        const x = along * Math.cos(a)
+        const y = across * Math.sin(a)
+        return offset(centre, x * sa + y * ca, x * ca - y * sa)
       }),
     )
   }
@@ -104,12 +160,19 @@ function fakeHazards() {
   if (fake.state === 'idle') return sampleHazards
   const kind = fake.scenario
   const t = fake.minutes
+  const tornado = kind === 'tornado' ? fakeTornadoStats(t, fake.params) : null
   const feature = (id, props, minutes) => ({
     type: 'Feature',
     id,
     properties: { kind, source: 'sim', ...props },
     geometry: fakeShape(minutes),
   })
+  if (tornado) {
+    return [
+      feature('hz_sim_buffer', { zone: 'buffer', role: 'debris', ef_rating: tornado.ef_rating }, t + 10),
+      feature('hz_sim_core', { zone: 'core', ...tornado }, t),
+    ]
+  }
   return [feature('hz_sim_buffer', { zone: 'buffer' }, t + 10), feature('hz_sim_core', { zone: 'core' }, t)]
 }
 
@@ -117,7 +180,7 @@ function fakeHazards() {
 function fakeForecast() {
   const { sim_time } = fakeState()
   const outlines =
-    fake.state === 'idle' || fake.scenario !== 'wildfire'
+    fake.state === 'idle' || (fake.scenario !== 'wildfire' && fake.scenario !== 'tornado')
       ? []
       : Array.from({ length: 8 }, (_, i) => {
           const t_min = (i + 1) * 15
@@ -125,7 +188,7 @@ function fakeForecast() {
             t_min,
             type: 'Feature',
             id: `fc_${t_min}`,
-            properties: { kind: 'wildfire', t_min, zone: 'predicted' },
+            properties: { kind: fake.scenario, t_min, zone: 'predicted' },
             geometry: fakeShape(fake.minutes + t_min),
           }
         })

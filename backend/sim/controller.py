@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.sim.oracle import ForecastOracle
+from backend.sim.tornado import TornadoSim
 from backend.sim.weatherpipe.live import WeatherUnavailable, live_weather
 from backend.sim.wildfire import WildfireSim
 
@@ -22,6 +23,7 @@ log = logging.getLogger(__name__)
 ALLOWED_SPEEDS = (1, 4, 16)
 FORECAST_HORIZON_MIN = 120
 WEATHER_MODES = ("forecast", "dashboard")
+SUPPORTED_SCENARIOS = ("wildfire", "tornado")
 
 
 class SimController:
@@ -37,12 +39,12 @@ class SimController:
         self.speed: int = 1
         self.wind_kmh: float = 20.0
         self.wind_from_deg: float = 315.0
-        self.sim: Optional[WildfireSim] = None
+        self.sim: Optional[Any] = None
 
     def status(self) -> dict[str, Any]:
         # While a fire runs, report the wind blowing now: the forecast's, or the latest override.
         source = self.sim if self.sim is not None else self
-        return {
+        body: dict[str, Any] = {
             "state": self.state,
             "scenario": self.scenario,
             "sim_time": self.sim_time,
@@ -50,18 +52,20 @@ class SimController:
             "wind_kmh": source.wind_kmh,
             "wind_from_deg": source.wind_from_deg,
         }
+        # Tornado adds EF category + live stats (additive; wildfire state unchanged).
+        if self.scenario == "tornado" and isinstance(self.sim, TornadoSim):
+            body["tornado"] = self.sim.stats()
+        return body
 
     def start(self, body: dict[str, Any]) -> dict[str, Any]:
         scenario = body.get("scenario", "wildfire")
-        if scenario == "flood":
-            raise ValueError("unsupported_scenario")
-        if scenario != "wildfire":
+        if scenario not in SUPPORTED_SCENARIOS:
             raise ValueError("unsupported_scenario")
 
         lat = float(body["lat"])
         lon = float(body["lon"])
-        wind_kmh = float(body.get("wind_kmh", 20))
-        wind_from_deg = float(body.get("wind_from_deg", 315))
+        wind_kmh = float(body.get("wind_kmh", 40 if scenario == "tornado" else 20))
+        wind_from_deg = float(body.get("wind_from_deg", 270 if scenario == "tornado" else 315))
         fuel_dryness = float(body.get("fuel_dryness", 0.7))
         if "humidity_pct" in body and body["humidity_pct"] is not None:
             # High humidity → less dry fuel (simple mapping for dashboard body)
@@ -70,28 +74,45 @@ class SimController:
 
         t0 = datetime.now(timezone.utc).replace(second=0, microsecond=0)
         weather, source = None, {"provider": "dashboard"}
-        if self.weather_mode == "forecast":
+        if scenario == "wildfire" and self.weather_mode == "forecast":
             try:
                 weather, source = live_weather(lat, lon, t0)
             except WeatherUnavailable as exc:
                 log.warning("wildfire weather: %s; using the dashboard's wind", exc)
                 source = {"provider": "dashboard", "fallback_reason": str(exc)}
 
-        self.sim = WildfireSim(
-            lat=lat,
-            lon=lon,
-            wind_kmh=wind_kmh,
-            wind_from_deg=wind_from_deg,
-            fuel_dryness=fuel_dryness,
-            weather=weather,
-            t0=t0,
-            weather_source=source,
-            domain_bbox=self.domain_bbox,
-        )
+        if scenario == "tornado":
+            # Tornadoes use the dashboard path direction/speed — no FBP weather series.
+            # Optional ef_rating (0–5) sets peak Enhanced Fujita category.
+            ef = body.get("ef_rating", body.get("ef_peak"))
+            self.sim = TornadoSim(
+                lat=lat,
+                lon=lon,
+                wind_kmh=wind_kmh,
+                wind_from_deg=wind_from_deg,
+                ef_rating=None if ef is None else int(ef),
+                weather_source={"provider": "dashboard"},
+                domain_bbox=self.domain_bbox,
+            )
+            source = {"provider": "dashboard"}
+        else:
+            self.sim = WildfireSim(
+                lat=lat,
+                lon=lon,
+                wind_kmh=wind_kmh,
+                wind_from_deg=wind_from_deg,
+                fuel_dryness=fuel_dryness,
+                weather=weather,
+                t0=t0,
+                weather_source=source,
+                domain_bbox=self.domain_bbox,
+            )
         self.weather_source = source
         self.state = "running"
-        self.scenario = "wildfire"
+        self.scenario = scenario
         self.sim_time = 0
+        self.wind_kmh = wind_kmh
+        self.wind_from_deg = wind_from_deg % 360
         return self.status()
 
     def pause(self) -> dict[str, Any]:

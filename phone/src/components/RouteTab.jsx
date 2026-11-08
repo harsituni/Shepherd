@@ -91,10 +91,17 @@ export function RouteDetails({
   let details
   if (trip) {
     // Evacuating: progress + Stop. The big turn banner floats on the map; keep a
-    // quiet next-turn line here when a cue is up.
+    // quiet next-turn line here when a cue is up. Mid-trip reroutes show why.
     const cue = trip.turnCue
+    const rerouteLine = trip.notice || route?.reroute_reason
     details = (
       <>
+        {rerouteLine && (
+          <div className="notice notice-strong" role="status">
+            <RerouteIcon />
+            <span>Rerouted: {rerouteLine}</span>
+          </div>
+        )}
         {cue && (
           <div className="next-turn">
             <TurnIcon />
