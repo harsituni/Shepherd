@@ -8,7 +8,6 @@ from backend.routing.traffic import (
     BPR_ALPHA,
     BPR_BETA,
     BPR_VC_CAP,
-    CLEARANCE_CAP_MIN,
     SWITCH_SAVE_MIN,
     TrafficEngine,
     bpr_factor,
