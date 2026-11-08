@@ -541,6 +541,19 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   font-size: var(--fs-sm); font-weight: 500;
 }
 
+/* "Finding your location..." : each dot fades in and out in turn. */
+.loading-dots { margin-left: 3px; letter-spacing: 1px; }
+.loading-dots span { animation: dot-fade 1.2s ease-in-out infinite; opacity: 0.2; }
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dot-fade {
+  0%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-dots span { animation: none; opacity: 1; }
+}
+
 /* ---------- report sheet ---------- */
 
 .sheet-scrim {

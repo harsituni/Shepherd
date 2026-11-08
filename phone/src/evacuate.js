@@ -117,6 +117,19 @@ function gpsError(err) {
   return "Couldn't get your location. Check that location is on, or use Simulated drive."
 }
 
+// One fresh fix for "Real GPS" being picked: resolves { lngLat: [lon, lat] } or
+// { error: message } so the pin can jump to where the phone actually is.
+export function locateOnce() {
+  return new Promise((resolve) => {
+    if (!window.isSecureContext || !navigator.geolocation) return resolve({ error: gpsError() })
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lngLat: [p.coords.longitude, p.coords.latitude] }),
+      (err) => resolve({ error: gpsError(err) }),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
+    )
+  })
+}
+
 // ---------- the hook ----------
 
 // trip: null | { mode: 'sim' | 'gps', route, arrived, fraction }

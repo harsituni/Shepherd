@@ -116,6 +116,7 @@ export default function MapScreen({
   areaName,
   notifications,
   location,
+  autoLocation,
   route,
   routeError,
   trip,
@@ -123,12 +124,15 @@ export default function MapScreen({
   actions,
 }) {
   const [sheet, setSheet] = useState(null) // 'alerts' | 'key' | null
-  // The route panel opens for each new location; closing it applies to that one.
+  // The route panel opens for each new location; closing or opening it applies to
+  // that one. The location found automatically on launch starts collapsed, so the
+  // map stays clear until the person opens the panel.
   const here = location ? location.join(',') : 'none'
-  const [closedFor, setClosedFor] = useState(null)
+  const auto = autoLocation ? autoLocation.join(',') : null
+  const [choice, setChoice] = useState(null) // { for: key, open: bool }
   // Slide up only when the person reopens the panel from the strip.
   const [slideIn, setSlideIn] = useState(false)
-  const panelOpen = closedFor !== here
+  const panelOpen = choice?.for === here ? choice.open : here !== auto
   const sum = routeSummary({ location, route, routeError, trip })
 
   return (
@@ -177,13 +181,13 @@ export default function MapScreen({
             slideIn={slideIn}
             onClose={() => {
               setSlideIn(false)
-              setClosedFor(here)
+              setChoice({ for: here, open: false })
             }}
           />
         ) : (
           <button type="button" className={sum.urgent ? 'ms-strip is-urgent' : 'ms-strip'} aria-label={`Show route: ${sum.title}`} onClick={() => {
               setSlideIn(true)
-              setClosedFor(null)
+              setChoice({ for: here, open: true })
             }}>
             <span className="ms-strip-text">
               <strong>{sum.title}</strong>

@@ -5,7 +5,7 @@ import { evacueeId, routeLengthKm } from '../evacuate.js'
 
 export const MODES = [
   ['sim', 'Simulated drive', 'Moves your dot along the route, so you can demo without walking.'],
-  ['gps', 'Real GPS', "Follows your phone's location. Your browser will ask for permission."],
+  ['gps', 'Real GPS', "Moves your pin to where your phone is and follows it. Your browser will ask for permission."],
 ]
 
 export default function EvacuateControls({ route, trip, mode, onMode, onStart, onStop }) {
