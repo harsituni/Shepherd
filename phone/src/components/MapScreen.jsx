@@ -1,12 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { AlertsTab } from './Notifications.jsx'
-import { BellIcon, CheckIcon, ChevronUpIcon, CloseIcon, CrookIcon, InfoIcon, WarningIcon } from './icons.jsx'
+import { BellIcon, ChevronUpIcon, CloseIcon, CrookIcon, InfoIcon, WarningIcon } from './icons.jsx'
 
 // The phone app's one screen, map-first (modelled on scooter apps like Lime and
 // Bird): the map fills the screen and everything else floats over it.
 //   top left    area chip (Shepherd mark + place name)
 //   top right   compact alert / evacuation card; tap it for the details
-//   right rail  Alerts, Map key, Report, I'm safe (just above the route panel)
+//   right rail  Alerts, Map key, Report (just above the route panel)
 //   bottom      route panel: shelter cards you swipe sideways + Start evacuating,
 //               closable to a one-line strip; full-width Need help bar under it
 //
@@ -17,7 +17,7 @@ import { BellIcon, CheckIcon, ChevronUpIcon, CloseIcon, CrookIcon, InfoIcon, War
 //   more                     <RouteMore/>: extra detail you scroll the panel down to
 //   mapKey                   <MapKey/>
 //   areaName, notifications, location, route, routeError, trip, version
-//   actions: { report, safe, help, canReport, sending }
+//   actions: { report, help, canReport, sending }
 
 // Map padding (px) roughly matching the floating chrome, so "frame my route"
 // keeps the route clear of the top cards, the rail and the route panel.
@@ -169,10 +169,6 @@ export default function MapScreen({
           <button type="button" className="ms-fab" disabled={!actions.canReport} onClick={actions.report}>
             <WarningIcon />
             <span>Report</span>
-          </button>
-          <button type="button" className="ms-fab" disabled={!actions.canReport} onClick={actions.safe}>
-            <CheckIcon />
-            <span>Safe</span>
           </button>
         </div>
 

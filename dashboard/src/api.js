@@ -170,6 +170,30 @@ export async function getReports() {
   return structuredClone(reportsFixture)
 }
 
+// Government updates (Notify tab). POST stores one; phones poll GET /notifications.
+// Not in contract v1 yet; fixture mode keeps them in memory for this page load.
+const sentFixture = []
+
+export async function getNotifications() {
+  if (USE_FIXTURES) return structuredClone(sentFixture)
+  const body = await request('/notifications')
+  return Array.isArray(body) ? body : (body?.notifications ?? [])
+}
+
+export async function postNotification({ title, message, severity, target }) {
+  if (!USE_FIXTURES) return post('/notifications', { title, message, severity, target })
+  const note = {
+    id: `nt_${sentFixture.length + 1}`,
+    title,
+    message,
+    severity,
+    target,
+    time: new Date().toISOString(),
+  }
+  sentFixture.unshift(note)
+  return structuredClone(note)
+}
+
 export async function postHazard({ kind, lat, lon, radius_m }) {
   if (!USE_FIXTURES) return post('/hazards', { kind, lat, lon, radius_m })
   const feature = {

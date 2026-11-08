@@ -462,6 +462,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .btn-primary:hover:not(:disabled) { background: var(--blue-hover); }
 .btn-primary:disabled { background: var(--divider); color: var(--muted-2); cursor: default; }
 .sent-title { font-size: var(--fs-body); font-weight: 700; color: var(--text); }
+.sent-item { display: flex; flex-direction: column; gap: 2px; padding: 10px 4px; }
+/* Severity label in the Sent list: Alert deep yellow, Evacuation order deep red, Advisory unchanged. */
+.sent-alert { color: var(--alert-title); font-weight: 600; }
+.sent-evacuation { color: var(--danger-title); font-weight: 600; }
 
 /* ---------- narrow screens: panels stack ---------- */
 

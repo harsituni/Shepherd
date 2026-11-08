@@ -11,7 +11,8 @@ import {
 } from './api.js'
 import { POLL_MS } from './config.js'
 import { locateOnce, useEvacuation, useHeartbeat } from './evacuate.js'
-import { isCurrentCore, nearestHazard } from './geo.js'
+import { evacZones } from './evacuation.js'
+import { isCurrentCore, nearestHazard, pointInRing } from './geo.js'
 import { placeName } from './placeName.js'
 import { nextClock } from './simClock.js'
 import AlertBanner from './components/AlertBanner.jsx'
@@ -131,10 +132,16 @@ export default function App() {
       else if (h.status === 'fulfilled') setClock((c) => nextClock(c, { sim_time: h.value?.sim_time }))
       if (s.status === 'fulfilled') setShelters(s.value)
       if (n.status === 'fulfilled') {
-        const fresh = n.value.filter((x) => !seenNotes.current.has(x.id))
+        // "Residents inside hazard zone" updates only reach phones pinned inside a
+        // wildfire evacuation zone; everything else goes to every phone.
+        const here = locationRef.current
+        const zones = evacZones(h.status === 'fulfilled' ? h.value : null).features
+        const inZone = here != null && zones.some((z) => pointInRing(here, z.geometry.coordinates[0]))
+        const mine = n.value.filter((x) => x.target !== 'zone' || inZone)
+        const fresh = mine.filter((x) => !seenNotes.current.has(x.id))
         if (fresh.length) {
           fresh.forEach((x) => seenNotes.current.add(x.id))
-          setNotifications(n.value)
+          setNotifications(mine)
           setPopup(mostSevere(fresh)) // pop up the most important new one
         }
       }
@@ -393,7 +400,6 @@ export default function App() {
         version={SHEPHERD_VERSION}
         actions={{
           report: () => setSheetOpen(true),
-          safe: () => sendReport('safe'),
           help: () => sendReport('sos'),
           canReport: !!location && !sending,
           sending,

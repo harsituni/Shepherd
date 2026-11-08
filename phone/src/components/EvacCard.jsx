@@ -26,7 +26,7 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
     spoken = `Wildfire. Evacuate. ${big}.`
   } else if (trip?.arrived) {
     big = 'Arrived'
-    lines = [`You're at ${trip.route.shelter_name}.`, "Tap “I'm safe” so responders know."]
+    lines = [`You're at ${trip.route.shelter_name}.`]
     spoken = `You have arrived at ${trip.route.shelter_name}.`
   } else if (trip?.mode === 'sim') {
     // Simulated drive (issue #56): count down to arrival instead of to leave-by.
