@@ -186,7 +186,7 @@ A cool, low-saturation blue-and-white civic palette, with one warm signal colour
 
 ### Primary
 - **Service Blue** (#0070C4): the one primary-action and route colour. Primary buttons, range accents, the tab underline and evacuation routes. On the phone it is also the "you" dot and the Advisory severity label. Hover deepens to **Pressed Blue** (#005A9E).
-- **Alberta Header Blue** (#005072): the header on both surfaces, matching Alberta's brand dark blue (`--goa-color-brand-dark` in the GoA design tokens). White text on it is 8.8:1.
+- **Alberta Header Blue** (#005072): the dashboard header and the phone's Shepherd mark (the phone is map-first, with no header bar), matching Alberta's brand dark blue (`--goa-color-brand-dark` in the GoA design tokens). White text on it is 8.8:1.
 - **Masthead Navy** (#0B3D6E): shelter markers, selected-state fills (choice tiles and segmented controls), outline-button borders and labels, icon-button glyphs and the toast. **Deep Navy** (#0A3360) is a reserved token and currently unused.
 
 ### Signal
@@ -256,7 +256,7 @@ Shepherd is flat. Surfaces are white and separated by 1px Frost Border or Frost 
 - **Scrim** (`rgba(11, 37, 69, 0.45)`): the dimmed backdrop behind the phone report sheet.
 
 ### Named Rules
-**The One Float Rule.** At most one soft shadow exists in the whole system, and it belongs only to a floating pop-up notification. Everything else stays flat.
+**The One Float Rule.** Shadows belong only to things that float. The phone's notification pop-up carries the strongest one; the phone's map screen controls, which float over a busy map (area chip, alert card, rail buttons, route panel and strip, Need help bar), carry one lighter soft shadow (`0 2px 10px rgba(11, 37, 69, 0.16)`) to separate them from it; shelter pop-ups a lighter one still. Everything that sits in the page stays flat.
 
 ## Shapes
 
@@ -299,7 +299,7 @@ A 2×2 grid of four tiles only: People at risk, Roads closed, Active reroutes an
 ### Incident banner and alerts
 - **Incident banner (dashboard):** a 16px Sky Tint strip with a bottom border, an 8px hazard-orange status dot (grey when idle), a bold hazard name and a muted status line.
 - **Alert banner (phone):** an icon plus a 16px 700 navy title and a 14px muted line (at most two lines) on Sky Tint. It shows the most severe active government notification, else the nearest hazard. The second line is the hazard relation when known ("Fire is 2.4 km west of you, moving east."). Advisory has a blue info icon, Alert a navy warning icon, and an evacuation order (or being inside the hazard) switches the whole banner to the Evacuation Tint family.
-- **Notification pop-up (phone):** slides down over the header when a new government notification arrives (220ms ease-out, none under reduced motion). A white card with 8px corners, a 1px border and the system's one soft shadow (`0 8px 24px rgba(11,37,69,0.18)`). A severity icon, a 14px 600 severity · time line, a 16px 700 title, and "Tap to read" expanding to the message; a close button dismisses it. Evacuation orders use the Ember Edge border.
+- **Notification pop-up (phone):** slides down over the top of the map screen when a new government notification arrives (220ms ease-out, none under reduced motion). A white card with 8px corners, a 1px border and the system's one soft shadow (`0 8px 24px rgba(11,37,69,0.18)`). A severity icon, a 14px 600 severity · time line, a 16px 700 title, and "Tap to read" expanding to the message; a close button dismisses it. Evacuation orders use the Ember Edge border.
 - **Severity colours:** Advisory = Service Blue, Alert = Masthead Navy, Evacuation order = Ember Ink text with an Ember Mark icon. These colour the severity label and icon only, never a left-border stripe or fill.
 - **Inline notice (phone):** plain 16px text with a leading stroke icon, with no box, fill or border. Hints ("Tap the map…") are Slate Muted; the reroute notice is navy 600 so it reads as news.
 
@@ -312,9 +312,13 @@ Government notifications, newest first, as plain divided rows: the coloured seve
 ### Feed and report lists
 Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 title (SOS in Closure Red), a 14px Slate Faint time and location, and a 14px muted note. Hovering a row fills it with Map Paper, and every row is at least 44px tall.
 
-### Phone action bar and toast
-- **Action bar:** a three-column grid of 48px buttons with 6px corners and 14px labels. "Report hazard" and "I'm safe" share the navy outline style; "Need help" is the one solid button, in Closure Red.
-- **Toast:** a solid navy bar with 6px corners and white 500 14px text, floating just above the action bar.
+### Phone map screen and toast
+- **Map-first** (like a scooter app): the map fills the screen; every control floats over it on white with a 1px Frost Border, 8px corners and the light float shadow.
+- **Top:** area chip (28px mark + place name, 600 14px) top left; the alert / evacuation card top right, compact (14px title, 22px headline, detail lines hidden) with a muted chevron; the whole card is one button that opens it to full width (30px headline, detail lines shown).
+- **Rail:** four 64px square buttons stacked on the right just above the route panel: icon + 600 14px navy label (Alerts with a navy count badge, Key, Report, Safe).
+- **Route panel:** sized to its content and never scrolls itself; only the shelter card row scrolls, sideways only (cards 84% wide with an explicit width, so the selected 2px navy border wraps the whole card in Safari too). Cards show name, status, and "8 min · 3.7 km · 0% full · Recommended"; a clear route adds no extra line, a blocked one just "Fire forecast on this route". Then drive mode, Start evacuating and the location-shared line. While it's open the rail is hidden, and a subtle 44px white × with a muted icon floats just above its top-right corner; it closes the panel to a 56px one-line strip with a chevron.
+- **Need help:** a full-width 56px Closure Red bar with white 700 18px text, always at the bottom.
+- **Toast:** a solid navy bar with 6px corners and white 500 14px text, under the top row.
 
 ### Map layers (signature)
 - **Hazard core:** Hazard Orange fill at 0.85 opacity with a 1.5px orange outline. **Buffer:** orange at 0.3 opacity. On the dashboard a wildfire core also gets three nested bands (the core shrunk to 75 / 50 / 25% toward its centre) stepping from orange to Fire Core at 0.9 opacity: solid colours, not a gradient.
@@ -324,7 +328,7 @@ Rows divided by Frost Divider lines, with no cards. Each row has a 16px 600 titl
 - **Route (phone):** a 5px Service Blue line over a 9px white casing, with round caps and joins, so it stays legible over grey tiles and orange hazards. Never cyan or any off-palette colour.
 - **Closed road:** Closure Red, solid when closed and dashed when slowed.
 - **Shelter:** a 20px navy square (4px corners, 2px white border) with a 600 14px label. On the phone only the route's destination is labelled, on whichever side of the square has more room.
-- **Map key (phone):** a one-row, wrapping key under the map listing only what is drawn (Hazard now, Predicted spread, Your route, Shelter, You), 14px Slate Muted with small swatches. The dashboard keeps its floating legend, bottom-left: a white card (1px Frost Border, 6px corners) under a 24px Alberta Header Blue bar reading "LEGEND" in white 700 14px capitals tracked +0.08em (about 10px tall with ~7px of air above and below, sized to the word, never tight enough to clip it; the one uppercase label in the system, by request; written "Legend" in the markup so screen readers say the word), with a 24px square minimise button (14px minus icon) whose invisible tap area is 44px. Minimising folds the list down into the bar with a 220ms ease height transition (none under reduced motion); then only the blue bar stays, docked at the bottom of the map, with a plus to expand it.
+- **Map key (phone):** opened from the rail's Key button as a sheet, listing only what is drawn (Hazard now, Predicted spread, Your route, Shelter, You), 16px Slate Muted with small swatches. The dashboard keeps its floating legend, bottom-left: a white card (1px Frost Border, 6px corners) under a 24px Alberta Header Blue bar reading "LEGEND" in white 700 14px capitals tracked +0.08em (about 10px tall with ~7px of air above and below, sized to the word, never tight enough to clip it; the one uppercase label in the system, by request; written "Legend" in the markup so screen readers say the word), with a 24px square minimise button (14px minus icon) whose invisible tap area is 44px. Minimising folds the list down into the bar with a 220ms ease height transition (none under reduced motion); then only the blue bar stays, docked at the bottom of the map, with a plus to expand it.
 - **Report pin:** a white circle with a 2.5px hazard-orange stroke. **Priority resident:** a navy-outlined diamond. **You:** an 18px blue dot with a 3px white ring. **Evacuee (dashboard):** each phone from `GET /evacuees` as a 12px Service Blue dot with a 2.5px white ring, drawn above every other layer.
 
 ## Do's and Don'ts

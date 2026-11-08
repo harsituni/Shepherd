@@ -11,12 +11,12 @@ function percentFull(shelters, shelterId) {
 }
 
 function formatKm(km) {
-  if (km == null || Number.isNaN(Number(km))) return '—'
+  if (km == null || Number.isNaN(Number(km))) return '–'
   return (Math.round(Number(km) * 10) / 10).toFixed(1)
 }
 
 // One-row key for what's actually drawn on the map right now.
-function MapKey({ hazards, shelters, route, location }) {
+export function MapKey({ hazards, shelters, route, location }) {
   const features = hazards?.features ?? []
   const evac = evacZones(hazards).features.length > 0
   const outlines = hazards?.forecast ?? features.filter(isPredicted)
@@ -43,9 +43,9 @@ function MapKey({ hazards, shelters, route, location }) {
   )
 }
 
-export default function RouteTab({
-  map,
-  hazards,
+// The route/shelter details for the current state (no location, errors, options,
+// evacuating…). Shared by the classic Route tab and the map-first layouts.
+export function RouteDetails({
   location,
   route,
   lost,
@@ -174,13 +174,5 @@ export default function RouteTab({
     )
   }
 
-  return (
-    <>
-      {map}
-      {/* Once a location is set the phone sends it to responders (POST /evacuees), so say so. */}
-      {location && <p className="location-shared">Your location is shared with responders.</p>}
-      <MapKey hazards={hazards} shelters={shelters} route={route} location={location} />
-      <div className="route-details">{details}</div>
-    </>
-  )
+  return details
 }

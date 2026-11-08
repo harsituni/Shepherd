@@ -69,3 +69,23 @@ export const CloseIcon = (p) => (
     <path d="M6 6l12 12M18 6 6 18" />
   </Svg>
 )
+
+// Map screen controls.
+export const BellIcon = (p) => (
+  <Svg size={20} {...p}>
+    <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z" />
+    <path d="M10 20.5a2 2 0 0 0 4 0" />
+  </Svg>
+)
+
+export const CheckIcon = (p) => (
+  <Svg size={20} {...p}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </Svg>
+)
+
+export const ChevronUpIcon = (p) => (
+  <Svg size={18} {...p}>
+    <path d="m6 15 6-6 6 6" />
+  </Svg>
+)
