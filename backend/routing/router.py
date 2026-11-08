@@ -50,6 +50,12 @@ def load_graph() -> None:
         graph = ox.load_graphml(graph_path)
         if len(graph) == 0 or graph.number_of_edges() == 0:
             raise ValueError("Saved graph contains no usable roads")
+        graph.graph["routing_bbox"] = (
+    min(float(n["x"]) for _, n in graph.nodes(data=True)),
+    min(float(n["y"]) for _, n in graph.nodes(data=True)),
+    max(float(n["x"]) for _, n in graph.nodes(data=True)),
+    max(float(n["y"]) for _, n in graph.nodes(data=True)),
+)
     except Exception as error:
         # Only loading errors enable the backup, never routing failures.
         _backup_mode = True
@@ -59,8 +65,14 @@ def load_graph() -> None:
 
 
 def _inside_demo(lat, lon):
-    """Check that a location is inside the downloaded demo area."""
-    west, south, east, north = DEMO_BBOX
+    """Check coverage using the loaded road graph."""
+    if _graph is not None:
+        west, south, east, north = _graph.graph.get(
+            "routing_bbox", DEMO_BBOX
+        )
+    else:
+        west, south, east, north = DEMO_BBOX
+
     return west <= lon <= east and south <= lat <= north
 
 
