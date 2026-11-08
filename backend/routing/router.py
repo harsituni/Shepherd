@@ -443,7 +443,7 @@ def closed_roads(hazards: list[dict]) -> list[dict]:
     return []
 
 
-def fire_closed_road_features(oracle, sim_time: int = 0, limit: int = 500) -> dict:
+def fire_closed_road_features(oracle, sim_time: int = 0, limit: int = 350) -> dict:
     """GeoJSON LineStrings for OSM edges past the fire/tornado close deadline.
 
     Contract rule: a road is closed once drivers would reach it after
@@ -468,7 +468,15 @@ def fire_closed_road_features(oracle, sim_time: int = 0, limit: int = 500) -> di
     if len(closed) == 0:
         return empty
     overdue = t - deadlines[closed]
-    order = closed[np.argsort(-overdue)][: max(1, int(limit))]
+    # Prefer longer / named corridors so the red dash layer reads cleanly.
+    lengths = np.maximum(rg.edge_len_m[closed].astype(np.float64), 1.0)
+    named = np.ones(len(closed), dtype=np.float64)
+    for i, e in enumerate(closed):
+        label = rg.edge_name[int(e)] if int(e) < len(rg.edge_name) else ""
+        if label and label != "Road":
+            named[i] = 1.25
+    score = overdue * np.log1p(lengths) * named
+    order = closed[np.argsort(-score)][: max(1, int(limit))]
     features = []
     for e in order:
         coords = rg.edge_coords_ll(int(e)).tolist()

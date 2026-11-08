@@ -327,8 +327,46 @@ export default function MapView({
         layout: { 'line-join': 'round' },
         paint: { 'line-color': EVAC_EDGE, 'line-width': 2 },
       })
-      // Traffic corridors under the fire so congestion reads as road colour.
+      // Traffic / closed / phone routes: uniform stroke width, soft casing, and
+      // only congested corridors — keeps the overlay tidy instead of spaghetti.
+      const ROAD_WIDTH = [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        10,
+        1.75,
+        12,
+        2.5,
+        14,
+        3.25,
+        16,
+        4,
+      ]
+      const ROAD_CASE = [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        10,
+        2.75,
+        12,
+        3.75,
+        14,
+        4.75,
+        16,
+        5.75,
+      ]
       map.addSource('traffic', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'traffic-roads-case',
+        type: 'line',
+        source: 'traffic',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': SURFACE,
+          'line-width': ROAD_CASE,
+          'line-opacity': 0.9,
+        },
+      })
       map.addLayer({
         id: 'traffic-roads',
         type: 'line',
@@ -338,35 +376,31 @@ export default function MapView({
           'line-color': [
             'match',
             ['get', 'level'],
-            'free',
-            '#6B8F71',
             'busy',
             '#E6A817',
             'jammed',
             '#D9480F',
             'gridlock',
             '#8B1A1A',
-            '#6B8F71',
+            '#E6A817',
           ],
-          'line-width': [
-            'interpolate',
-            ['linear'],
-            ['get', 'vc_ratio'],
-            0,
-            2,
-            0.8,
-            3.5,
-            1.5,
-            6,
-            2.5,
-            8,
-          ],
+          'line-width': ROAD_WIDTH,
+          'line-opacity': 0.88,
+        },
+      })
+      // Fire-closed OSM edges (arrival_min − 30). Dashed, same width language.
+      map.addSource('closed-roads', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'closed-roads-case',
+        type: 'line',
+        source: 'closed-roads',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': SURFACE,
+          'line-width': ROAD_CASE,
           'line-opacity': 0.85,
         },
       })
-      // Fire-closed OSM edges (arrival_min − 30). Drawn above traffic so red
-      // corridors read clearly as "don't drive here" during the demo.
-      map.addSource('closed-roads', { type: 'geojson', data: EMPTY })
       map.addLayer({
         id: 'closed-roads',
         type: 'line',
@@ -374,12 +408,34 @@ export default function MapView({
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color': CLOSED,
-          'line-width': 4,
-          'line-opacity': 0.9,
+          'line-width': ROAD_WIDTH,
+          'line-opacity': 0.92,
+          'line-dasharray': [1.2, 1.4],
         },
       })
       // Live phone evacuation routes (from heartbeat route_coords).
       map.addSource('evacuee-routes', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'evacuee-routes-case',
+        type: 'line',
+        source: 'evacuee-routes',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': SURFACE,
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10,
+            4,
+            14,
+            7,
+            16,
+            9,
+          ],
+          'line-opacity': 0.95,
+        },
+      })
       map.addLayer({
         id: 'evacuee-routes',
         type: 'line',
@@ -387,8 +443,18 @@ export default function MapView({
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color': BLUE,
-          'line-width': 4,
-          'line-opacity': 0.85,
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10,
+            2.5,
+            14,
+            4,
+            16,
+            5,
+          ],
+          'line-opacity': 0.95,
         },
       })
       map.addSource('hazards', { type: 'geojson', data: EMPTY })
@@ -501,15 +567,16 @@ export default function MapView({
   }, [hazards, shelters, loaded])
 
   // Traffic roads (only while Simulate traffic is on — never leave jam colours
-  // on an idle "not started" map).
+  // on an idle "not started" map). Drop leftover "free" edges if an older API
+  // still sends them — the map only paints congested corridors.
   useEffect(() => {
     const map = mapRef.current
     if (!loaded || !map) return
-    const edges =
-      traffic?.enabled && (traffic.edges?.features?.length ?? 0) > 0
-        ? traffic.edges
-        : EMPTY
-    map.getSource('traffic')?.setData(edges)
+    const raw = traffic?.enabled ? traffic.edges?.features ?? [] : []
+    const features = raw.filter((f) => f.properties?.level && f.properties.level !== 'free')
+    map.getSource('traffic')?.setData(
+      features.length ? { type: 'FeatureCollection', features } : EMPTY,
+    )
   }, [traffic, loaded])
 
   // Fire-closed roads (GET /roads/closed) — grow red as the wind-driven fire spreads.

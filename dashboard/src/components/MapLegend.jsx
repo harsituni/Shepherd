@@ -5,7 +5,6 @@ const ITEMS = [
   ['Active hazard', 'swatch-hazard'],
   ['Evacuation zone', 'swatch-evac'],
   ['Predicted spread', 'swatch-predicted'],
-  ['Traffic free', 'swatch-traffic-free'],
   ['Traffic busy', 'swatch-traffic-busy'],
   ['Traffic jammed', 'swatch-traffic-jammed'],
   ['Traffic gridlock', 'swatch-traffic-gridlock'],

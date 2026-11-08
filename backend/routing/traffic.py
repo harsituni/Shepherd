@@ -76,8 +76,11 @@ SWITCH_SAVE_MIN = 1.0
 SWITCH_COOLDOWN_MIN = 2
 DEFAULT_SIMULATED = 2000
 MAX_SIMULATED = 5000
-# How many congested edges to return for the dashboard map (sorted by v/c).
-MAP_EDGE_LIMIT = 2500
+# Congested edges for the dashboard map (sorted by v/c). Keep this modest so
+# the overlay reads as corridors, not a spaghetti of every residential edge.
+MAP_EDGE_LIMIT = 900
+# Skip near-empty roads on the map — only paint busy / jammed / gridlock.
+MAP_MIN_VC = 0.5
 
 
 def _highway_key(value) -> str:
@@ -643,23 +646,29 @@ class TrafficEngine:
             rg = self._rg
             factors = bpr_factor(self._volume, self._capacity) if self.enabled else np.ones(rg.n_edges)
             vc = self._volume / np.maximum(self._capacity, 1.0)
-            # Prefer edges that actually have cars, then by v/c.
-            score = vc + (self._volume > 0).astype(np.float64)
+            # Prefer jammed arterials over quiet residential spaghetti.
+            hwy_bonus = np.zeros(rg.n_edges, dtype=np.float64)
+            for i, hwy in enumerate(self._highway):
+                if hwy in ("motorway", "trunk", "primary"):
+                    hwy_bonus[i] = 0.35
+                elif hwy in ("secondary", "tertiary"):
+                    hwy_bonus[i] = 0.15
+            score = vc + (self._volume > 0).astype(np.float64) + hwy_bonus
             order = np.argsort(-score)
             features = []
-            for idx in order[:limit]:
-                if not self.enabled and self._volume[idx] <= 0:
+            for idx in order:
+                if len(features) >= max(1, int(limit)):
+                    break
+                if not self.enabled:
                     continue
-                if self.enabled and self._volume[idx] <= 0 and vc[idx] < 0.05:
-                    # Skip empty quiet edges to keep the payload small.
+                ratio = float(vc[idx])
+                # Map only shows congested corridors (busy+); free-flow stays basemap.
+                if ratio < MAP_MIN_VC or self._volume[idx] <= 0:
                     continue
                 coords = rg.edge_coords_ll(int(idx)).tolist()
                 if len(coords) < 2:
                     continue
-                ratio = float(vc[idx])
-                if ratio < 0.5:
-                    level = "free"
-                elif ratio < 0.9:
+                if ratio < 0.9:
                     level = "busy"
                 elif ratio < 1.3:
                     level = "jammed"
