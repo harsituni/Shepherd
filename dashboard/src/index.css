@@ -14,6 +14,7 @@
   --on-navy-muted: #bfd7ee;
   --map-bg: #f3f7fb;
   --hazard: #d9480f;
+  --tornado: #4a3a6b;
   --predicted: #c62828; /* dotted predicted-path outline (same red as closed roads, which are solid) */
   --hazard-high: #7a1f0a;
   --evac-stripe: #ffd400; /* evacuation zone: diagonal stripes */

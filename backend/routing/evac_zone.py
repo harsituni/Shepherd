@@ -58,9 +58,10 @@ def _point_in_ring(point: tuple[float, float], ring: list) -> bool:
 
 
 def _is_fire_now(feature: dict) -> bool:
+    """Current core hazard that paints an evacuation circle (wildfire or tornado)."""
     props = feature.get("properties") or {}
     return (
-        props.get("kind") == "wildfire"
+        props.get("kind") in ("wildfire", "tornado")
         and props.get("zone") == "core"
         and props.get("predicted_min") is None
         and (feature.get("geometry") or {}).get("type") == "Polygon"

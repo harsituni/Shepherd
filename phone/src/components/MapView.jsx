@@ -16,6 +16,7 @@ const EMPTY = { type: 'FeatureCollection', features: [] }
 const cssVar = (name, fallback) =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 const HAZARD = cssVar('--hazard', '#D9480F')
+const TORNADO = cssVar('--tornado', '#4A3A6B')
 const MAP_BG = cssVar('--map-bg', '#F3F7FB')
 const ROUTE = cssVar('--blue', '#0070C4')
 const ALT = cssVar('--muted-2', '#5B7590')
@@ -23,6 +24,7 @@ const CLOSED = cssVar('--closed', '#C62828')
 const PREDICTED_COLOR = cssVar('--predicted', '#C62828')
 const EVAC_STRIPE = cssVar('--evac-stripe', '#FFD400')
 const EVAC_EDGE = cssVar('--evac-edge', '#9A6B00')
+const KIND_COLOR = ['match', ['get', 'kind'], 'tornado', TORNADO, HAZARD]
 
 // Diagonal yellow stripes on a transparent tile, used as the evacuation zone's fill
 // pattern (same as the dashboard). Drawn at 2× for sharp lines. Solid colour only.
@@ -278,14 +280,14 @@ export default function MapView({
         type: 'fill',
         source: 'hazards',
         filter: ['all', CURRENT, ['==', ['get', 'zone'], 'buffer']],
-        paint: { 'fill-color': HAZARD, 'fill-opacity': 0.3 },
+        paint: { 'fill-color': KIND_COLOR, 'fill-opacity': 0.3 },
       })
       map.addLayer({
         id: 'hazard-core',
         type: 'fill',
         source: 'hazards',
         filter: ['all', CURRENT, ['==', ['get', 'zone'], 'core']],
-        paint: { 'fill-color': HAZARD, 'fill-opacity': 0.85 },
+        paint: { 'fill-color': KIND_COLOR, 'fill-opacity': 0.85 },
       })
       // The other route options: thin and dashed, blocked ones in closure red.
       map.addSource('route-alts', { type: 'geojson', data: EMPTY })

@@ -15,6 +15,7 @@ import { POLL_MS } from './config.js'
 import { evacueeId, locateOnce, useEvacuation, useHeartbeat } from './evacuate.js'
 import { dangerRings, demoteUnsafeRoute, evacZones, unsafeShelterIds } from './evacuation.js'
 import { isCurrentCore, nearestHazard, pointInRing } from './geo.js'
+import { noSafeRoute, shouldReroute } from './reroute.js'
 import { placeName } from './placeName.js'
 import { nextClock } from './simClock.js'
 import AlertBanner from './components/AlertBanner.jsx'
@@ -147,6 +148,15 @@ export default function App() {
     setToast(text)
     toastTimer.current = setTimeout(() => setToast(null), ms)
   }, [])
+  const showToastRef = useRef(showToast)
+  useEffect(() => {
+    showToastRef.current = showToast
+  }, [showToast])
+
+  // Filled in once useEvacuation mounts; refresh reads these each poll.
+  const tripRef = useRef(null)
+  const rerouteRef = useRef(null)
+  const noSafeToastAt = useRef(0)
 
   const refreshBusy = useRef(false)
 
@@ -183,8 +193,11 @@ export default function App() {
       // 2 s ago is still the one to show. Otherwise a moved pin makes it stale.
       const stale = () => !evacuatingRef.current && locationRef.current !== loc
       try {
-        // Send the pick so the backend keeps it in the answer even if it turns unsafe.
-        let r = await getRoute(loc[1], loc[0], chosenRef.current)
+        // Prefer the route we're actually driving so /route keeps it in `options`
+        // even after it turns unsafe (needed to decide a mid-trip reroute).
+        const drivingId =
+          tripRef.current?.route?.route_id ?? tripRef.current?.route?.id ?? chosenRef.current
+        let r = await getRoute(loc[1], loc[0], drivingId)
         if (stale()) return
         // Same yellow-zone rule as the map markers: never leave a painted-unsafe
         // centre as Clear / Recommended if /route is briefly still optimistic.
@@ -192,7 +205,24 @@ export default function App() {
           const outlines = h.value?.forecast ?? []
           r = demoteUnsafeRoute(r, unsafeShelterIds(s.value, dangerRings(h.value, outlines)))
         }
-        if (chosenRef.current) {
+
+        // Mid-trip: if the path we're on went bad, switch onto the new best from here.
+        if (evacuatingRef.current && tripRef.current && !tripRef.current.arrived) {
+          const switchTo = shouldReroute(tripRef.current, r)
+          if (switchTo) {
+            chosenRef.current = switchTo.route.route_id
+            setChosen(switchTo.route.route_id)
+            rerouteRef.current?.(switchTo.route, switchTo.reason)
+            showToastRef.current?.(`Rerouted: ${switchTo.reason}`, 5000)
+            setFocusKey(Date.now())
+          } else if (noSafeRoute(r)) {
+            const now = Date.now()
+            if (now - noSafeToastAt.current > 15000) {
+              noSafeToastAt.current = now
+              showToastRef.current?.('No safe route left. Stay put if you can and call 911.', 6000)
+            }
+          }
+        } else if (chosenRef.current) {
           const pick = r?.options?.find((o) => o.id === chosenRef.current)
           if (pick && pick.status !== 'ok' && pick.status !== 'tight') {
             chosenRef.current = null
@@ -214,7 +244,9 @@ export default function App() {
         // Contract only has error "no_route". Outside the demo box (or idle with
         // no fire) should not panic people into calling 911.
         const features = h.status === 'fulfilled' ? (h.value?.features ?? []) : []
-        const fireOn = features.some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
+        const fireOn = features.some(
+          (f) => isCurrentCore(f) && (f.properties.kind === 'wildfire' || f.properties.kind === 'tornado'),
+        )
         // v3 answers "everything is blocked" with a 200; its 404s are about place.
         const outOfArea = /demo area|within 300 m/i.test(err.message ?? '')
         setRouteError(fireOn && !outOfArea ? 'no_route' : 'out_of_area')
@@ -341,11 +373,34 @@ export default function App() {
     setLocation(lngLat)
   }, [])
   const gpsFailed = useCallback((message) => showToast(message, 6000), [showToast])
-  const { trip, start: startTrip, stop: stopTrip } = useEvacuation({ clock, onMove: moveTo, onError: gpsFailed })
+  const { trip, start: startTrip, stop: stopTrip, reroute: rerouteTrip } = useEvacuation({
+    clock,
+    onMove: moveTo,
+    onError: gpsFailed,
+  })
   const evacuating = trip != null
   useEffect(() => {
     evacuatingRef.current = evacuating
-  }, [evacuating])
+    tripRef.current = trip
+    rerouteRef.current = rerouteTrip
+  }, [evacuating, trip, rerouteTrip])
+
+  // While driving, the map follows the path on the trip (including mid-trip
+  // reroutes), not a stale pre-trip recommendation.
+  const driveRoute = trip
+    ? {
+        ...shown,
+        ...trip.route,
+        route_id: trip.route.route_id ?? trip.route.id,
+        geometry: trip.route.geometry,
+        shelter_id: trip.route.shelter_id,
+        shelter_name: trip.route.shelter_name,
+        eta_min: trip.route.eta_min,
+        distance_km: trip.route.distance_km,
+        rerouted: Boolean(trip.route.rerouted || trip.notice),
+        reroute_reason: trip.route.reroute_reason ?? trip.notice,
+      }
+    : shown
 
   // Picking Real GPS moves the pin to the phone's actual location right away (and
   // routes from there), instead of waiting for Start evacuating. Simulated drive
@@ -427,11 +482,12 @@ export default function App() {
   const readHeartbeat = useCallback(() => {
     const loc = locationRef.current
     if (!loc) return null
-    const r = shownRef.current
+    const driving = tripRef.current?.route
+    const r = driving ?? shownRef.current
     return {
       lat: loc[1],
       lon: loc[0],
-      route_id: r?.route_id ?? null,
+      route_id: r?.route_id ?? r?.id ?? null,
       route_status: r?.status ?? null,
       shelter_id: r?.shelter_id ?? null,
     }
@@ -441,11 +497,13 @@ export default function App() {
   // During a wildfire the evacuation card (leave-by countdown) takes the banner's place.
   const wildfire =
     route?.leave_by_sim_min != null ||
-    (hazards?.features ?? []).some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
+    (hazards?.features ?? []).some(
+      (f) => isCurrentCore(f) && (f.properties.kind === 'wildfire' || f.properties.kind === 'tornado'),
+    )
 
   const detailProps = {
     location,
-    route: shown,
+    route: driveRoute,
     lost,
     routeError,
     shelters,
@@ -458,6 +516,11 @@ export default function App() {
     evacMode,
     onEvacMode: chooseEvacMode,
     onStartEvacuating: () => {
+      const id = shown?.route_id ?? shown?.best_route_id
+      if (id) {
+        chosenRef.current = id
+        setChosen(id)
+      }
       setFocusKey(Date.now()) // frame the route the dot will follow
       startTrip(evacMode, shown)
     },
@@ -472,7 +535,7 @@ export default function App() {
           <MapView
             hazards={hazards}
             shelters={shelters}
-            route={shown}
+            route={driveRoute}
             location={location}
             pending={pendingTap}
             onTap={evacuating ? undefined : tapMap}
@@ -485,7 +548,7 @@ export default function App() {
           wildfire ? (
             <EvacCard
               location={location}
-              route={shown}
+              route={driveRoute}
               routeError={routeError}
               near={location ? nearestHazard(location, hazards) : null}
               clock={clock}
@@ -496,13 +559,13 @@ export default function App() {
           )
         }
         details={<RouteDetails {...detailProps} />}
-        more={<RouteMore route={shown} shelters={shelters} trip={trip} evacMode={evacMode} />}
-        mapKey={<MapKey hazards={hazards} shelters={shelters} route={shown} location={location} />}
+        more={<RouteMore route={driveRoute} shelters={shelters} trip={trip} evacMode={evacMode} />}
+        mapKey={<MapKey hazards={hazards} shelters={shelters} route={driveRoute} location={location} />}
         areaName={areaName}
         notifications={notifications}
         location={location}
         autoLocation={autoLocation}
-        route={shown}
+        route={driveRoute}
         routeError={routeError}
         trip={trip}
         version={SHEPHERD_VERSION}

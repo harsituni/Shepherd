@@ -117,7 +117,7 @@ function fakeHazards() {
 function fakeForecast() {
   const { sim_time } = fakeState()
   const outlines =
-    fake.state === 'idle' || fake.scenario !== 'wildfire'
+    fake.state === 'idle' || (fake.scenario !== 'wildfire' && fake.scenario !== 'tornado')
       ? []
       : Array.from({ length: 8 }, (_, i) => {
           const t_min = (i + 1) * 15
@@ -125,7 +125,7 @@ function fakeForecast() {
             t_min,
             type: 'Feature',
             id: `fc_${t_min}`,
-            properties: { kind: 'wildfire', t_min, zone: 'predicted' },
+            properties: { kind: fake.scenario, t_min, zone: 'predicted' },
             geometry: fakeShape(fake.minutes + t_min),
           }
         })

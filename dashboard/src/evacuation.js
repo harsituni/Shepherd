@@ -44,15 +44,15 @@ function pointInRing([x, y], ring) {
   return inside
 }
 
-const isFireNow = (f) =>
-  f.properties?.kind === 'wildfire' &&
+const isHazardNow = (f) =>
+  (f.properties?.kind === 'wildfire' || f.properties?.kind === 'tornado') &&
   f.properties?.zone === 'core' &&
   f.properties?.predicted_min == null &&
   f.geometry?.type === 'Polygon'
 
-// One evacuation circle per wildfire drawn on the map (current fire only).
+// One evacuation circle per active core hazard (wildfire or tornado funnel).
 export function evacZones(hazards) {
-  const features = (hazards?.features ?? []).filter(isFireNow).map((f) => ({
+  const features = (hazards?.features ?? []).filter(isHazardNow).map((f) => ({
     type: 'Feature',
     id: `${f.id}:evac`,
     properties: { fire_id: f.id },
@@ -64,7 +64,7 @@ export function evacZones(hazards) {
 // Circles that count for shelter safety: around the fire now and every forecast outline.
 export function dangerRings(hazards, forecastOutlines = []) {
   return [
-    ...(hazards?.features ?? []).filter(isFireNow),
+    ...(hazards?.features ?? []).filter(isHazardNow),
     ...forecastOutlines.filter((o) => o.geometry?.type === 'Polygon'),
   ].map((f) => evacCircle(f.geometry.coordinates[0]))
 }

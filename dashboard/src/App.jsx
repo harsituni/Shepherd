@@ -30,7 +30,7 @@ import NotifyForm from './components/NotifyForm.jsx'
 // Backend errors come back as { error, message } (contract). The raw message can be
 // misleading (a tornado start says "Flood deferred"), so known codes get plain text.
 function simErrorText(err) {
-  if (err.code === 'unsupported_scenario') return "The backend can't simulate this hazard yet. Only wildfire runs for now."
+  if (err.code === 'unsupported_scenario') return "The backend can't simulate this hazard yet."
   return `The backend refused this: ${err.message}`
 }
 

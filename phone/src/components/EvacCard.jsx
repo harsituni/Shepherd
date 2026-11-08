@@ -7,13 +7,20 @@ import { WarningIcon } from './icons.jsx'
 // v2 `leave_by_sim_min`), counted down on the sim clock, so it follows the
 // dashboard's 1× / 4× / 16× speed and stops when the sim is paused.
 // Already evacuating: "Leave now" no longer applies, so don't repeat it.
-const onTheWay = (near) => (near?.inside ? "You're in the fire zone. Keep going." : hazardSentence(near))
+const onTheWay = (near) =>
+  near?.inside
+    ? near.kind === 'tornado'
+      ? "You're in the tornado path. Keep going."
+      : "You're in the fire zone. Keep going."
+    : hazardSentence(near)
 
 export default function EvacCard({ location, route, routeError, near, clock, trip }) {
   const simNow = useSimNow(clock)
   const leaveBy = route?.leave_by_sim_min
   const paused = clock?.state === 'paused'
   const where = route?.shelter_name ? `${route.shelter_name}, ${route.eta_min} min drive` : null
+  const kindWord = near?.kind === 'tornado' ? 'Tornado' : 'Wildfire'
+  const title = near?.kind === 'tornado' ? 'Tornado evacuation' : 'Wildfire evacuation'
 
   let label = null // small line above the big text
   let big // the largest text on screen
@@ -23,7 +30,7 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
   if (!location) {
     big = 'Tap the map where you are'
     lines = ["We'll tell you when you need to leave."]
-    spoken = `Wildfire. Evacuate. ${big}.`
+    spoken = `${kindWord}. Evacuate. ${big}.`
   } else if (trip?.arrived) {
     big = 'Arrived'
     lines = [`You're at ${trip.route.shelter_name}.`]
@@ -33,52 +40,66 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
     const left = trip.route.eta_min * (1 - (trip.fraction ?? 0))
     label = 'Arriving in'
     big = formatMinSec(left)
-    lines = [`Driving to ${trip.route.shelter_name} (simulated)`, onTheWay(near)]
+    lines = [`Driving to ${trip.route.shelter_name} (simulated)`]
+    if (trip.notice) lines.push(`Rerouted: ${trip.notice}`)
+    lines.push(onTheWay(near))
     const mins = Math.max(1, Math.ceil(left))
-    spoken = `Evacuating. Arriving at ${trip.route.shelter_name} in about ${mins} ${mins === 1 ? 'minute' : 'minutes'}.`
+    spoken = trip.notice
+      ? `Rerouted. Evacuating to ${trip.route.shelter_name}.`
+      : `Evacuating. Arriving at ${trip.route.shelter_name} in about ${mins} ${mins === 1 ? 'minute' : 'minutes'}.`
   } else if (trip?.mode === 'gps') {
     big = 'On your way'
-    lines = [`Heading to ${trip.route.shelter_name}`, 'Following your real GPS.', onTheWay(near)]
-    spoken = `Evacuating to ${trip.route.shelter_name}.`
+    lines = [`Heading to ${trip.route.shelter_name}`, 'Following your real GPS.']
+    if (trip.notice) lines.push(`Rerouted: ${trip.notice}`)
+    lines.push(onTheWay(near))
+    spoken = trip.notice
+      ? `Rerouted. Evacuating to ${trip.route.shelter_name}.`
+      : `Evacuating to ${trip.route.shelter_name}.`
   } else if (routeError === 'no_route' || route?.no_safe_route === true) {
     big = 'No safe route'
     lines = ['Stay where you are if it is safe and call 911.']
-    spoken = `Wildfire. ${big}. Call 911.`
+    spoken = `${kindWord}. ${big}. Call 911.`
   } else if (route?.route_status === 'indeterminate') {
     // v3: nothing could be confirmed safe or unsafe, so nothing is recommended.
     big = "Can't confirm"
     lines = ["Shepherd can't confirm a safe route right now.", 'Follow official instructions. Call 911 if you are in danger.']
-    spoken = `Wildfire. ${lines[0]} ${lines[1]}`
+    spoken = `${kindWord}. ${lines[0]} ${lines[1]}`
   } else if (near?.inside) {
     big = 'Leave now'
-    lines = ['You are inside the wildfire zone.', where]
-    spoken = 'Wildfire. You are inside the fire zone. Leave now.'
+    lines = [near.kind === 'tornado' ? 'You are inside the tornado path.' : 'You are inside the wildfire zone.', where]
+    spoken = `${kindWord}. You are inside the hazard zone. Leave now.`
   } else if (!route) {
     big = routeError ? 'Reconnecting…' : 'Working it out…'
     lines = [routeError ? "Can't reach Shepherd right now." : 'Finding when you need to leave.']
-    spoken = `Wildfire. Evacuate. ${lines[0]}`
+    spoken = `${kindWord}. Evacuate. ${lines[0]}`
   } else if (leaveBy == null && route.options) {
-    // No leave-by: the fire isn't forecast to reach this route, so no deadline yet.
+    // No leave-by: the hazard isn't forecast to reach this route, so no deadline yet.
     big = 'No deadline yet'
-    lines = ["The fire isn't forecast to reach your route.", where, hazardSentence(near)]
-    spoken = `Wildfire. ${lines[0]}`
+    lines = [
+      near?.kind === 'tornado'
+        ? "The tornado isn't forecast to reach your route."
+        : "The fire isn't forecast to reach your route.",
+      where,
+      hazardSentence(near),
+    ]
+    spoken = `${kindWord}. ${lines[0]}`
   } else if (leaveBy == null) {
     // Backend still on the Step 0 /route shape: no leave-by time to count down.
     big = 'Leave as soon as you can'
     lines = [where, hazardSentence(near)]
-    spoken = `Wildfire. Evacuate. ${big}.`
+    spoken = `${kindWord}. Evacuate. ${big}.`
   } else {
     const left = simNow == null ? leaveBy - (route.sim_time ?? leaveBy) : leaveBy - simNow
     if (left <= 0) {
       big = 'Leave now'
       lines = [`Your leave-by time, T+${leaveBy}, has passed.`, where]
-      spoken = 'Wildfire. Your leave-by time has passed. Leave now.'
+      spoken = `${kindWord}. Your leave-by time has passed. Leave now.`
     } else {
       label = 'Leave within'
       big = formatMinSec(left)
       lines = [`Leave by T+${leaveBy}${paused ? ' · simulation paused' : ''}`, where, hazardSentence(near)]
       const mins = Math.ceil(left)
-      spoken = `Wildfire. Evacuate. Leave within ${mins} ${mins === 1 ? 'minute' : 'minutes'}.`
+      spoken = `${kindWord}. Evacuate. Leave within ${mins} ${mins === 1 ? 'minute' : 'minutes'}.`
     }
   }
 
@@ -89,7 +110,7 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
       <div className="evac-head">
         <WarningIcon className="evac-icon" />
         <h1 className="evac-title" id="evac-title">
-          Wildfire evacuation
+          {title}
         </h1>
       </div>
       <div className="evac-body" aria-hidden="true">
