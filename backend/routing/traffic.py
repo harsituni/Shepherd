@@ -85,12 +85,13 @@ DEFAULT_SIMULATED = 10_000
 # thousand agents and scale each one's road load (projection) so the API stays fast.
 MAX_SIMULATED = 100_000
 MAX_SIM_AGENTS = 2_500
-# Seed congested edges, then grow along connected volume so corridors look continuous.
-MAP_SEED_LIMIT = 700
-MAP_EDGE_LIMIT = 1800
-# Seeds need real congestion; gap-fill keeps any connected edge that still has cars.
-MAP_MIN_VC = 0.45
-MAP_FILL_MIN_VOLUME = 0.25
+# Seed congested edges, then grow hard along the graph so corridors don't break
+# at quiet intersection connectors.
+MAP_SEED_LIMIT = 900
+MAP_EDGE_LIMIT = 2800
+MAP_MIN_VC = 0.4
+# Any cars at all is enough to keep a connector when it touches a corridor.
+MAP_FILL_MIN_VOLUME = 0.05
 
 
 def _highway_key(value) -> str:
@@ -702,26 +703,73 @@ class TrafficEngine:
         return buckets
 
     def _expand_corridor_edges_locked(self, seeds: list[int], vc: np.ndarray) -> list[int]:
-        """Grow from congested seeds along any connected edge that still has cars."""
+        """Grow from congested seeds; keep connectors + reverse lanes so ribbons don't break."""
         if not seeds:
             return []
         node_edges = self._node_edge_index_locked()
         rg = self._rg
+        # Undirected pair → both directed edges (fills opposite-lane holes).
+        pair_to_edges: dict[tuple[int, int], list[int]] = {}
+        for e in range(rg.n_edges):
+            a, b = int(rg.edge_u[e]), int(rg.edge_v[e])
+            key = (a, b) if a <= b else (b, a)
+            pair_to_edges.setdefault(key, []).append(e)
+
         chosen = set(int(e) for e in seeds)
+        # Always include the reverse direction of every seed.
+        for e in list(chosen):
+            a, b = int(rg.edge_u[e]), int(rg.edge_v[e])
+            key = (a, b) if a <= b else (b, a)
+            for sib in pair_to_edges.get(key, ()):
+                chosen.add(sib)
+
         queue = list(chosen)
         while queue and len(chosen) < MAP_EDGE_LIMIT:
             e = queue.pop()
             for node in (int(rg.edge_u[e]), int(rg.edge_v[e])):
-                for nxt in node_edges[node]:
+                incident = node_edges[node]
+                # If this node already has corridor traffic, keep every incident
+                # edge that carries any cars — closes intersection gaps.
+                node_hot = any(
+                    (x in chosen) or self._volume[x] >= MAP_FILL_MIN_VOLUME or float(vc[x]) >= MAP_MIN_VC * 0.5
+                    for x in incident
+                )
+                for nxt in incident:
                     if nxt in chosen:
                         continue
-                    if self._volume[nxt] < MAP_FILL_MIN_VOLUME and float(vc[nxt]) < MAP_MIN_VC * 0.6:
+                    keep = (
+                        self._volume[nxt] >= MAP_FILL_MIN_VOLUME
+                        or float(vc[nxt]) >= MAP_MIN_VC * 0.5
+                        or (node_hot and self._volume[nxt] > 0)
+                    )
+                    if not keep:
                         continue
                     chosen.add(nxt)
+                    a, b = int(rg.edge_u[nxt]), int(rg.edge_v[nxt])
+                    key = (a, b) if a <= b else (b, a)
+                    for sib in pair_to_edges.get(key, ()):
+                        if sib not in chosen:
+                            chosen.add(sib)
+                            queue.append(sib)
                     queue.append(nxt)
                     if len(chosen) >= MAP_EDGE_LIMIT:
                         break
         return list(chosen)
+
+    def _edge_poly_from_node_locked(self, e: int, from_node: int) -> tuple[list[list[float]], int]:
+        """Polyline for edge e starting at from_node, endpoints snapped to node lat/lon."""
+        rg = self._rg
+        u, v = int(rg.edge_u[e]), int(rg.edge_v[e])
+        coords = rg.edge_coords_ll(e).tolist()
+        if from_node == v:
+            coords = list(reversed(coords))
+            to_node = u
+        else:
+            to_node = v
+        # Snap ends to shared node coordinates so chains join with zero gaps.
+        coords[0] = [float(rg.node_lon[from_node]), float(rg.node_lat[from_node])]
+        coords[-1] = [float(rg.node_lon[to_node]), float(rg.node_lat[to_node])]
+        return coords, to_node
 
     def _merge_corridor_features_locked(self, edge_ids: list[int], vc: np.ndarray,
                                         factors: np.ndarray) -> list[dict]:
@@ -730,20 +778,10 @@ class TrafficEngine:
             return []
         rg = self._rg
         remaining = set(int(e) for e in edge_ids)
-        # node → edges still available
         at_node: dict[int, list[int]] = {}
         for e in remaining:
             at_node.setdefault(int(rg.edge_u[e]), []).append(e)
             at_node.setdefault(int(rg.edge_v[e]), []).append(e)
-
-        def take_edge(e: int, from_node: int) -> tuple[list[list[float]], int]:
-            """Walk one edge away from from_node; return coords in travel order + far node."""
-            u, v = int(rg.edge_u[e]), int(rg.edge_v[e])
-            coords = rg.edge_coords_ll(e).tolist()
-            if from_node == u:
-                return coords, v
-            # reverse geometry when entering from v
-            return list(reversed(coords)), u
 
         def detach(e: int) -> None:
             remaining.discard(e)
@@ -752,28 +790,36 @@ class TrafficEngine:
                 if bucket and e in bucket:
                     bucket.remove(e)
 
-        def extend(tip: int, chain: list[int], coords: list) -> int:
+        def pick_next(tip: int, prefer_name: str) -> Optional[int]:
+            candidates = [e for e in at_node.get(tip, []) if e in remaining]
+            if not candidates:
+                return None
+            candidates.sort(
+                key=lambda e: (0 if rg.edge_name[e] == prefer_name else 1, -float(vc[e])),
+            )
+            return candidates[0]
+
+        def grow(tip: int, chain: list[int], coords: list, forward: bool) -> None:
             while True:
-                candidates = [e for e in at_node.get(tip, []) if e in remaining]
-                if not candidates:
-                    return tip
-                name = rg.edge_name[chain[-1]]
-                candidates.sort(
-                    key=lambda e: (0 if rg.edge_name[e] == name else 1, -float(vc[e])),
-                )
-                nxt = candidates[0]
+                prefer = rg.edge_name[chain[-1] if forward else chain[0]]
+                nxt = pick_next(tip, prefer)
+                if nxt is None:
+                    return
                 detach(nxt)
-                piece, tip = take_edge(nxt, tip)
-                if coords and piece and coords[-1] == piece[0]:
+                piece, tip = self._edge_poly_from_node_locked(nxt, tip)
+                if forward:
+                    # Shared node already at coords[-1] == piece[0].
                     coords.extend(piece[1:])
+                    chain.append(nxt)
                 else:
-                    coords.extend(piece)
-                chain.append(nxt)
+                    # Growing backward: piece runs away from seed; prepend reversed.
+                    prefix = list(reversed(piece))
+                    coords[:0] = prefix[:-1]
+                    chain.insert(0, nxt)
 
         features: list[dict] = []
         feat_i = 0
         while remaining:
-            # Prefer a dead-end so the chain grows into a long corridor.
             start_e = next(iter(remaining))
             for e in list(remaining):
                 deg_u = len(at_node.get(int(rg.edge_u[e]), []))
@@ -784,37 +830,9 @@ class TrafficEngine:
             u, v = int(rg.edge_u[start_e]), int(rg.edge_v[start_e])
             detach(start_e)
             chain = [start_e]
-            coords = rg.edge_coords_ll(start_e).tolist()
-            # Grow both directions for one continuous ribbon.
-            extend(v, chain, coords)
-            # Prepend by growing from u with reversed pieces.
-            left: list[int] = []
-            left_coords: list = []
-            tip = u
-            while True:
-                candidates = [e for e in at_node.get(tip, []) if e in remaining]
-                if not candidates:
-                    break
-                name = rg.edge_name[chain[0] if not left else left[-1]]
-                candidates.sort(
-                    key=lambda e: (0 if rg.edge_name[e] == name else 1, -float(vc[e])),
-                )
-                nxt = candidates[0]
-                detach(nxt)
-                piece, tip = take_edge(nxt, tip)
-                left.append(nxt)
-                if left_coords and piece and left_coords[-1] == piece[0]:
-                    left_coords.extend(piece[1:])
-                else:
-                    left_coords.extend(piece)
-            if left:
-                chain = list(reversed(left)) + chain
-                # left_coords runs away from the seed; reverse to lead into seed.
-                prefix = list(reversed(left_coords))
-                if prefix and coords and prefix[-1] == coords[0]:
-                    coords = prefix[:-1] + coords
-                else:
-                    coords = prefix + coords
+            coords, _ = self._edge_poly_from_node_locked(start_e, u)
+            grow(v, chain, coords, forward=True)
+            grow(u, chain, coords, forward=False)
 
             ratios = [float(vc[e]) for e in chain]
             ratio = max(ratios) if ratios else 0.0
@@ -840,7 +858,64 @@ class TrafficEngine:
                 "geometry": {"type": "LineString", "coordinates": coords},
             })
             feat_i += 1
-        return features
+
+        # Second pass: stitch ribbons whose endpoints sit on the same graph node /
+        # nearly the same lon-lat so leftover gaps at T-junctions disappear.
+        return self._stitch_nearby_features_locked(features)
+
+    def _stitch_nearby_features_locked(self, features: list[dict]) -> list[dict]:
+        if len(features) < 2:
+            return features
+        # Index endpoints (rounded) → feature indices still alive.
+        alive = list(range(len(features)))
+        coords_of = [list(f["geometry"]["coordinates"]) for f in features]
+        level_rank = {"busy": 1, "jammed": 2, "gridlock": 3}
+
+        def end_key(pt, kind: str):
+            return (kind, round(pt[0], 5), round(pt[1], 5))
+
+        changed = True
+        while changed:
+            changed = False
+            index: dict[tuple, list[tuple[int, str]]] = {}
+            for i in alive:
+                c = coords_of[i]
+                if len(c) < 2:
+                    continue
+                index.setdefault(end_key(c[0], "s"), []).append((i, "s"))
+                index.setdefault(end_key(c[-1], "e"), []).append((i, "e"))
+            for bucket in index.values():
+                if len(bucket) < 2:
+                    continue
+                # Pair first two distinct features that touch here.
+                (i, ei), (j, ej) = bucket[0], bucket[1]
+                if i == j or i not in alive or j not in alive:
+                    continue
+                a, b = coords_of[i], coords_of[j]
+                # Orient so a runs into b.
+                if ei == "e" and ej == "s":
+                    merged = a + b[1:]
+                elif ei == "s" and ej == "e":
+                    merged = b + a[1:]
+                elif ei == "e" and ej == "e":
+                    merged = a + list(reversed(b))[1:]
+                else:  # s + s
+                    merged = list(reversed(a)) + b[1:]
+                # Keep i, drop j.
+                coords_of[i] = merged
+                props_i = features[i]["properties"]
+                props_j = features[j]["properties"]
+                props_i["edges"] = int(props_i.get("edges", 1)) + int(props_j.get("edges", 1))
+                props_i["volume"] = round(float(props_i.get("volume", 0)) + float(props_j.get("volume", 0)), 1)
+                if level_rank.get(props_j.get("level"), 0) > level_rank.get(props_i.get("level"), 0):
+                    props_i["level"] = props_j["level"]
+                    props_i["vc_ratio"] = props_j.get("vc_ratio", props_i.get("vc_ratio"))
+                features[i]["geometry"]["coordinates"] = merged
+                alive.remove(j)
+                changed = True
+                break
+
+        return [features[i] for i in alive]
 
     def edge_features(self, limit: int = MAP_EDGE_LIMIT) -> dict:
         with self._lock:
@@ -867,7 +942,6 @@ class TrafficEngine:
                     continue
                 seeds.append(int(idx))
             edge_ids = self._expand_corridor_edges_locked(seeds, vc)
-            # Prefer keeping highest-score edges if we still overflow.
             if len(edge_ids) > limit:
                 edge_ids = sorted(edge_ids, key=lambda e: -float(score[e]))[: int(limit)]
             features = self._merge_corridor_features_locked(edge_ids, vc, factors)

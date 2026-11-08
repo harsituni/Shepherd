@@ -330,31 +330,32 @@ export default function MapView({
       // Traffic / closed / phone routes: one continuous stroke language (round
       // caps/joins, shared width). Backend merges edges into long corridors so
       // the overlay reads as continuous traffic, not broken dashes.
+      // Slightly fat strokes so micro-gaps at intersections visually close.
       const ROAD_WIDTH = [
         'interpolate',
         ['linear'],
         ['zoom'],
         10,
-        2.25,
+        2.75,
         12,
-        3.25,
+        4,
         14,
-        4.25,
+        5.5,
         16,
-        5.25,
+        7,
       ]
       const ROAD_CASE = [
         'interpolate',
         ['linear'],
         ['zoom'],
         10,
-        3.5,
+        4,
         12,
-        4.75,
+        5.75,
         14,
-        6,
+        7.5,
         16,
-        7.25,
+        9,
       ]
       map.addSource('traffic', { type: 'geojson', data: EMPTY })
       map.addLayer({
