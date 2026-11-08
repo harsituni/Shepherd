@@ -132,11 +132,12 @@ export default function App() {
         setRouteError('network')
         return
       }
-      // Contract only has error "no_route". With no active wildfire, a miss is
-      // usually "outside the demo box" — don't panic people into calling 911.
+      // Contract only has error "no_route". Outside the demo box (or idle with
+      // no fire) should not panic people into calling 911.
       const features = h.status === 'fulfilled' ? (h.value?.features ?? []) : []
       const fireOn = features.some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
-      setRouteError(fireOn ? 'no_route' : 'out_of_area')
+      const outOfArea = /demo area/i.test(err.message ?? '')
+      setRouteError(fireOn && !outOfArea ? 'no_route' : 'out_of_area')
     }
   }, [])
 

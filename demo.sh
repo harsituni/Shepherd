@@ -13,8 +13,9 @@ cd "$ROOT"
 
 DEMO_DIR="$ROOT/.demo"
 JOIN_HTML="$ROOT/demo-join.html"
+JOIN_JSON="$ROOT/dashboard/public/demo-join.json"
 JOIN_TXT="$DEMO_DIR/JOIN_URL.txt"
-mkdir -p "$DEMO_DIR"
+mkdir -p "$DEMO_DIR" "$ROOT/dashboard/public"
 PHONE_LOG="$DEMO_DIR/cloudflared-phone.log"
 API_LOG="$DEMO_DIR/cloudflared-api.log"
 STACK_LOG="$DEMO_DIR/stack.log"
@@ -69,7 +70,7 @@ free_port() {
 
 mark_join_stale() {
   # Old Cloudflare URLs die when tunnels stop — don't leave a scannable dead QR.
-  if [[ "$WROTE_JOIN" == 1 || -f "$JOIN_HTML" ]]; then
+  if [[ "$WROTE_JOIN" == 1 || -f "$JOIN_HTML" || -f "$JOIN_JSON" ]]; then
     cat >"$JOIN_HTML" <<'HTML'
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8" /><title>Shepherd — tunnels stopped</title>
@@ -83,6 +84,8 @@ code{background:#EAF3FB;padding:2px 6px;border-radius:4px}</style></head>
 <p>Then scan the <em>new</em> QR it opens — quick-tunnel URLs change every run.</p>
 </body></html>
 HTML
+    mkdir -p "$(dirname "$JOIN_JSON")"
+    printf '%s\n' '{"active":false}' >"$JOIN_JSON"
     rm -f "$JOIN_TXT"
   fi
 }
@@ -156,21 +159,6 @@ wait_tunnel_url() {
   exit 1
 }
 
-open_join_page() {
-  local path="$1"
-  echo "Opening QR page: $path"
-  if command -v open >/dev/null 2>&1; then
-    open -a Safari "$path" 2>/dev/null \
-      || open -a "Google Chrome" "$path" 2>/dev/null \
-      || open "$path" 2>/dev/null \
-      || echo "Could not auto-open — open that file manually."
-  elif command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$path" 2>/dev/null || echo "Open $path manually."
-  else
-    echo "Open $path in a browser to show the QR."
-  fi
-}
-
 need_cmd curl
 need_cmd cloudflared
 need_cmd python3
@@ -240,18 +228,21 @@ API_URL="$(wait_tunnel_url "$API_LOG" api)"
 echo "OK  Phone tunnel: $PHONE_URL"
 echo "OK  API tunnel:   $API_URL"
 
-# Build QR without relying on demo_join's flaky `open`.
-python3 - "$JOIN_HTML" "$PHONE_URL" "$API_URL" <<'PY'
+# Build QR HTML + dashboard/public/demo-join.json (dashboard polls this).
+python3 - "$JOIN_HTML" "$JOIN_JSON" "$PHONE_URL" "$API_URL" <<'PY'
 import base64, json, sys, urllib.parse, urllib.request
-out, phone, api = sys.argv[1], sys.argv[2].rstrip("/"), sys.argv[3].rstrip("/")
+out_html, out_json, phone, api = sys.argv[1], sys.argv[2], sys.argv[3].rstrip("/"), sys.argv[4].rstrip("/")
 join = f"{phone}?api={urllib.parse.quote(api, safe='')}"
+qr_data_url = None
 try:
     q = urllib.parse.quote(join, safe="")
     png = urllib.request.urlopen(
         f"https://api.qrserver.com/v1/create-qr-code/?size=280x280&ecc=M&data={q}",
         timeout=15,
     ).read()
-    img = f'<img alt="QR" width="280" height="280" src="data:image/png;base64,{base64.b64encode(png).decode()}" />'
+    b64 = base64.b64encode(png).decode()
+    qr_data_url = f"data:image/png;base64,{b64}"
+    img = f'<img alt="QR" width="280" height="280" src="{qr_data_url}" />'
 except Exception as exc:
     q = urllib.parse.quote(join, safe="")
     img = f'<img alt="QR" width="280" height="280" src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data={q}" /><p>Embed failed: {exc}</p>'
@@ -269,16 +260,17 @@ code{{word-break:break-all;background:#EAF3FB;padding:2px 6px;border-radius:4px}
 <p class="big">Join URL</p>
 <p><code>{json.dumps(join)[1:-1]}</code></p>
 <p class="muted">API: <code>{json.dumps(api)[1:-1]}</code></p>
+<p class="muted">Also shown on the dashboard at <code>http://localhost:5173</code>.</p>
 </body></html>
 """
-open(out, "w", encoding="utf-8").write(html)
+open(out_html, "w", encoding="utf-8").write(html)
+payload = {"active": True, "joinUrl": join, "apiUrl": api, "phoneUrl": phone, "qrDataUrl": qr_data_url}
+open(out_json, "w", encoding="utf-8").write(json.dumps(payload))
 print(join)
 PY
 JOIN="$(python3 -c "import urllib.parse,sys; print(sys.argv[1].rstrip('/')+'?api='+urllib.parse.quote(sys.argv[2].rstrip('/'), safe=''))" "$PHONE_URL" "$API_URL")"
 echo "$JOIN" >"$JOIN_TXT"
 WROTE_JOIN=1
-
-open_join_page "$JOIN_HTML"
 
 cat <<EOF
 
@@ -287,10 +279,12 @@ cat <<EOF
 
   $JOIN
 
-  Also saved in:  $JOIN_TXT
-  QR page:        $JOIN_HTML
+  QR lives on the dashboard (right panel) — no browser popup.
+  http://localhost:5173
 
-  Dashboard: http://localhost:5173
+  Also saved in:  $JOIN_TXT
+  Fallback HTML:  $JOIN_HTML
+
   Ctrl+C stops everything (old links then show “tunnels stopped”).
 ════════════════════════════════════════════════════════════
 

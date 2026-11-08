@@ -17,10 +17,7 @@ export default function Header({ mode, onModeChange, lastUpdated, connectionErro
         <div className="brand-mark" style={{ color: 'var(--navy)' }}>
           <CrookIcon />
         </div>
-        <div className="brand-text">
-          <span className="brand-name">Shepherd</span>
-          <span className="brand-sub">Disaster monitoring · Alberta</span>
-        </div>
+        <span className="brand-name">Shepherd</span>
       </div>
       <div className="header-right">
         <div className="mode-switch" role="group" aria-label="Mode">

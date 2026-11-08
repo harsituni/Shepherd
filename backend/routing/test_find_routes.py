@@ -37,10 +37,18 @@ class FindRoutesTests(unittest.TestCase):
 )
         self.assertFalse(body["options"][0]["forecast_complete"])
         self.assertIn("not a safety guarantee", body["warning"])
+        self.assertIn("unknown", body["warning"])
+        self.assertNotIn("Fire timing unknown", body["options"][0].get("clear_until_label") or "")
         self.assertEqual(body["shelter_id"], "sh_a")
         self.assertAlmostEqual(body["distance_km"], 0.3)
         self.assertIn(list(BEND), body["geometry"]["coordinates"])
         self.assertFalse(body["approximate"])
+
+    def test_outside_demo_raises_demo_message(self):
+        with patch.object(router, "_graph", None), patch.object(router, "_backup_mode", True):
+            with self.assertRaises(router.NoRouteError) as raised:
+                router.find_routes(53.55, -113.20, lambda lat, lon: None, self.shelters)
+            self.assertIn("demo area", str(raised.exception))
 
     def test_fire_can_block_some(self):
         body = self.routes(lambda lat, lon: 20 if lat > 53.545 else 120, sim_time=10)

@@ -12,7 +12,7 @@ The Shepherd command dashboard for the Government of Alberta. Officials use it t
    - Play / pause / reset, speed 1× / 4× / 16×, elapsed time (T+min).
    - Live / Simulation mode switch: Live = real data feeds, Simulation = run a scenario. (Internally the mode value is still `drill`.)
 2. **Rerouting map with predicted path.**
-   - Current hazard (solid orange, shading to dark red `#7A1F0A` at the centre for wildfire) plus predicted spread as red dotted rings (no fill) labelled T+30 / T+60 min; toggle "Show predicted path".
+   - Current hazard (solid orange, shading to dark red `#7A1F0A` at the centre for wildfire) plus predicted spread as a single red dotted ring (no fill) labelled T+60 min; toggle "Show predicted path".
    - Closed roads in red, evacuation routes in blue, shelters as navy squares, all redrawn when the hazard changes.
    - **Evacuees**: every phone that has set a location (tapped the map, a preset, Need help, or is evacuating) shows as a blue dot from `GET /evacuees` (contract v2), polled every 2 s. The backend drops a phone after 30 s without a heartbeat.
    - **Evacuation zone** around every wildfire: a perfect circle centred on the fire, reaching 1 km past its farthest edge (current fire only, never the predicted path), yellow diagonal stripes with a solid darker-yellow border (`src/evacuation.js`). Built from the drawn fire, so it grows and shrinks with the history slider.
@@ -28,10 +28,10 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 
 ## Layout (matches the approved mockup)
 - Mockup: `design/dashboard-mockup.html` (screenshot `design/dashboardpic.png`). Visual reference only; rebuild as React components with MapLibre in place of the sketched SVG map.
-- Header (Alberta blue `#005072`): placeholder logo, Shepherd name, "Disaster monitoring · Alberta", Live/Simulation switch, last-updated time.
+- Header (Alberta blue `#005072`): placeholder logo, "Shepherd" (no subtitle; 26px, centred on the logo), Live/Simulation switch, last-updated time.
 - Thin light-blue incident banner under it (current hazard + status).
-- Left panel: Simulate & predict controls.
-- Centre: full map, legend bottom-left, zoom top-right, history slider along the bottom.
+- Left panel: simulation controls, titled "Simulate". No instruction hint under the hazard buttons.
+- Centre: full map, legend bottom-left (blue "LEGEND" header bar with a minimise / expand button; minimised, only the bar stays at the bottom of the map; the all-caps title is a deliberate exception to the sentence-case rule), zoom top-right, history slider along the bottom.
 - Right panel: 4 stat tiles, then tabs: **Reports** (hazard reports; reports from high-priority residents are specially marked) · **Notify** (send update + history; severity colours: Alert deep yellow `#9A6B00`, Evacuation order deep red `#8A2F06`). No separate Updates or Priority tabs.
 - Fluid page layout; panels stack on narrow screens.
 
@@ -69,7 +69,7 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 - `GET /reports`: Points with `kind` (`fire`|`flooded_road`|`blocked_road`|`safe`|`sos`), `note`, `sim_time`. Feeds the Reports tab and map pins.
 - `GET /roads/closed` (Step 2, fixture until then): LineStrings with `name`, `status` (`closed` = solid red, `slowed` = dashed red), `reason`. Feeds "Roads closed" and the Updates feed.
 - Sim control (Step 2): `POST /sim/start` `{ scenario, lat, lon, wind_kmh, wind_from_deg, fuel_dryness }` (`fuel_dryness` 0–1, `wind_from_deg` compass degrees); flood: `{ scenario: "flood", river_rise_m_per_hr }`. `POST /sim/pause|resume|reset`, `POST /sim/speed { multiplier }`, `GET /sim/state` → `{ state: idle|running|paused, scenario, sim_time, speed }`. `POST /sim/wind { wind_kmh, wind_from_deg }` (contract v2, both required) changes wind mid-run; wind speed is the one condition that stays unlocked after start.
-- `GET /forecast` (contract v2): `{ sim_time, horizon_min, wind_kmh, wind_from_deg, outlines }`, each outline a Polygon Feature with `t_min` (15, 30 … 120 minutes from now); `outlines: []` when idle. Polled with `/hazards`; the dashboard draws the 30 and 60 min outlines as the predicted path (`FORECAST_MIN_SHOWN` in `src/history.js`), and all of them when the history slider is dragged past now.
+- `GET /forecast` (contract v2): `{ sim_time, horizon_min, wind_kmh, wind_from_deg, outlines }`, each outline a Polygon Feature with `t_min` (15, 30 … 120 minutes from now); `outlines: []` when idle. Polled with `/hazards`; the dashboard draws only the 60 min outline as the predicted path (one ring, so it doesn't read as a double border) (`FORECAST_MIN_SHOWN` in `src/history.js`), and all of them when the history slider is dragged past now.
 - Live updates: poll `/hazards` + `/reports` every 2 s; later WebSocket `ws://localhost:8000/ws` sends `{ type: tick|report|reset, changed: [hazards|roads|shelters|reports] }` → re-fetch only what's listed.
 - Errors come back as `{ error, message }`.
 
