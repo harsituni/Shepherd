@@ -3,11 +3,11 @@ import hashlib
 import json
 
 import numpy as np
-from shapely.geometry import Point, box
+from shapely.geometry import Point
 
 from backend.sim.engine import ensemble
 from backend.sim.engine.contracts import load_scenario
-from backend.sim.engine.grid import build_grid, seed_mask, to_utm
+from backend.sim.engine.grid import build_grid, domain_mask, seed_mask, to_utm
 from backend.sim.engine.result import SimulationResult
 from backend.sim.engine.spread import compute_arrival
 from backend.sim.engine.weather import build_weather_table, spread_bearing
@@ -43,7 +43,7 @@ def _compute(scenario, *, mock=False):
     initial = sc.initial_perimeter.to_shapely() if sc.initial_perimeter else Point(sc.ignition.lon, sc.ignition.lat)
     initial_utm = to_utm(initial)
     seeds = seed_mask(initial_utm, grid)
-    burnable = seed_mask(to_utm(box(*sc.bbox)), grid)
+    burnable = domain_mask(sc.bbox, grid)
     members = ensemble.make_members(sc.weather, sc.n_ensemble, seed=sc.ensemble_seed)
     if mock:
         from backend.sim.engine.mock import mock_arrival

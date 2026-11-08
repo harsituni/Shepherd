@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import shapely
+from shapely.geometry import box
 from pyproj import Transformer
 from rasterio import features
 from rasterio.transform import Affine
@@ -18,6 +19,7 @@ GRID_CRS = "EPSG:32612"
 TO_UTM = Transformer.from_crs("EPSG:4326", GRID_CRS, always_xy=True)
 TO_WGS84 = Transformer.from_crs(GRID_CRS, "EPSG:4326", always_xy=True)
 DEFAULT_CELL_M = 100
+DOMAIN_SEGMENT_DEG = 0.001  # <=112 m along latitude/longitude in the supported zone
 
 
 @dataclass(frozen=True)
@@ -52,7 +54,8 @@ def build_grid(bbox, cell_m=DEFAULT_CELL_M) -> Grid:
     min_lon, min_lat, max_lon, max_lat = bbox
     if not isinstance(cell_m, int) or cell_m <= 0:
         raise ValueError("cell_m must be a positive integer")
-    left, bottom, right, top = TO_UTM.transform_bounds(*bbox, densify_pts=21)
+    # Use exactly the same projected boundary as the burnable-domain mask.
+    left, bottom, right, top = projected_domain(bbox).bounds
     min_e = math.floor(left / cell_m) * cell_m
     max_e = math.ceil(right / cell_m) * cell_m
     min_n = math.floor(bottom / cell_m) * cell_m
@@ -90,6 +93,37 @@ def to_utm(geom):
 
 def to_wgs84(geom):
     return shapely.transform(geom, _xy_transform(TO_WGS84))
+
+
+def projected_domain(bbox):
+    """Project the geographic box's curved sides, not just its four corners.
+
+    Straight chords between projected corners can exclude roads inside the
+    geographic bbox (F08, 66 Street SW). Densification is shared by grid bounds,
+    engine rasterization and the oracle; it does not alter propagation rates.
+    """
+    return to_utm(shapely.segmentize(box(*bbox), DOMAIN_SEGMENT_DEG))
+
+
+def domain_mask(bbox, grid):
+    """Modeled cells whose closed squares intersect the projected domain.
+
+    GDAL all_touched can miss thin intersections or include nearby disjoint
+    cells depending on segment subdivision. Use geometric intersections for
+    the domain boundary; keep ignition rasterization unchanged. Chunking bounds
+    temporary geometry memory even for the engine's largest supported grid.
+    """
+    domain = projected_domain(bbox)
+    shapely.prepare(domain)
+    mask = np.empty(grid.rows * grid.cols, dtype=bool)
+    for start in range(0, len(mask), 8192):
+        flat = np.arange(start, min(start + 8192, len(mask)))
+        row, col = np.divmod(flat, grid.cols)
+        left = grid.origin_x + col * grid.cell_m
+        top = grid.origin_y - row * grid.cell_m
+        cells = shapely.box(left, top - grid.cell_m, left + grid.cell_m, top)
+        mask[flat] = shapely.intersects(domain, cells)
+    return mask.reshape(grid.shape)
 
 
 def seed_mask(perimeter_utm, grid) -> np.ndarray:

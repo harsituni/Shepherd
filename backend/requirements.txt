@@ -4,6 +4,8 @@ uvicorn[standard]
 osmnx>=2,<3
 networkx>=3,<4
 scikit-learn>=1.5,<2
+# Routing v3's compiled Dijkstra (already installed with scikit-learn; 1.13 is the last for 3.9)
+scipy>=1.9,<2
 # Wildfire spread engine + OpenWeather forecast (Dviviz) — needed by backend.sim.wildfire
 numpy>=1.22
 pyproj>=3.1

@@ -40,10 +40,15 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
     big = 'On your way'
     lines = [`Heading to ${trip.route.shelter_name}`, 'Following your real GPS.', onTheWay(near)]
     spoken = `Evacuating to ${trip.route.shelter_name}.`
-  } else if (routeError === 'no_route') {
+  } else if (routeError === 'no_route' || route?.no_safe_route === true) {
     big = 'No safe route'
     lines = ['Stay where you are if it is safe and call 911.']
     spoken = `Wildfire. ${big}. Call 911.`
+  } else if (route?.route_status === 'indeterminate') {
+    // v3: nothing could be confirmed safe or unsafe, so nothing is recommended.
+    big = "Can't confirm"
+    lines = ["Shepherd can't confirm a safe route right now.", 'Follow official instructions. Call 911 if you are in danger.']
+    spoken = `Wildfire. ${lines[0]} ${lines[1]}`
   } else if (near?.inside) {
     big = 'Leave now'
     lines = ['You are inside the wildfire zone.', where]
@@ -53,10 +58,9 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
     lines = [routeError ? "Can't reach Shepherd right now." : 'Finding when you need to leave.']
     spoken = `Wildfire. Evacuate. ${lines[0]}`
   } else if (leaveBy == null && route.options) {
-    // v2 with no leave-by: the fire isn't forecast to reach any route within the
-    // forecast horizon (the backend's margin_min 999), so there's no deadline yet.
+    // No leave-by: the fire isn't forecast to reach this route, so no deadline yet.
     big = 'No deadline yet'
-    lines = ["The fire isn't forecast to reach your routes in the next 2 hours.", where, hazardSentence(near)]
+    lines = ["The fire isn't forecast to reach your route.", where, hazardSentence(near)]
     spoken = `Wildfire. ${lines[0]}`
   } else if (leaveBy == null) {
     // Backend still on the Step 0 /route shape: no leave-by time to count down.

@@ -13,6 +13,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from backend.sim.oracle import ForecastOracle
 from backend.sim.weatherpipe.live import WeatherUnavailable, live_weather
 from backend.sim.wildfire import WildfireSim
 
@@ -24,10 +25,11 @@ WEATHER_MODES = ("forecast", "dashboard")
 
 
 class SimController:
-    def __init__(self, weather: str = "forecast") -> None:
+    def __init__(self, weather: str = "forecast", domain_bbox: Optional[list] = None) -> None:
         if weather not in WEATHER_MODES:
             raise ValueError(f"weather must be one of {WEATHER_MODES}")
         self.weather_mode = weather
+        self.domain_bbox = list(domain_bbox) if domain_bbox else None
         self.weather_source: Optional[dict] = None
         self.state: str = "idle"  # idle | running | paused
         self.scenario: Optional[str] = None
@@ -84,6 +86,7 @@ class SimController:
             weather=weather,
             t0=t0,
             weather_source=source,
+            domain_bbox=self.domain_bbox,
         )
         self.weather_source = source
         self.state = "running"
@@ -161,3 +164,21 @@ class SimController:
         if self.sim is None or self.state == "idle":
             return None
         return self.sim.arrival_min(lat, lon, FORECAST_HORIZON_MIN)
+
+    def arrival_status(self, lat: float, lon: float) -> tuple:
+        """("arrival", minute), ("not_reached", None) or ("outside_domain", None);
+        ("idle", None) with no fire running."""
+        if self.sim is None or self.state == "idle":
+            return "idle", None
+        return self.sim.arrival_status(lat, lon, FORECAST_HORIZON_MIN)
+
+    def set_domain(self, bbox: Optional[list]) -> None:
+        """Area the next fire must cover (the road graph's box), so routing has a
+        forecast everywhere it routes. Takes effect on the next /sim/start."""
+        self.domain_bbox = list(bbox) if bbox else None
+
+    def oracle(self) -> Optional[ForecastOracle]:
+        """Frozen forecast snapshot for routing, or None with no fire running."""
+        if self.sim is None or self.state == "idle":
+            return None
+        return self.sim.oracle()

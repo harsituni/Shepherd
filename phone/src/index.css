@@ -233,11 +233,16 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 .route-more-status.status-ok { color: var(--clear); }
 .status-tight .route-card-status { color: var(--danger-title); }
 .status-tight .route-card-clear { color: var(--danger-text); }
-.status-blocked { background: var(--map-bg); color: var(--muted); cursor: not-allowed; }
-.status-blocked::before { border-color: var(--divider); background: var(--map-bg); }
-.status-blocked .route-card-name { color: var(--muted); font-weight: 600; }
+.status-blocked,
+.status-indeterminate { background: var(--map-bg); color: var(--muted); cursor: not-allowed; }
+.status-blocked::before,
+.status-indeterminate::before { border-color: var(--divider); background: var(--map-bg); }
+.status-blocked .route-card-name,
+.status-indeterminate .route-card-name { color: var(--muted); font-weight: 600; }
 .status-blocked .route-card-status { color: var(--closed); }
-.status-blocked .route-card-clear { color: var(--muted); }
+.status-indeterminate .route-card-status { color: var(--muted); }
+.status-blocked .route-card-clear,
+.status-indeterminate .route-card-clear { color: var(--muted); }
 
 /* ---------- start evacuating (issue #56) ---------- */
 

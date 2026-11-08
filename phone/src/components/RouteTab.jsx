@@ -15,6 +15,25 @@ function formatKm(km) {
   return (Math.round(Number(km) * 10) / 10).toFixed(1)
 }
 
+// Routes run between road points (shared/route_v3.md): metres from the person to
+// where the route starts, and from where it ends to the centre. Not mapped, so
+// these are notes, never directions. Null when there's no gap worth mentioning.
+const GAP_M = 10
+function gaps(route) {
+  const from = route?.access?.origin?.unmodeled_m
+  const to = route?.access?.destination?.unmodeled_m
+  return {
+    start: from >= GAP_M ? Math.round(from) : null,
+    end: to >= GAP_M ? Math.round(to) : null,
+  }
+}
+
+function lostLine(lost, route) {
+  const why = lost.status === 'blocked' ? 'is now blocked' : "can't be confirmed safe any more"
+  const instead = route.shelter_name ? ` Showing ${route.shelter_name} instead.` : ''
+  return `Your route to ${lost.shelter_name} ${why}.${instead}`
+}
+
 // One-row key for what's actually drawn on the map right now.
 export function MapKey({ hazards, shelters, route, location }) {
   const features = hazards?.features ?? []
@@ -113,14 +132,30 @@ export function RouteDetails({
     details = <p className="muted">Finding your route…</p>
   } else if (route.options?.length) {
     const next = route.steps?.[0]
+    const { start } = gaps(route)
     details = (
       <>
+        {route.no_safe_route === true && (
+          <div className="no-route" role="alert">
+            <strong>No safe route found</strong>
+            <span>Every route below is forecast to be cut by fire. Stay where you are if it is safe and call 911.</span>
+            <a className="btn-primary" href="tel:911">
+              Call 911
+            </a>
+          </div>
+        )}
+        {route.route_status === 'indeterminate' && (
+          <div className="notice notice-strong" role="status">
+            <span>
+              Shepherd can&apos;t confirm a safe route right now. Follow official instructions, and call 911 if you are
+              in danger.
+            </span>
+          </div>
+        )}
         {lost && (
           <div className="notice notice-strong" role="status">
             <RerouteIcon />
-            <span>
-              Your route to {lost.shelter_name} is now blocked. Showing {route.shelter_name} instead.
-            </span>
+            <span>{lostLine(lost, route)}</span>
           </div>
         )}
         <RouteOptions
@@ -130,6 +165,7 @@ export function RouteDetails({
           shelters={shelters}
           onChoose={onChoose}
         />
+        {start != null && <p className="muted num">Route starts on the road {start} m from you.</p>}
         {next && (
           <div className="next-turn">
             <TurnIcon />
@@ -139,7 +175,7 @@ export function RouteDetails({
             </div>
           </div>
         )}
-        {controls}
+        {route.geometry && controls}
       </>
     )
   } else {
@@ -187,11 +223,12 @@ export function RouteMore({ route, shelters, trip, evacMode }) {
   const shelter = shelters?.features?.find((f) => f.id === route.shelter_id)?.properties
   const cap = shelter?.capacity
   const free = cap != null ? Math.max(0, cap - (shelter.occupancy ?? 0)) : null
-  const status = option ? STATUS[option.status] ?? STATUS.tight : null
+  const status = option ? STATUS[option.status] ?? STATUS.indeterminate : null
   const statusLine = option ? clearLine(option) ?? status.hint : null
   const steps = route.steps ?? []
   const approximate = option?.approximate ?? route.approximate
   const mode = MODES.find(([m]) => m === evacMode)
+  const { start, end } = gaps(option ?? route)
 
   return (
     <section className="route-more" aria-label="Route details">
@@ -217,6 +254,9 @@ export function RouteMore({ route, shelters, trip, evacMode }) {
           <dd className="num">
             <strong>{route.eta_min} min</strong>
             <span>{formatKm(route.distance_km)} km by car</span>
+            {start != null && <span>Starts on the road {start} m from you</span>}
+            {end != null && <span>Ends on the road {end} m from the centre</span>}
+            {(start != null || end != null) && <span>Those short stretches aren&apos;t mapped.</span>}
           </dd>
         </div>
         {status && (
