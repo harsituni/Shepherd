@@ -42,9 +42,9 @@ function Sheet({ title, onClose, children }) {
 }
 
 // The alert / evacuation card, compact in the top-right corner: just its headline.
-// Tapping it opens it to full width with the detail lines.
-function CornerAlert({ children }) {
-  const [open, setOpen] = useState(false)
+// Tapping it opens it to full width with the detail lines. Open state lives in
+// MapScreen so Report and Need help can fold it away (their boxes sit where it opens).
+function CornerAlert({ children, open, onToggle }) {
   return (
     <div className={open ? 'ms-alert is-open' : 'ms-alert'}>
       {children}
@@ -53,7 +53,7 @@ function CornerAlert({ children }) {
         className="ms-alert-toggle"
         aria-expanded={open}
         aria-label={open ? 'Hide alert details' : 'Show alert details'}
-        onClick={() => setOpen((o) => !o)}
+        onClick={onToggle}
       >
         <ChevronUpIcon />
       </button>
@@ -129,6 +129,12 @@ export default function MapScreen({
   actions,
 }) {
   const [sheet, setSheet] = useState(null) // 'alerts' | 'key' | null
+  const [alertOpen, setAlertOpen] = useState(false) // the top-right alert card, opened to full width
+  // Report and Need help open a box where the opened alert card sits, so fold it first.
+  const withAlertClosed = (action) => () => {
+    setAlertOpen(false)
+    action?.()
+  }
   // The route panel opens for each new location; closing or opening it applies to
   // that one. The location found automatically on launch starts collapsed, so the
   // map stays clear until the person opens the panel. Keyed on where the location was
@@ -154,7 +160,9 @@ export default function MapScreen({
             {areaName}
           </span>
         </div>
-        <CornerAlert>{alert}</CornerAlert>
+        <CornerAlert open={alertOpen} onToggle={() => setAlertOpen((o) => !o)}>
+          {alert}
+        </CornerAlert>
       </div>
 
       {trip?.turnCue && <TurnCue cue={trip.turnCue} />}
@@ -171,7 +179,7 @@ export default function MapScreen({
             <InfoIcon />
             <span>Key</span>
           </button>
-          <button type="button" className="ms-fab" disabled={!actions.canReport} onClick={actions.report}>
+          <button type="button" className="ms-fab" disabled={!actions.canReport} onClick={withAlertClosed(actions.report)}>
             <WarningIcon />
             <span>Report</span>
           </button>
@@ -210,7 +218,7 @@ export default function MapScreen({
           </button>
         )}
 
-        <button type="button" className="ms-help" disabled={actions.sending} onClick={actions.help}>
+        <button type="button" className="ms-help" disabled={actions.sending} onClick={withAlertClosed(actions.help)}>
           Need help
         </button>
       </div>

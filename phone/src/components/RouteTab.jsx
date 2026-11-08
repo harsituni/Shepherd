@@ -1,6 +1,6 @@
 import { isCurrentCore, isPredicted } from '../geo.js'
 import { dangerRings, evacZones, unsafeShelterIds } from '../evacuation.js'
-import { ChevronUpIcon, PinIcon, RerouteIcon, TurnIcon } from './icons.jsx'
+import { ChevronUpIcon, PinIcon, RerouteIcon } from './icons.jsx'
 import EvacuateControls, { MODES } from './EvacuateControls.jsx'
 import RouteOptions, { STATUS, clearLine } from './RouteOptions.jsx'
 
@@ -91,9 +91,8 @@ export function RouteDetails({
 
   let details
   if (trip) {
-    // Evacuating: progress + Stop. The big turn banner floats on the map; keep a
-    // quiet next-turn line here when a cue is up. Mid-trip reroutes show why.
-    const cue = trip.turnCue
+    // Evacuating: progress + Stop. The turn banner floats on the map; no turn line
+    // here above the drive controls. Mid-trip reroutes show why.
     const rerouteLine = trip.notice || route?.reroute_reason
     details = (
       <>
@@ -101,15 +100,6 @@ export function RouteDetails({
           <div className="notice notice-strong" role="status">
             <RerouteIcon />
             <span>Rerouted: {rerouteLine}</span>
-          </div>
-        )}
-        {cue && (
-          <div className="next-turn">
-            <TurnIcon />
-            <div className="next-turn-text">
-              <span className="next-turn-title">{cue.instruction}</span>
-              <span className="muted num">{cue.distanceLabel}</span>
-            </div>
           </div>
         )}
         {controls}
@@ -154,7 +144,6 @@ export function RouteDetails({
   } else if (!route) {
     details = <p className="muted">Finding your route…</p>
   } else if (route.options?.length) {
-    const next = route.steps?.[0]
     const { start } = gaps(route)
     details = (
       <>
@@ -189,21 +178,11 @@ export function RouteDetails({
           onChoose={onChoose}
         />
         {start != null && <p className="muted num">Route starts on the road {start} m from you.</p>}
-        {next && (
-          <div className="next-turn">
-            <TurnIcon />
-            <div className="next-turn-text">
-              <span className="next-turn-title">{next.instruction}</span>
-              <span className="muted num">in {formatKm(next.distance_km)} km</span>
-            </div>
-          </div>
-        )}
         {route.geometry && controls}
       </>
     )
   } else {
     const full = percentFull(shelters, route.shelter_id)
-    const next = route.steps?.[0]
     details = (
       <>
         {route.rerouted && (
@@ -219,15 +198,6 @@ export function RouteDetails({
             {full != null && ` · ${full}% full`}
           </span>
         </div>
-        {next && (
-          <div className="next-turn">
-            <TurnIcon />
-            <div className="next-turn-text">
-              <span className="next-turn-title">{next.instruction}</span>
-              <span className="muted num">in {formatKm(next.distance_km)} km</span>
-            </div>
-          </div>
-        )}
         {controls}
       </>
     )
