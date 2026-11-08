@@ -75,6 +75,9 @@ if [[ ! -f "$VENV_ACTIVATE" ]]; then
   echo "  pip install -r backend/requirements.txt"
   exit 1
 fi
+# A venv already activated from PowerShell leaves _OLD_VIRTUAL_PATH in Windows form,
+# which the bash activate script would copy back into PATH. Drop it first.
+unset _OLD_VIRTUAL_PATH _OLD_VIRTUAL_PYTHONHOME
 # shellcheck disable=SC1090
 source "$VENV_ACTIVATE"
 # shellcheck disable=SC1091
