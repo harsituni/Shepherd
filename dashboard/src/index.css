@@ -72,7 +72,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    whatever height is left after the header, banner and history bar; the side
    panels scroll on their own only if a very short window can't fit them. */
 .app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-.layout { display: flex; flex-wrap: wrap; flex: 1; min-height: 0; }
+.layout { display: flex; flex: 1; min-height: 0; }
+/* No wrapping on desktop: in a wrapping row each line is as tall as its tallest
+   panel, so a long panel (Traffic) pushed the map, legend and history bar off the
+   bottom and couldn't scroll. Unwrapped, every column is one screen tall. */
 
 /* ---------- header ---------- */
 
@@ -582,6 +585,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (max-width: 1100px) {
   /* Stacked panels can't fit one screen, so the page scrolls again here. */
   .app { height: auto; min-height: 100vh; overflow: visible; }
+  .layout { flex-wrap: wrap; }
   .controls, .side { max-width: none; overflow-y: visible; }
   .controls { border-right: 0; border-bottom: 1px solid var(--divider); }
   .side { border-left: 0; border-top: 1px solid var(--divider); }
