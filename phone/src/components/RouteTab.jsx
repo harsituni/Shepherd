@@ -1,8 +1,8 @@
 import { isCurrentCore, isPredicted } from '../geo.js'
 import { dangerRings, evacZones, unsafeShelterIds } from '../evacuation.js'
-import { PinIcon, RerouteIcon, TurnIcon } from './icons.jsx'
-import EvacuateControls from './EvacuateControls.jsx'
-import RouteOptions from './RouteOptions.jsx'
+import { ChevronUpIcon, PinIcon, RerouteIcon, TurnIcon } from './icons.jsx'
+import EvacuateControls, { MODES } from './EvacuateControls.jsx'
+import RouteOptions, { STATUS, clearLine } from './RouteOptions.jsx'
 
 function percentFull(shelters, shelterId) {
   const s = shelters?.features?.find((f) => f.id === shelterId)
@@ -175,4 +175,99 @@ export function RouteDetails({
   }
 
   return details
+}
+
+// Extra detail for the picked route, below the fold of the map-first route panel:
+// you scroll the panel down to read it. Only facts the backend sends (shelter
+// capacity and status, the route's forecast status, leave-by, directions).
+export function RouteMore({ route, shelters, trip, evacMode }) {
+  if (trip || !route?.shelter_id) return null
+  const option =
+    route.options?.find((o) => o.id === route.route_id) ?? route.options?.find((o) => o.shelter_id === route.shelter_id)
+  const shelter = shelters?.features?.find((f) => f.id === route.shelter_id)?.properties
+  const cap = shelter?.capacity
+  const free = cap != null ? Math.max(0, cap - (shelter.occupancy ?? 0)) : null
+  const status = option ? STATUS[option.status] ?? STATUS.tight : null
+  const statusLine = option ? clearLine(option) ?? status.hint : null
+  const steps = route.steps ?? []
+  const approximate = option?.approximate ?? route.approximate
+  const mode = MODES.find(([m]) => m === evacMode)
+
+  return (
+    <section className="route-more" aria-label="Route details">
+      <h3 className="route-more-head">
+        Route details
+        <ChevronUpIcon aria-hidden="true" />
+      </h3>
+      <dl className="route-more-list">
+        <div>
+          <dt>Shelter</dt>
+          <dd>
+            <strong>{route.shelter_name}</strong>
+            {shelter && <span>{shelter.open === false ? 'Closed' : 'Open now'}</span>}
+            {free != null && (
+              <span className="num">
+                {free.toLocaleString()} of {cap.toLocaleString()} spaces free
+              </span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Trip</dt>
+          <dd className="num">
+            <strong>{route.eta_min} min</strong>
+            <span>{formatKm(route.distance_km)} km by car</span>
+          </dd>
+        </div>
+        {status && (
+          <div>
+            <dt>Fire forecast</dt>
+            <dd>
+              <span className={`route-more-status status-${option.status}`}>
+                <span className="status-swatch" aria-hidden="true" />
+                {status.label}
+              </span>
+              {statusLine && <span>{statusLine}</span>}
+            </dd>
+          </div>
+        )}
+        {route.leave_by_label && (
+          <div>
+            <dt>Leave by</dt>
+            <dd className="num">
+              <strong>{route.leave_by_label}</strong>
+            </dd>
+          </div>
+        )}
+        {steps.length > 0 && (
+          <div>
+            <dt>Directions</dt>
+            <dd>
+              <ol className="route-more-steps">
+                {steps.map((st, i) => (
+                  <li key={i}>
+                    <span>{st.instruction}</span>
+                    <span className="num">{formatKm(st.distance_km)} km</span>
+                  </li>
+                ))}
+              </ol>
+            </dd>
+          </div>
+        )}
+        {mode && (
+          <div>
+            <dt>{mode[1]}</dt>
+            <dd>
+              <span>{mode[2]}</span>
+            </dd>
+          </div>
+        )}
+      </dl>
+      {approximate && (
+        <p className="route-more-note">
+          Distance and time are straight-line estimates, not turn-by-turn directions. Follow road signs and responders.
+        </p>
+      )}
+    </section>
+  )
 }

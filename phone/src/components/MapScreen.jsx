@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { AlertsTab } from './Notifications.jsx'
 import { BellIcon, CheckIcon, ChevronUpIcon, CloseIcon, CrookIcon, InfoIcon, WarningIcon } from './icons.jsx'
 
@@ -14,9 +14,13 @@ import { BellIcon, CheckIcon, ChevronUpIcon, CloseIcon, CrookIcon, InfoIcon, War
 //   renderMap(framePadding)  the live MapView, told what the floating chrome covers
 //   alert                    <EvacCard/> or <AlertBanner/>
 //   details                  <RouteDetails/> for the current state
+//   more                     <RouteMore/>: extra detail you scroll the panel down to
 //   mapKey                   <MapKey/>
 //   areaName, notifications, location, route, routeError, trip, version
 //   actions: { report, safe, help, canReport, sending }
+//   routeAlert               <RouteAlert/> when your route just got worse (issue #58)
+//   stale                    <RouteStale/> when route checks keep failing
+//   openPanelKey             changes when the route panel must reopen (a route alert)
 
 // Map padding (px) roughly matching the floating chrome, so "frame my route"
 // keeps the route clear of the top cards, the rail and the route panel.
@@ -59,6 +63,39 @@ function CornerAlert({ children }) {
   )
 }
 
+// The open route panel. It opens at the height of its main content (the cards,
+// drive mode, Start evacuating), so it looks the same as before; the "Route
+// details" heading just peeks under it, and the extra detail is a scroll away.
+// Reopening it from the strip slides it up from the bottom.
+function RoutePanel({ details, more, shared, slideIn, onClose }) {
+  const mainRef = useRef(null)
+  const [mainH, setMainH] = useState(null)
+  useLayoutEffect(() => {
+    const el = mainRef.current
+    if (!el) return undefined
+    const measure = () => setMainH(el.offsetHeight)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return (
+    <section className={slideIn ? 'ms-panel is-sliding' : 'ms-panel'} aria-label="Your route">
+      {/* Floats just above the panel's corner (the rail is hidden while open). */}
+      <button type="button" className="ms-panel-close" aria-label="Close route panel" onClick={onClose}>
+        <CloseIcon />
+      </button>
+      <div className="ms-panel-scroll" style={more && mainH != null ? { '--main-h': `${mainH}px` } : undefined}>
+        <div className="ms-panel-main" ref={mainRef}>
+          {details}
+          {shared && <p className="ms-shared">Your location is shared with responders.</p>}
+        </div>
+        {more}
+      </div>
+    </section>
+  )
+}
+
 // One-line summary of where you stand, for the closed route panel.
 function routeSummary({ location, route, routeError, trip }) {
   if (trip) return { title: 'Evacuating', line: route?.shelter_name ?? 'Following your route' }
@@ -77,6 +114,7 @@ export default function MapScreen({
   renderMap,
   alert,
   details,
+  more,
   mapKey,
   areaName,
   notifications,
@@ -86,11 +124,23 @@ export default function MapScreen({
   trip,
   version,
   actions,
+  routeAlert,
+  stale,
+  openPanelKey,
 }) {
   const [sheet, setSheet] = useState(null) // 'alerts' | 'key' | null
   // The route panel opens for each new location; closing it applies to that one.
   const here = location ? location.join(',') : 'none'
   const [closedFor, setClosedFor] = useState(null)
+  // A route alert reopens the panel so the updated cards are in view.
+  const [seenOpenKey, setSeenOpenKey] = useState(openPanelKey)
+  if (openPanelKey !== seenOpenKey) {
+    setSeenOpenKey(openPanelKey)
+    setClosedFor(null)
+  }
+
+  // Slide up only when the person reopens the panel from the strip.
+  const [slideIn, setSlideIn] = useState(false)
   const panelOpen = closedFor !== here
   const sum = routeSummary({ location, route, routeError, trip })
 
@@ -99,6 +149,7 @@ export default function MapScreen({
       {renderMap(FRAME_PADDING)}
 
       <div className="ms-top">
+        {routeAlert}
         <div className="ms-chip">
           <span className="brand-mark" aria-hidden="true">
             <CrookIcon />
@@ -108,6 +159,7 @@ export default function MapScreen({
           </span>
         </div>
         <CornerAlert>{alert}</CornerAlert>
+        {stale}
       </div>
 
       <div className="ms-bottom">
@@ -133,16 +185,21 @@ export default function MapScreen({
         </div>
 
         {panelOpen ? (
-          <section className="ms-panel" aria-label="Your route">
-            {/* Floats just above the panel's corner (the rail is hidden while open). */}
-            <button type="button" className="ms-panel-close" aria-label="Close route panel" onClick={() => setClosedFor(here)}>
-              <CloseIcon />
-            </button>
-            {details}
-            {location && <p className="ms-shared">Your location is shared with responders.</p>}
-          </section>
+          <RoutePanel
+            details={details}
+            more={more}
+            shared={Boolean(location)}
+            slideIn={slideIn}
+            onClose={() => {
+              setSlideIn(false)
+              setClosedFor(here)
+            }}
+          />
         ) : (
-          <button type="button" className={sum.urgent ? 'ms-strip is-urgent' : 'ms-strip'} aria-label={`Show route: ${sum.title}`} onClick={() => setClosedFor(null)}>
+          <button type="button" className={sum.urgent ? 'ms-strip is-urgent' : 'ms-strip'} aria-label={`Show route: ${sum.title}`} onClick={() => {
+              setSlideIn(true)
+              setClosedFor(null)
+            }}>
             <span className="ms-strip-text">
               <strong>{sum.title}</strong>
               {sum.line && <span className="num">{sum.line}</span>}
