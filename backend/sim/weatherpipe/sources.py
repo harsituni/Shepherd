@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from backend.sim.weatherpipe import cache, openweather
-from backend.sim.weatherpipe.conventions import iso_z, require_utc
+from backend.sim.weatherpipe.conventions import iso_z, parse_utc, require_utc
 from backend.sim.weatherpipe.obs import WeatherObs, make_obs, merge_obs
 
 API_KEY_ENV = "OPENWEATHER_API_KEY"
@@ -94,7 +94,7 @@ def _cached(path):
     anchor = []
     if endpoint != "current" and anchor_path.exists():
         anchor = openweather.obs_from_current(cache.load_raw(anchor_path)["response"])
-    fetched_at = datetime.fromisoformat(envelope["fetched_at"])
+    fetched_at = parse_utc(envelope["fetched_at"], "fetched_at")
     return merge_obs(anchor, forecast), _source_info(
         endpoint, fetched_at, envelope["lat"], envelope["lon"], cache_path=str(path))
 
