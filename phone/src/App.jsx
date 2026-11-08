@@ -11,7 +11,7 @@ import {
 } from './api.js'
 import { POLL_MS } from './config.js'
 import { locateOnce, useEvacuation, useHeartbeat } from './evacuate.js'
-import { evacZones } from './evacuation.js'
+import { dangerRings, demoteUnsafeRoute, evacZones, unsafeShelterIds } from './evacuation.js'
 import { isCurrentCore, nearestHazard, pointInRing } from './geo.js'
 import { placeName } from './placeName.js'
 import { nextClock } from './simClock.js'
@@ -37,9 +37,14 @@ function deviceLocation() {
   })
 }
 
-// Keep leave-by from drifting later on the same pin (cleared when the pin changes).
+// Keep leave-by from drifting later on the same recommended route (cleared when
+// the pin changes, the best route changes, or nothing is recommended anymore).
 function ratchetLeaveBy(prev, next) {
   if (!next) return next
+  if (next.route_status && next.route_status !== 'viable') return next
+  if (prev?.best_route_id && next.best_route_id && prev.best_route_id !== next.best_route_id) {
+    return next
+  }
   const was = prev?.leave_by_sim_min
   if (was == null) return next
   const now = next.leave_by_sim_min
@@ -153,8 +158,21 @@ export default function App() {
       const stale = () => !evacuatingRef.current && locationRef.current !== loc
       try {
         // Send the pick so the backend keeps it in the answer even if it turns unsafe.
-        const r = await getRoute(loc[1], loc[0], chosenRef.current)
+        let r = await getRoute(loc[1], loc[0], chosenRef.current)
         if (stale()) return
+        // Same yellow-zone rule as the map markers: never leave a painted-unsafe
+        // centre as Clear / Recommended if /route is briefly still optimistic.
+        if (h.status === 'fulfilled' && s.status === 'fulfilled') {
+          const outlines = h.value?.forecast ?? []
+          r = demoteUnsafeRoute(r, unsafeShelterIds(s.value, dangerRings(h.value, outlines)))
+        }
+        if (chosenRef.current) {
+          const pick = r?.options?.find((o) => o.id === chosenRef.current)
+          if (pick && pick.status !== 'ok' && pick.status !== 'tight') {
+            chosenRef.current = null
+            setChosen(null)
+          }
+        }
         // Leave-by must never jump upward for the same pin: once we've told someone
         // "leave by T+X", a later poll can't push that deadline out while the fire grows.
         setRoute((prev) => ratchetLeaveBy(prev, r))

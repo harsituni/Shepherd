@@ -766,7 +766,8 @@ def prepare_forecast(oracle) -> None:
 
 
 def find_routes_v3(lat: float, lon: float, oracle, shelters: list[dict], sim_time: int = 0,
-                   check_route_id=None, debug: bool = False) -> dict:
+                   check_route_id=None, debug: bool = False,
+                   hazards=None, forecast_outlines=None) -> dict:
     """2-4 road routes from the pin, each checked cell by cell against one forecast snapshot.
 
     `oracle` is the sim's frozen ForecastOracle, or None with no fire running.
@@ -799,14 +800,58 @@ def find_routes_v3(lat: float, lon: float, oracle, shelters: list[dict], sim_tim
         candidates = build_candidates(rg, edge_fire, oracle, lat, lon, shelters, t_now, stats,
                                       keep_id=check_route_id)
         rg = stats.routing_graph
-    chosen = select(rg, candidates, check_route_id, search_complete=stats.search_complete)
+    from backend.routing.evac_zone import danger_rings, mark_unsafe_shelters, unsafe_shelter_ids
+    from backend.routing.safety import viable as _viable
+    from backend.routing.select import rank_key as _rank_key
 
-    options = [_v3_option(c, rg) for c in chosen.options]
+    unsafe_ids = unsafe_shelter_ids(shelters, danger_rings(hazards, forecast_outlines))
+    # Prefer a centre outside the dashboard yellow zone for the recommendation.
+    check_id = check_route_id
+    if check_id:
+        kept = next((c for c in candidates if c.id == check_id), None)
+        if kept is not None and kept.shelter["id"] in unsafe_ids:
+            check_id = None
+    safe_pool = [c for c in candidates if c.shelter["id"] not in unsafe_ids] or candidates
+    chosen = select(rg, safe_pool, check_id, search_complete=stats.search_complete)
+    options = mark_unsafe_shelters([_v3_option(c, rg) for c in chosen.options], unsafe_ids)
+    # Surface greyed unsafe alternatives that select() dropped when safer ones exist.
+    shown = {o["id"] for o in options}
+    for c in sorted(candidates, key=_rank_key):
+        if c.id in shown or c.shelter["id"] not in unsafe_ids:
+            continue
+        if len(options) >= 4:
+            break
+        options.append(mark_unsafe_shelters([_v3_option(c, rg)], unsafe_ids)[0])
+        shown.add(c.id)
+
+    usable = [o for o in options if o["status"] in ("ok", "tight")]
+    if not usable:
+        for c in sorted(safe_pool, key=_rank_key):
+            if not _viable(c.judgement):
+                continue
+            opt = _v3_option(c, rg)
+            if opt["status"] not in ("ok", "tight"):
+                continue
+            options = [opt] + [o for o in options if o["id"] != opt["id"]]
+            usable = [opt]
+            break
+
+    best_id = usable[0]["id"] if usable else None
+    if best_id is not None:
+        options = [o for o in options if o["id"] == best_id] + [o for o in options if o["id"] != best_id]
+    # Same no_safe_route rule as select(): true only after a complete search with
+    # no unresolved indeterminate candidates left in scope.
+    unknown = (not stats.search_complete
+               or any(o["status"] == "indeterminate" for o in options)
+               or any(c.status == "indeterminate" for c in candidates))
+    route_status = "viable" if best_id else ("indeterminate" if unknown else "blocked")
+    no_safe = False if best_id else (None if unknown else True)
+
     body = {
         "lat": lat, "lon": lon, "sim_time": int(t_now),
-        "best_route_id": chosen.best.id if chosen.best is not None else None,
-        "no_safe_route": chosen.no_safe_route,
-        "route_status": chosen.route_status,
+        "best_route_id": best_id,
+        "no_safe_route": no_safe,
+        "route_status": route_status,
         "forecast_error": forecast_error,
         "search": {"complete": bool(stats.search_complete), "scope": stats.search_scope,
                    "shelters_evaluated": stats.shelters_evaluated},
@@ -816,12 +861,12 @@ def find_routes_v3(lat: float, lon: float, oracle, shelters: list[dict], sim_tim
             "covers_until_sim_min": float(oracle.covers_until_sim_min),
             "wind_kmh": float(oracle.wind_kmh), "wind_from_deg": float(oracle.wind_from_deg),
         },
-        "options": options,
+        "options": options[:4],
         "excluded": stats.excluded,
     }
-    if chosen.best is not None:
-        best = options[0]
-        leave_by = chosen.best.judgement.leave_by_sim_min
+    if best_id is not None:
+        best = next(o for o in options if o["id"] == best_id)
+        leave_by = best.get("leave_by_sim_min")
         if leave_by is not None:
             body["leave_by_sim_min"] = leave_by
             body["leave_by_label"] = f"Leave within {max(0, leave_by - int(t_now))} min (sim)"

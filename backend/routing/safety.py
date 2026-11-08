@@ -44,6 +44,10 @@ COVERAGE_SLACK_MIN = 90   # a trip must end this long before the forecast window
 # (LOOKAHEAD); using that full horizon made leave-by jump up whenever the run
 # extended, even as the fire grew.
 COVERAGE_HORIZON_MIN = 240
+# Match dashboard/phone evacuation.js: a shelter is unsafe if fire (now or within
+# the short forecast) comes within this many metres of the building — not only
+# when the single destination road cell burns.
+SHELTER_EVAC_M = 1000
 EPS_MIN = 1e-6            # float noise; an exact-buffer arrival stays allowed
 KEEP_VERSIONS = 2
 
@@ -190,6 +194,51 @@ def indeterminate(path, t_now, reason, shelter_threat=None):
                      False, t_now + path.total_min)
 
 
+def _building_xy(path: RoutePath) -> tuple:
+    """UTM of the reception centre building (not the road endpoint)."""
+    dest = (path.access or {}).get("destination") or {}
+    building = dest.get("building_point")
+    if building is not None and len(building) >= 2:
+        from backend.routing.road_graph import TO_GRID
+        return tuple(float(c) for c in TO_GRID.transform(float(building[0]), float(building[1])))
+    return path.shelter_xy
+
+
+def _shelter_zone_arrival(oracle, building_xy: tuple) -> tuple[float, bool]:
+    """Earliest fire arrival in the shelter's evacuation neighbourhood.
+
+    Returns (arrival_min, any_unknown). +inf means no modeled fire in the zone.
+    """
+    grid = FireGrid.of(oracle)
+    bx, by = building_xy
+    cell = float(grid.cell_m)
+    reach = SHELTER_EVAC_M + cell  # include every cell the buffer can touch
+    r0 = max(0, int(math.floor((grid.y0 - (by + reach)) / cell)))
+    r1 = min(grid.nrows - 1, int(math.floor((grid.y0 - (by - reach)) / cell)))
+    c0 = max(0, int(math.floor((bx - reach - grid.x0) / cell)))
+    c1 = min(grid.ncols - 1, int(math.floor((bx + reach - grid.x0) / cell)))
+    earliest = math.inf
+    unknown = False
+    reach_sq = float(SHELTER_EVAC_M + cell) ** 2
+    for row in range(r0, r1 + 1):
+        for col in range(c0, c1 + 1):
+            flat = row * grid.ncols + col
+            cx, cy = grid.centre(flat)
+            if (cx - bx) ** 2 + (cy - by) ** 2 > reach_sq:
+                continue
+            if flat < 0 or flat >= len(oracle.arrival) or not oracle.in_domain[flat]:
+                unknown = True
+                continue
+            arrival = float(oracle.arrival[flat])
+            if not np.isfinite(arrival) or arrival < 0 or arrival > oracle.covers_until_sim_min:
+                if not np.isposinf(arrival):
+                    unknown = True
+                continue
+            if arrival < earliest:
+                earliest = arrival
+    return earliest, unknown
+
+
 def judge(path: RoutePath, t_now: float, oracle=None, edge_fire: Optional[EdgeFire] = None) -> Judgement:
     """Check every cell on the route against the 30-minute rule."""
     if oracle is None:
@@ -207,6 +256,9 @@ def judge(path: RoutePath, t_now: float, oracle=None, edge_fire: Optional[EdgeFi
                            or edge_fire.oracle.covers_until_sim_min != oracle.covers_until_sim_min):
         return indeterminate(path, t_now, "Road hazards do not match this forecast.")
     grid = FireGrid.of(oracle)
+    building_xy = _building_xy(path)
+    zone_A, _zone_unknown = _shelter_zone_arrival(oracle, building_xy)
+    shelter_threat = int(math.floor(zone_A)) if np.isfinite(zone_A) else None
 
     # Cells in travel order: connector, each edge's cells, then the shelter's own cell.
     c_flat, _, c_leave = traverse_segment(path.pin_xy, path.join_xy, grid)
@@ -227,6 +279,8 @@ def judge(path: RoutePath, t_now: float, oracle=None, edge_fire: Optional[EdgeFi
         unknowns.append(edge_fire.cell_unknown[idx])
         kinds.append(np.ones(len(idx), np.int8))
         owners.append(np.repeat(edges, counts))
+    # Destination road point (journey end). Building threat is handled separately
+    # via the evacuation neighbourhood around the centre itself.
     s_flat = np.array([grid.flat_of(*path.shelter_xy)])
     s_A, s_unknown = arrival_at_cells(oracle, s_flat)
     flats.append(s_flat)
@@ -257,10 +311,10 @@ def judge(path: RoutePath, t_now: float, oracle=None, edge_fire: Optional[EdgeFi
                     arrival_sim_min, covers_until)
         complete = False
 
-    shelter_threat = int(math.floor(s_A[0])) if np.isfinite(s_A[0]) else None
     fire_spare = float(spare[finite].min()) if finite.any() else math.inf
-    # A known conflict proves blockage even when other cells are unknown. Lack
-    # of coverage alone cannot prove either safety or a fire conflict.
+    # Road / connector / destination-road cells only. Centres inside the dashboard
+    # 1 km yellow evacuation circle are demoted in find_routes_v3 via hazard
+    # polygons (same geometry as evacuation.js) — not by neighbourhood cells here.
     blocked = fire_spare < -EPS_MIN
     if not blocked and not complete:
         reason = ("Traversable origin, destination, or road-junction access is not established by the map."
@@ -314,9 +368,9 @@ def judge(path: RoutePath, t_now: float, oracle=None, edge_fire: Optional[EdgeFi
 
     # Compute from unrounded absolute limits so fractional departure times do
     # not introduce extra rounding. Expiry caps every active forecast deadline.
-    leave_by = int(math.floor(t_now + min(fire_spare, coverage_spare) + EPS_MIN))
-    if not complete:
-        leave_by = None
+    leave_by = None
+    if not blocked and complete:
+        leave_by = int(math.floor(t_now + min(fire_spare, coverage_spare) + EPS_MIN))
     return Judgement(status, margin, leave_by, clear_until, reason, hazard, shelter_threat,
                      complete, arrival_sim_min)
 

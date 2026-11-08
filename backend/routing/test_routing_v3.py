@@ -227,21 +227,32 @@ class SafetyTests(unittest.TestCase):
         self.assertAlmostEqual(fire.edge_deadline[0], 100 - BUFFER_MIN - leave_m / 1000 / SPEED_KM_PER_MIN)
 
     def test_statuses_and_intercepts(self):
-        self.fc.at_point(ll(1050, 0), 100)
+        # Fire near the origin (outside the destination's 1 km evacuation buffer) so
+        # only the road 30-minute rule decides ok / tight / blocked.
+        road_fire = ll(200, 0)
+        self.fc.at_point(road_fire, 100)
         j, _ = self.judged()
         self.assertEqual(j.status, "ok")
         self.assertGreaterEqual(j.margin_min, 60)
-        self.fc.at_point(ll(1050, 0), 50)
+        self.fc.at_point(road_fire, 50)
         j, _ = self.judged()
         self.assertEqual(j.status, "tight")
         self.assertEqual(j.hazard_intercept["road_name"], "S-X Road")
-        self.fc.at_point(ll(1050, 0), 25)
+        self.fc.at_point(road_fire, 25)
         j, _ = self.judged()
         self.assertEqual(j.status, "blocked")
         self.assertTrue(j.reason.startswith("Fire is expected on S-X Road at T+25. Roads close at T-5;"))
         hit = j.hazard_intercept
         self.assertEqual((hit["fire_arrival_sim_min"], hit["closes_at_sim_min"]), (25, -5))
-        self.assertAlmostEqual(hit["lat"], ll(1050, 0)[1], places=3)
+        self.assertAlmostEqual(hit["lat"], road_fire[1], places=3)
+
+    def test_fire_near_shelter_reports_shelter_threat(self):
+        # Neighbourhood threat is reported for ranking/UI; yellow-zone blocking of
+        # the recommendation is applied from hazard polygons in find_routes_v3.
+        self.fc.at_point(ll(1050, 0), 100)
+        j, _ = self.judged()
+        self.assertEqual(j.status, "ok")
+        self.assertEqual(j.shelter_threat_sim_min, 100)
 
     def test_fire_on_the_connector_alone_blocks(self):
         pin = ll(-250, 150)  # 290 m from S, off the road

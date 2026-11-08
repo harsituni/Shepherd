@@ -339,6 +339,7 @@ def get_route(
     """Multi-option leave-by routes (v3 by default; contract v2 with SHEPHERD_ROUTING=v2)."""
     try:
         if ROUTING_VERSION == "v3":
+            forecast = controller.forecast()
             return find_routes_v3(
                 lat,
                 lon,
@@ -347,6 +348,8 @@ def get_route(
                 sim_time=controller.sim_time,
                 check_route_id=check_route_id,
                 debug=debug,
+                hazards={"type": "FeatureCollection", "features": controller.features()},
+                forecast_outlines=forecast.get("outlines") or [],
             )
         if check_route_id:
             return check_route(
