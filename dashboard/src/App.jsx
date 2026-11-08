@@ -168,6 +168,10 @@ export default function App() {
       run(async () => {
         await resetSim()
         await deleteHazards()
+        // Turn traffic paint off so the map isn't jammed before the next fire.
+        await setTrafficConfig({ enabled: false }).catch(() => null)
+        setTraffic(null)
+        setClosedRoads(null)
         setStartPoint(null)
         setViewing(null)
         snapshots.current.clear()

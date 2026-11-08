@@ -500,11 +500,15 @@ export default function MapView({
     framed.current = true
   }, [hazards, shelters, loaded])
 
-  // Traffic roads (when Simulate traffic is on).
+  // Traffic roads (only while Simulate traffic is on — never leave jam colours
+  // on an idle "not started" map).
   useEffect(() => {
     const map = mapRef.current
     if (!loaded || !map) return
-    const edges = traffic?.enabled ? traffic.edges ?? EMPTY : EMPTY
+    const edges =
+      traffic?.enabled && (traffic.edges?.features?.length ?? 0) > 0
+        ? traffic.edges
+        : EMPTY
     map.getSource('traffic')?.setData(edges)
   }, [traffic, loaded])
 

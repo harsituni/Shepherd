@@ -691,8 +691,10 @@ def post_sim_resume() -> dict:
 @app.post("/sim/reset")
 def post_sim_reset() -> dict:
     state = controller.reset()
-    # Keep traffic config, but clear volumes / assignments for a fresh scenario.
-    traffic_engine.configure(enabled=traffic_engine.enabled)
+    # Idle map should be clean — don't leave thousands of jam colours from the
+    # last drill painted before the next wildfire is placed.
+    traffic_engine.configure(enabled=False)
+    state["traffic"] = traffic_engine.status()
     return state
 
 

@@ -238,8 +238,15 @@ class TrafficEngine:
                 # Never block the HTTP thread on hundreds of routes.
                 self._schedule_assign_locked(force=True, sim_time=0)
             elif not self.enabled:
-                self._volume[:] = 0
+                self._assign_pending = None
+                for eid in list(self._agents):
+                    if self._agents[eid].kind == "sim":
+                        self._unload_agent_locked(self._agents.pop(eid))
+                if len(self._volume):
+                    self._volume[:] = 0
                 self._metrics = TrafficMetrics()
+                self._compare = None
+                self._last_rebalance_sim = -10_000
             return self.status_locked()
 
     def _schedule_assign_locked(self, force: bool = False, sim_time: int = 0) -> None:
