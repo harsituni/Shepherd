@@ -332,3 +332,45 @@ export async function setSimSpeed(multiplier) {
   fake.speed = multiplier
   return fakeState()
 }
+
+// ---------- traffic (contract v2.1) ----------
+
+export async function getTraffic() {
+  if (!USE_FIXTURES) return request('/traffic')
+  return {
+    enabled: false,
+    anti_gridlock: true,
+    simulated_count: 2000,
+    real_count: 0,
+    active_count: 0,
+    metrics: {},
+    compare: null,
+    edges: { type: 'FeatureCollection', features: [] },
+  }
+}
+
+export async function getTrafficState() {
+  if (!USE_FIXTURES) return request('/traffic/state')
+  return getTraffic()
+}
+
+export async function setTrafficConfig(body) {
+  if (!USE_FIXTURES) return post('/traffic/config', body)
+  return { ...body, metrics: {}, compare: null }
+}
+
+export async function compareTraffic() {
+  if (!USE_FIXTURES) return post('/traffic/compare')
+  return {
+    ok: true,
+    without_min: 74,
+    with_min: 41,
+    saved_min: 33,
+    label: 'Clearance time 74 → 41 min',
+  }
+}
+
+export async function rebalanceTraffic() {
+  if (!USE_FIXTURES) return post('/traffic/rebalance')
+  return { ok: true }
+}

@@ -17,20 +17,50 @@ function Tile({ label, value, tone }) {
   )
 }
 
-// Reports and Notify moved to the left panel (they open as centred pop-ups),
-// so this panel is just the phone join QR and the four key numbers.
-export default function SidePanel({ shelters }) {
+// Phone join QR + live numbers. When traffic is on, the tiles show clearance /
+// jam metrics from GET /traffic instead of empty placeholders.
+export default function SidePanel({ shelters, traffic }) {
   const capacity = shelterCapacityPct(shelters)
+  const m = traffic?.metrics
+  const compare = traffic?.compare
 
   return (
     <aside className="side" aria-label="Status">
       <JoinQr />
 
+      {compare?.label && (
+        <p className="traffic-side-compare num" role="status">
+          {compare.label}
+        </p>
+      )}
+
       <div className="tiles">
-        <Tile label="People at risk" />
-        <Tile label="Roads closed" tone="red" />
-        <Tile label="Active reroutes" tone="blue" />
-        <Tile label="Shelter capacity used" value={capacity == null ? null : `${capacity}%`} />
+        <Tile
+          label={traffic?.enabled ? 'Cars evacuating' : 'People at risk'}
+          value={traffic?.enabled ? (m?.agents_active ?? traffic.active_count) : null}
+        />
+        <Tile
+          label={traffic?.enabled ? 'Jammed roads' : 'Roads closed'}
+          value={traffic?.enabled ? m?.jammed_edges : null}
+          tone="red"
+        />
+        <Tile
+          label={traffic?.enabled ? 'Traffic reroutes' : 'Active reroutes'}
+          value={traffic?.enabled ? m?.reroutes : null}
+          tone="blue"
+        />
+        <Tile
+          label={traffic?.enabled ? 'Clearance time' : 'Shelter capacity used'}
+          value={
+            traffic?.enabled
+              ? m?.clearance_min != null
+                ? `${Math.round(m.clearance_min)} min`
+                : null
+              : capacity == null
+                ? null
+                : `${capacity}%`
+          }
+        />
       </div>
     </aside>
   )

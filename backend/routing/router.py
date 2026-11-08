@@ -97,7 +97,9 @@ def load_graph() -> None:
         logging.getLogger(__name__).warning("%s File: %s. Error: %s", BACKUP_WARNING, graph_path, error)
         return
     _graph = graph
-    _road_graph()
+    rg = _road_graph()
+    from backend.routing.traffic import engine as traffic_engine
+    traffic_engine.bind_graph(graph, rg)
 
 
 # ---------- array road graph (shared by v2 snapping and v3) ----------
@@ -118,6 +120,8 @@ def _road_graph() -> RoadGraph:
         if ref is None or ref() is not _graph:
             rg = RoadGraph.from_networkx(_graph)
             _rg_cache = (weakref.ref(_graph), rg)
+            from backend.routing.traffic import engine as traffic_engine
+            traffic_engine.bind_graph(_graph, rg)
         return rg
 
 
@@ -884,7 +888,7 @@ def find_routes_v3(lat: float, lon: float, oracle, shelters: list[dict], sim_tim
 
 def _v3_option(c, rg) -> dict:
     j, path = c.judgement, c.path
-    return {
+    option = {
         "id": c.id,
         "role": c.role,
         "shelter_id": c.shelter["id"],
@@ -915,6 +919,18 @@ def _v3_option(c, rg) -> dict:
                     if path.approximate else V3_WARNING),
         "forecast_complete": j.forecast_complete,
     }
+    # Additive traffic fields (not in contract v2). JourneyGraph carries .parent.
+    from backend.routing.traffic import engine as traffic_engine
+    if hasattr(rg, "parent") and path.access_verified:
+        traffic_engine.annotate_option(option, rg, path.edges)
+        delay = option.get("traffic_delay_min") or 0
+        if traffic_engine.enabled and delay >= 1 and c.role == "fastest":
+            option["reroute_reason"] = option.get("reroute_reason") or f"Traffic adds {delay} min vs free-flow"
+    else:
+        option["traffic_delay_min"] = 0
+        option["traffic_free_min"] = option.get("modeled_duration_min")
+        option["_traffic_edge_ids"] = []
+    return option
 
 
 def _v3_geometry(path, rg):

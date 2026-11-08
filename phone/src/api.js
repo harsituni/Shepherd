@@ -228,6 +228,19 @@ export async function getSimState() {
   }
 }
 
+// Contract v2.1: faster route under traffic for the phone banner.
+export async function getTrafficHint(lat, lon, routeId) {
+  if (USE_FIXTURES) return { hint: null }
+  try {
+    const q = new URLSearchParams({ lat, lon })
+    if (routeId) q.set('route_id', routeId)
+    return await request(`/route/traffic_hint?${q}`)
+  } catch (err) {
+    if (err.status === 404) return { hint: null }
+    throw err
+  }
+}
+
 // The predicted path comes from GET /forecast (contract v2): outlines at t_min =
 // 15, 30 … 120 minutes from now. The map draws only the 60 min one as a
 // `predicted_min` feature, like the dashboard: two nested dotted rings read as a

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  compareTraffic,
   deleteHazards,
   getEvacuees,
   getForecast,
@@ -7,11 +8,13 @@ import {
   getReports,
   getShelters,
   getSimState,
+  getTraffic,
   pauseSim,
   resetSim,
   resumeSim,
   setSimSpeed,
   setSimWind,
+  setTrafficConfig,
   startSim,
 } from './api.js'
 import { POLL_MS, USE_FIXTURES } from './config.js'
@@ -49,6 +52,8 @@ export default function App() {
   const [connectionError, setConnectionError] = useState(false)
   const [forecast, setForecast] = useState(null) // GET /forecast
   const [evacuees, setEvacuees] = useState(null) // GET /evacuees: phones that set a location
+  const [traffic, setTraffic] = useState(null) // GET /traffic (roads + metrics)
+  const [trafficBusy, setTrafficBusy] = useState(false)
   const [viewing, setViewing] = useState(null) // history slider: null = live, else a sim minute
   const [popup, setPopup] = useState(null) // 'reports' | 'notify' | null: which centred pop-up is open
   const snapshots = useRef(new Map()) // sim_time → hazard features, for the slider
@@ -67,7 +72,9 @@ export default function App() {
       const fc = await getForecast().catch(() => null)
       // Same for evacuees: a failure only hides the phone dots until the next poll.
       const ev = await getEvacuees().catch(() => null)
+      const tr = await getTraffic().catch(() => null)
       if (ev) setEvacuees(ev)
+      if (tr) setTraffic(tr)
       if (h.status === 'fulfilled') setHazards(h.value)
       if (s.status === 'fulfilled') setShelters(s.value)
       if (r.status === 'fulfilled') setReports(r.value)
@@ -139,8 +146,16 @@ export default function App() {
               },
         )
         await setSimSpeed(speed)
+        // Turn traffic on at start so the map shows jammed roads without a second step.
+        // Default to thousands so judges see gridlock + reroutes as soon as the
+        // disaster drops (slider value wins if they already tuned Traffic).
+        await setTrafficConfig({
+          enabled: true,
+          anti_gridlock: true,
+          simulated_count: conditions.trafficCount ?? traffic?.simulated_count ?? 2000,
+        })
       }),
-    [run, sim, startPoint, hazardKind],
+    [run, sim, startPoint, hazardKind, traffic],
   )
 
   const reset = useCallback(
@@ -161,6 +176,40 @@ export default function App() {
     (windKmh, windFrom) => run(() => setSimWind(windKmh, windFrom)),
     [run],
   )
+
+  const changeTraffic = useCallback(
+    async (patch) => {
+      setTrafficBusy(true)
+      try {
+        const next = await setTrafficConfig(patch)
+        // Full /traffic (with edges) for the map; config only returns state.
+        const full = await getTraffic().catch(() => next)
+        setTraffic(full)
+        setSimError(null)
+      } catch (err) {
+        if (err.code) setSimError(simErrorText(err))
+        else setConnectionError(true)
+      } finally {
+        setTrafficBusy(false)
+      }
+    },
+    [],
+  )
+
+  const runCompare = useCallback(async () => {
+    setTrafficBusy(true)
+    try {
+      await compareTraffic()
+      const full = await getTraffic()
+      setTraffic(full)
+      setSimError(null)
+    } catch (err) {
+      if (err.code) setSimError(simErrorText(err))
+      else setConnectionError(true)
+    } finally {
+      setTrafficBusy(false)
+    }
+  }, [])
 
   // Dragging the history slider pauses the sim (spec), so "now" holds still.
   const scrub = useCallback(
@@ -229,6 +278,10 @@ export default function App() {
           onOpenNotify={() => setPopup('notify')}
           onlyPriority={onlyPriority}
           onOnlyPriorityChange={setOnlyPriority}
+          traffic={traffic}
+          trafficBusy={trafficBusy}
+          onTrafficConfig={changeTraffic}
+          onTrafficCompare={runCompare}
         />
         <main className="centre">
           <MapView
@@ -242,6 +295,7 @@ export default function App() {
             focus={focus}
             startPoint={startPoint}
             showPredicted={showPredicted}
+            traffic={traffic}
             onMapClick={pickStart}
           />
           <HistoryBar
@@ -252,7 +306,7 @@ export default function App() {
             onLive={() => setViewing(null)}
           />
         </main>
-        <SidePanel shelters={shelters} />
+        <SidePanel shelters={shelters} traffic={traffic} />
       </div>
       <Dialog open={popup === 'reports'} title="Reports" onClose={closePopup}>
         <ReportsList reports={reports} onSelect={focusReport} />

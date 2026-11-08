@@ -277,6 +277,7 @@ export default function MapView({
   focus,
   startPoint,
   showPredicted = true,
+  traffic = null,
   onMapClick,
 }) {
   const containerRef = useRef(null)
@@ -323,6 +324,43 @@ export default function MapView({
         source: 'evac',
         layout: { 'line-join': 'round' },
         paint: { 'line-color': EVAC_EDGE, 'line-width': 2 },
+      })
+      // Traffic corridors under the fire so congestion reads as road colour.
+      map.addSource('traffic', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'traffic-roads',
+        type: 'line',
+        source: 'traffic',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': [
+            'match',
+            ['get', 'level'],
+            'free',
+            '#6B8F71',
+            'busy',
+            '#E6A817',
+            'jammed',
+            '#D9480F',
+            'gridlock',
+            '#8B1A1A',
+            '#6B8F71',
+          ],
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['get', 'vc_ratio'],
+            0,
+            2,
+            0.8,
+            3.5,
+            1.5,
+            6,
+            2.5,
+            8,
+          ],
+          'line-opacity': 0.85,
+        },
       })
       map.addSource('hazards', { type: 'geojson', data: EMPTY })
       // Predicted spread first, so the current hazard draws on top of it.
@@ -432,6 +470,14 @@ export default function MapView({
     map.fitBounds(bounds, { padding: { top: 70, right: 250, bottom: 70, left: 70 }, maxZoom: 13, duration: 800 })
     framed.current = true
   }, [hazards, shelters, loaded])
+
+  // Traffic roads (when Simulate traffic is on).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!loaded || !map) return
+    const edges = traffic?.enabled ? traffic.edges ?? EMPTY : EMPTY
+    map.getSource('traffic')?.setData(edges)
+  }, [traffic, loaded])
 
   // Hazards: polygons + a "Now" label on each core zone.
   useEffect(() => {
