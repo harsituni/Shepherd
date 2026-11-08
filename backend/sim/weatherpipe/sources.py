@@ -38,17 +38,18 @@ def api_key(env_file: Path | None = None) -> str | None:
 
 def fetch_weather(lat: float, lon: float, source: str = "openweather:forecast-3h", *,
                   t0: datetime | None = None, cache_dir=DEFAULT_CACHE_DIR,
-                  session=None) -> tuple[list[WeatherObs], dict]:
+                  session=None, **http) -> tuple[list[WeatherObs], dict]:
     """Returns normalised observations + a weather_source dict. source ∈
     {"openweather:forecast-3h", "openweather:onecall-hourly", "cache:<path>", "cache:latest",
     "canned:<path>"}.
 
     cache:latest replays the newest cached forecast for this lat/lon in cache_dir.
     canned:<path> needs t0, because a canned series is in Contract A form (t_min after t0).
+    http: optional timeout_s / retries for the OpenWeather requests.
     """
     kind, _, arg = source.partition(":")
     if kind == "openweather":
-        return _live(lat, lon, arg, cache_dir, session)
+        return _live(lat, lon, arg, cache_dir, session, http)
     if kind == "cache":
         if arg == "latest":
             return _cached(cache.latest_forecast(cache_dir, lat, lon, openweather.FORECAST_ENDPOINTS))
@@ -60,7 +61,7 @@ def fetch_weather(lat: float, lon: float, source: str = "openweather:forecast-3h
     raise ValueError(f"unknown weather source {source!r}")
 
 
-def _live(lat, lon, endpoint, cache_dir, session):
+def _live(lat, lon, endpoint, cache_dir, session, http):
     if endpoint not in openweather.FORECAST_ENDPOINTS:
         raise ValueError(f"unknown OpenWeather endpoint {endpoint!r}, expected {openweather.FORECAST_ENDPOINTS}")
     key = api_key()
@@ -73,7 +74,7 @@ def _live(lat, lon, endpoint, cache_dir, session):
     paths = {}
     obs = {}
     for name in (endpoint, "current"):
-        raw = openweather.fetch_raw(name, lat, lon, key, session)
+        raw = openweather.fetch_raw(name, lat, lon, key, session, **http)
         paths[name] = cache.save_raw(
             cache_dir, openweather.PROVIDER, name, lat, lon, fetched_at,
             openweather.public_url(name, lat, lon), raw, secret=key,

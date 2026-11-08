@@ -7,6 +7,7 @@ A forecast fetch and its "current" anchor share fetched_at, so one can find the 
 """
 
 import json
+import math
 from datetime import datetime
 from pathlib import Path
 
@@ -57,6 +58,32 @@ def latest_forecast(cache_dir, lat, lon, endpoints) -> Path:
     if not found:
         raise FileNotFoundError(f"no cached forecast for {lat:.4f}, {lon:.4f} in {cache_dir}")
     return max(found, key=lambda p: p.stem.rsplit("_", 1)[1])
+
+
+def latest_forecast_near(cache_dir, lat, lon, endpoints, max_km) -> Path:
+    """Newest cached forecast fetched within max_km of (lat, lon), across the given endpoints.
+
+    A single-point forecast a few km away is as good as one at the exact point.
+    """
+    found = []
+    for endpoint in endpoints:
+        for p in Path(cache_dir).glob(f"*_{endpoint}_*.json"):
+            try:
+                _, _, p_lat, p_lon, stamp = p.stem.split("_")
+                far = _distance_km(lat, lon, float(p_lat), float(p_lon)) > max_km
+            except ValueError:
+                continue
+            if not far:
+                found.append((stamp, p))
+    if not found:
+        raise FileNotFoundError(f"no cached forecast within {max_km} km of {lat:.4f}, {lon:.4f} in {cache_dir}")
+    return max(found)[1]
+
+
+def _distance_km(lat1, lon1, lat2, lon2):
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1) * math.cos(math.radians((lat1 + lat2) / 2))
+    return 6371 * math.hypot(dlat, dlon)
 
 
 def sibling_path(path, endpoint) -> Path:

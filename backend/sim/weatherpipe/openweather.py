@@ -42,17 +42,21 @@ def public_url(endpoint, lat, lon) -> str:
     return requests.Request("GET", base, params=params).prepare().url
 
 
-def fetch_raw(endpoint, lat, lon, api_key, session=None) -> dict:
+def fetch_raw(endpoint, lat, lon, api_key, session=None, *,
+              timeout_s=HTTP_TIMEOUT_S, retries=HTTP_RETRIES) -> dict:
     """GET one endpoint. Retries 5xx and connection errors; never retries 4xx."""
     base, extra = ENDPOINTS[endpoint]
     params = {"lat": lat, "lon": lon, "units": "metric", **extra, "appid": api_key}
     http = session or requests
-    for attempt in range(HTTP_RETRIES + 1):
+    for attempt in range(retries + 1):
         try:
-            resp = http.get(base, params=params, timeout=HTTP_TIMEOUT_S)
+            resp = http.get(base, params=params, timeout=timeout_s)
         except (requests.ConnectionError, requests.Timeout) as exc:
             reason = type(exc).__name__
             status = None
+        except requests.RequestException as exc:
+            # requests puts the full URL, key included, in its messages: keep only the type.
+            raise OpenWeatherError(f"openweather {endpoint} failed: {type(exc).__name__}") from None
         else:
             if resp.status_code < 400:
                 log.info("openweather %s: HTTP %s", endpoint, resp.status_code)
@@ -67,11 +71,11 @@ def fetch_raw(endpoint, lat, lon, api_key, session=None) -> dict:
             status = resp.status_code
             if status < 500:
                 raise OpenWeatherError(f"openweather {endpoint} failed: {reason} (not retried)")
-        if attempt < HTTP_RETRIES:
+        if attempt < retries:
             log.warning("openweather %s: %s, retrying", endpoint, reason)
-            time.sleep(HTTP_BACKOFF_S[attempt])
+            time.sleep(HTTP_BACKOFF_S[min(attempt, len(HTTP_BACKOFF_S) - 1)])
     raise OpenWeatherError(
-        f"openweather {endpoint} failed after {HTTP_RETRIES + 1} attempts: {reason}"
+        f"openweather {endpoint} failed after {retries + 1} attempts: {reason}"
     )
 
 
