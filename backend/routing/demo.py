@@ -15,6 +15,7 @@ def main():
         ("sh_millwoods", "Mill Woods Rec Centre", -113.413, 53.457, 3000),
         ("sh_meadows", "The Meadows Rec Centre", -113.370, 53.473, 3200),
         ("sh_jasper_place", "Jasper Place Leisure Centre", -113.582, 53.522, 2800),
+        ("sh_castle_downs", "Castle Downs Rec Centre", -113.520, 53.612, 3000),
     ]:
         shelters.append({
             "type": "Feature",

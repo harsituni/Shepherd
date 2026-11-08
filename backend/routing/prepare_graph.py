@@ -19,6 +19,7 @@ LOCATIONS = {
     "Mill Woods": (-113.413, 53.457),
     "The Meadows": (-113.370, 53.473),
     "Jasper Place": (-113.582, 53.522),
+    "Castle Downs": (-113.520, 53.612),
     "Wildfire start": (-113.663, 53.535),
 }
 MAX_SNAP_METRES = 1000
