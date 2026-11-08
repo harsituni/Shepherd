@@ -18,6 +18,9 @@ import { BellIcon, CheckIcon, ChevronUpIcon, CloseIcon, CrookIcon, InfoIcon, War
 //   mapKey                   <MapKey/>
 //   areaName, notifications, location, route, routeError, trip, version
 //   actions: { report, safe, help, canReport, sending }
+//   routeAlert               <RouteAlert/> when your route just got worse (issue #58)
+//   stale                    <RouteStale/> when route checks keep failing
+//   openPanelKey             changes when the route panel must reopen (a route alert)
 
 // Map padding (px) roughly matching the floating chrome, so "frame my route"
 // keeps the route clear of the top cards, the rail and the route panel.
@@ -120,11 +123,21 @@ export default function MapScreen({
   trip,
   version,
   actions,
+  routeAlert,
+  stale,
+  openPanelKey,
 }) {
   const [sheet, setSheet] = useState(null) // 'alerts' | 'key' | null
   // The route panel opens for each new location; closing it applies to that one.
   const here = location ? location.join(',') : 'none'
   const [closedFor, setClosedFor] = useState(null)
+  // A route alert reopens the panel so the updated cards are in view.
+  const [seenOpenKey, setSeenOpenKey] = useState(openPanelKey)
+  if (openPanelKey !== seenOpenKey) {
+    setSeenOpenKey(openPanelKey)
+    setClosedFor(null)
+  }
+
   // Slide up only when the person reopens the panel from the strip.
   const [slideIn, setSlideIn] = useState(false)
   const panelOpen = closedFor !== here
@@ -135,6 +148,7 @@ export default function MapScreen({
       {renderMap(FRAME_PADDING)}
 
       <div className="ms-top">
+        {routeAlert}
         <div className="ms-chip">
           <span className="brand-mark" aria-hidden="true">
             <CrookIcon />
@@ -144,6 +158,7 @@ export default function MapScreen({
           </span>
         </div>
         <CornerAlert>{alert}</CornerAlert>
+        {stale}
       </div>
 
       <div className="ms-bottom">

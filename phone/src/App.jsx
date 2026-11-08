@@ -13,6 +13,7 @@ import { POLL_MS } from './config.js'
 import { useEvacuation, useHeartbeat } from './evacuate.js'
 import { isCurrentCore, nearestHazard } from './geo.js'
 import { placeName } from './placeName.js'
+import { alternative, useRouteWatch, useStaleFor } from './routeWatch.js'
 import { nextClock } from './simClock.js'
 import AlertBanner from './components/AlertBanner.jsx'
 import EvacCard from './components/EvacCard.jsx'
@@ -21,6 +22,7 @@ import { mostSevere, NotificationPopup } from './components/Notifications.jsx'
 import MapScreen from './components/MapScreen.jsx'
 import { MapKey, RouteDetails, RouteMore } from './components/RouteTab.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
+import RouteAlert, { RouteStale } from './components/RouteAlert.jsx'
 import { SHEPHERD_VERSION } from './version.js'
 
 // Resolves to [lon, lat], or null if unavailable, denied or slow.
@@ -50,6 +52,8 @@ export default function App() {
   const [notifications, setNotifications] = useState([])
   const [popup, setPopup] = useState(null)
   const [clock, setClock] = useState(null) // sim clock for the leave-by countdown
+  const [lastOkAt, setLastOkAt] = useState(null) // last successful /route check
+  const [watchEpoch, setWatchEpoch] = useState(0) // bumps when the route to watch is re-picked (#58)
   const seenNotes = useRef(new Set())
   const toastTimer = useRef(null)
   const locationRef = useRef(location)
@@ -119,6 +123,7 @@ export default function App() {
       if (stale()) return
       setRoute(r)
       setRouteError(null)
+      setLastOkAt(Date.now())
     } catch (err) {
       if (stale()) return
       setRoute(null)
@@ -151,6 +156,7 @@ export default function App() {
       setRoute(null)
       setRouteError(null)
       setChosen(null) // a new location starts from the recommended route
+      setWatchEpoch((n) => n + 1)
       setFocusKey(Date.now())
       refresh()
     },
@@ -232,6 +238,29 @@ export default function App() {
   }, [])
   useHeartbeat({ active: evacuating || location != null, everyMs: POLL_MS, read: readHeartbeat, send: postEvacuee })
 
+  // Issue #58: the /route poll above re-checks every 2 s; if the route the user is
+  // relying on turns tight or blocked (say the dashboard changed the wind), raise a
+  // red alert offering the best route that's still open. Mid-trip, switching starts
+  // a new leg from where the dot is now.
+  const watched = trip?.route ?? shown
+  const routeWatch = useRouteWatch({
+    key: watchEpoch,
+    route,
+    routeError,
+    shownShelterId: watched?.shelter_id ?? null,
+    shownShelterName: watched?.shelter_name ?? null,
+  })
+  const switchAlt = routeWatch.alert ? alternative(route, routeWatch.alert.shelterId) : null
+  const switchTo = (option) => {
+    setChosen(option.shelter_id)
+    setWatchEpoch((n) => n + 1)
+    setFocusKey(Date.now())
+    routeWatch.dismiss()
+    if (trip && !trip.arrived) startTrip(trip.mode, withChoice(route, option.shelter_id).shown)
+  }
+  // Don't fail silently: if route checks keep failing, say so (the alert can't fire).
+  const stale = useStaleFor(lastOkAt, location != null && routeError === 'network', 6000)
+
   // During a wildfire the evacuation card (leave-by countdown) takes the banner's place.
   const wildfire =
     route?.leave_by_sim_min != null ||
@@ -245,6 +274,7 @@ export default function App() {
     shelters,
     onChoose: (shelterId) => {
       setChosen(shelterId)
+      setWatchEpoch((n) => n + 1)
       setFocusKey(Date.now()) // frame the newly picked route
     },
     trip,
@@ -252,6 +282,8 @@ export default function App() {
     onEvacMode: setEvacMode,
     onStartEvacuating: () => {
       setFocusKey(Date.now()) // frame the route the dot will follow
+      setChosen(shown?.shelter_id ?? null) // keep this shelter even if the best changes mid-trip
+      setWatchEpoch((n) => n + 1)
       startTrip(evacMode, shown)
     },
     onStopEvacuating: stopTrip,
@@ -297,6 +329,19 @@ export default function App() {
         routeError={routeError}
         trip={trip}
         version={SHEPHERD_VERSION}
+        routeAlert={
+          routeWatch.alert && (
+            <RouteAlert
+              alert={routeWatch.alert}
+              alt={switchAlt}
+              evacuating={evacuating && !trip?.arrived}
+              onSwitch={switchTo}
+              onDismiss={routeWatch.dismiss}
+            />
+          )
+        }
+        stale={stale && <RouteStale seconds={stale.seconds} />}
+        openPanelKey={routeWatch.raised}
         actions={{
           report: () => setSheetOpen(true),
           safe: () => sendReport('safe'),
