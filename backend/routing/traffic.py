@@ -29,6 +29,12 @@ MAX_UNIQUE_ROUTES = 96
 # BPR (Bureau of Public Roads) — standard volume-delay.
 BPR_ALPHA = 0.15
 BPR_BETA = 4.0
+# Cap v/c inside BPR so a naive 2k-car pile-up can't produce hundred-million
+# minute ETAs (and a broken "Clearance time 297244928 → 15 min" label).
+BPR_VC_CAP = 3.0
+# Demo metrics / compare labels stay human-readable.
+CLEARANCE_CAP_MIN = 480.0  # 8 hours
+MAX_VC_REPORT = 5.0
 
 # Static loading capacity (vehicles that can share an edge before it jams).
 # Tuned for demo N≈hundreds–thousands, not real hourly freeway flow.
@@ -103,10 +109,21 @@ def _parse_lanes(value, highway: str) -> int:
 
 
 def bpr_factor(volume: np.ndarray, capacity: np.ndarray) -> np.ndarray:
-    """t / t0 = 1 + α (v/c)^β. Capacity floored so empty edges stay free-flow."""
+    """t / t0 = 1 + α (v/c)^β. Capacity floored so empty edges stay free-flow.
+
+    v/c is capped so extreme demo crowds still jam roads without overflowing
+    float travel times used in clearance / compare copy.
+    """
     c = np.maximum(capacity.astype(np.float64), 1.0)
     vc = np.maximum(volume.astype(np.float64), 0.0) / c
+    vc = np.minimum(vc, BPR_VC_CAP)
     return 1.0 + BPR_ALPHA * np.power(vc, BPR_BETA)
+
+
+def _sane_minutes(value: float) -> float:
+    if value is None or not math.isfinite(float(value)):
+        return CLEARANCE_CAP_MIN
+    return float(min(CLEARANCE_CAP_MIN, max(0.0, float(value))))
 
 
 @dataclass
@@ -564,13 +581,14 @@ class TrafficEngine:
         edge_ids = [int(e) for e in edges]
         free = float(rg.edge_time_min[np.asarray(edge_ids, dtype=np.int64)].sum()) if edge_ids else 0.0
         sid = shelter["id"]
+        eta = _sane_minutes(dist)
         return {
             "route_id": f"rt_{sid}_fastest",
             "shelter_id": sid,
             "edge_ids": edge_ids,
-            "eta_min": dist,
+            "eta_min": eta,
             "free_eta_min": free,
-            "delay_min": max(0.0, dist - free),
+            "delay_min": max(0.0, eta - free),
         }
 
     def _pick_route_locked(self, lat: float, lon: float) -> Optional[dict]:
@@ -586,12 +604,14 @@ class TrafficEngine:
                 agents_active=0, agents_arrived=arrived, reroutes=self._metrics.reroutes,
             )
             return
-        etas = [a.eta_min for a in active]
+        etas = [_sane_minutes(a.eta_min) for a in active]
         vc = self._volume / np.maximum(self._capacity, 1.0) if len(self._volume) else np.zeros(0)
+        raw_max_vc = float(vc.max()) if len(vc) else 0.0
         self._metrics = TrafficMetrics(
             clearance_min=float(max(etas)),
             avg_eta_min=float(sum(etas) / len(etas)),
-            max_vc=float(vc.max()) if len(vc) else 0.0,
+            # Report real pressure but clamp so "Peak load 5473%" never ships.
+            max_vc=float(min(raw_max_vc, MAX_VC_REPORT)),
             jammed_edges=int(np.sum(vc >= 0.9)),
             agents_active=len(active),
             agents_arrived=arrived,
@@ -612,20 +632,17 @@ class TrafficEngine:
 
             self.anti_gridlock = False
             self._assign_all_locked(force=True, sim_time=sim_time)
-            without = self._metrics.clearance_min
+            without = _sane_minutes(self._metrics.clearance_min)
 
             self.anti_gridlock = True
             self._assign_all_locked(force=True, sim_time=sim_time)
-            with_ag = self._metrics.clearance_min
+            with_ag = _sane_minutes(self._metrics.clearance_min)
 
             self._compare = {
-                "without_min": None if without is None else round(without, 1),
-                "with_min": None if with_ag is None else round(with_ag, 1),
-                "saved_min": None if without is None or with_ag is None else round(without - with_ag, 1),
-                "label": (
-                    f"Clearance time {without:.0f} → {with_ag:.0f} min"
-                    if without is not None and with_ag is not None else None
-                ),
+                "without_min": round(without, 1),
+                "with_min": round(with_ag, 1),
+                "saved_min": round(without - with_ag, 1),
+                "label": f"Clearance time {without:.0f} → {with_ag:.0f} min",
             }
             self.enabled = was_enabled
             self.anti_gridlock = True if was_enabled else was_anti

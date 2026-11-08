@@ -9,6 +9,19 @@ function Metric({ label, value }) {
   )
 }
 
+/** Guard against a spilled BPR ETA (e.g. "297244928 → 15 min"). */
+function formatCompareLabel(compare) {
+  const without = Number(compare?.without_min)
+  const withMin = Number(compare?.with_min)
+  if (Number.isFinite(without) && Number.isFinite(withMin) && without < 100_000 && withMin < 100_000) {
+    return compare.label || `Clearance time ${Math.round(without)} → ${Math.round(withMin)} min`
+  }
+  if (Number.isFinite(withMin) && withMin < 100_000) {
+    return `Clearance time ${Math.round(withMin)} min with anti-gridlock`
+  }
+  return compare?.label && !/\d{6,}/.test(compare.label) ? compare.label : null
+}
+
 // Left-panel traffic controls (contract v2.1): on/off, crowd size, anti-gridlock,
 // metrics, and Compare (naive pile-up vs spread-out clearance).
 export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onCompare }) {
@@ -84,13 +97,17 @@ export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onC
         <Metric label="Cars on roads" value={metrics.agents_active ?? traffic?.active_count} />
         <Metric
           label="Peak load"
-          value={metrics.max_vc != null ? `${Math.round(metrics.max_vc * 100)}%` : null}
+          value={
+            metrics.max_vc != null
+              ? `${Math.min(500, Math.round(metrics.max_vc * 100))}%`
+              : null
+          }
         />
       </div>
 
       {compare?.label && (
         <p className="traffic-compare-label num" role="status">
-          {compare.label}
+          {formatCompareLabel(compare)}
         </p>
       )}
 

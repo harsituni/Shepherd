@@ -1,5 +1,18 @@
 import JoinQr from './JoinQr.jsx'
 
+/** Hide spilled BPR numbers like "Clearance time 297244928 → 15 min". */
+function compareLabel(compare) {
+  const without = Number(compare?.without_min)
+  const withMin = Number(compare?.with_min)
+  if (Number.isFinite(without) && Number.isFinite(withMin) && without < 100_000 && withMin < 100_000) {
+    return compare.label || `Clearance time ${Math.round(without)} → ${Math.round(withMin)} min`
+  }
+  if (Number.isFinite(withMin) && withMin < 100_000) {
+    return `Clearance time ${Math.round(withMin)} min with anti-gridlock`
+  }
+  return null
+}
+
 function shelterCapacityPct(shelters) {
   const features = shelters?.features ?? []
   const capacity = features.reduce((s, f) => s + (f.properties.capacity ?? 0), 0)
@@ -35,9 +48,9 @@ export default function SidePanel({
     <aside className="side" aria-label="Status">
       <JoinQr />
 
-      {compare?.label && (
+      {compareLabel(compare) && (
         <p className="traffic-side-compare num" role="status">
-          {compare.label}
+          {compareLabel(compare)}
         </p>
       )}
 
