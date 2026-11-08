@@ -46,12 +46,12 @@ function advanceFake() {
 }
 
 const EF_FAKE = [
-  { wind_kmh: 121, wind_mph: 75, peak_m: 90 },
-  { wind_kmh: 158, wind_mph: 98, peak_m: 160 },
-  { wind_kmh: 198, wind_mph: 123, peak_m: 280 },
-  { wind_kmh: 241, wind_mph: 150, peak_m: 420 },
-  { wind_kmh: 295, wind_mph: 183, peak_m: 620 },
-  { wind_kmh: 354, wind_mph: 220, peak_m: 900 },
+  { wind_kmh: 121, wind_mph: 75, peak_m: 45 },
+  { wind_kmh: 158, wind_mph: 98, peak_m: 80 },
+  { wind_kmh: 198, wind_mph: 123, peak_m: 130 },
+  { wind_kmh: 241, wind_mph: 150, peak_m: 190 },
+  { wind_kmh: 295, wind_mph: 183, peak_m: 260 },
+  { wind_kmh: 354, wind_mph: 220, peak_m: 340 },
 ]
 
 function fakeTornadoStats(minutes, params) {

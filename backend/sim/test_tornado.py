@@ -32,7 +32,7 @@ class TornadoSimTests(unittest.TestCase):
         strong = TornadoSim(53.54, -113.55, wind_kmh=40, wind_from_deg=270, ef_rating=5)
         weak.step(22)
         strong.step(22)
-        self.assertGreater(strong.stats()["path_width_m"], weak.stats()["path_width_m"] * 2)
+        self.assertGreater(strong.stats()["path_width_m"], weak.stats()["path_width_m"] * 1.8)
         self.assertEqual(strong.stats()["ef_peak_label"], "EF5")
         self.assertEqual(weak.stats()["ef_peak_label"], "EF0")
 

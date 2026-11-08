@@ -51,18 +51,20 @@ CURVE_M_PER_KM = 55
 SINE_AMP_M = 380
 SINE_WAVELENGTH_M = 6500
 WOBBLE_AMP_M = 90
-DEBRIS_PAD_M = 450
-SCAR_PAD_M = 80
+DEBRIS_PAD_M = 220
+SCAR_PAD_M = 40
 
 # Enhanced Fujita scale — mid-band estimated winds and typical damage widths.
 # Winds are the *rotational* estimate at the funnel, not storm translation.
+# core_peak_m is half-width of the damage path at mature peak (demo-scale; real
+# EF5 corridors can run wider, but that swallows the whole city on this map).
 EF_TABLE = {
-    0: {"label": "EF0", "wind_mph": 75,  "wind_kmh": 121, "core_peak_m": 90,  "desc": "Light damage"},
-    1: {"label": "EF1", "wind_mph": 98,  "wind_kmh": 158, "core_peak_m": 160, "desc": "Moderate damage"},
-    2: {"label": "EF2", "wind_mph": 123, "wind_kmh": 198, "core_peak_m": 280, "desc": "Considerable damage"},
-    3: {"label": "EF3", "wind_mph": 150, "wind_kmh": 241, "core_peak_m": 420, "desc": "Severe damage"},
-    4: {"label": "EF4", "wind_mph": 183, "wind_kmh": 295, "core_peak_m": 620, "desc": "Devastating damage"},
-    5: {"label": "EF5", "wind_mph": 220, "wind_kmh": 354, "core_peak_m": 900, "desc": "Incredible damage"},
+    0: {"label": "EF0", "wind_mph": 75,  "wind_kmh": 121, "core_peak_m": 45,  "desc": "Light damage"},
+    1: {"label": "EF1", "wind_mph": 98,  "wind_kmh": 158, "core_peak_m": 80,  "desc": "Moderate damage"},
+    2: {"label": "EF2", "wind_mph": 123, "wind_kmh": 198, "core_peak_m": 130, "desc": "Considerable damage"},
+    3: {"label": "EF3", "wind_mph": 150, "wind_kmh": 241, "core_peak_m": 190, "desc": "Severe damage"},
+    4: {"label": "EF4", "wind_mph": 183, "wind_kmh": 295, "core_peak_m": 260, "desc": "Devastating damage"},
+    5: {"label": "EF5", "wind_mph": 220, "wind_kmh": 354, "core_peak_m": 340, "desc": "Incredible damage"},
 }
 CORE_R_ORG_FRAC = 0.22
 CORE_R_ROPE_FRAC = 0.12
@@ -208,12 +210,14 @@ class TornadoSim:
 
     def step(self, minutes: int) -> None:
         self.minutes += int(minutes)
-        if self._oracle is None or self._oracle.covers_until_sim_min < self.minutes + ROUTE_WINDOW_MIN:
+        need = self.minutes + ROUTE_WINDOW_MIN + LOOKAHEAD_MIN
+        if self._oracle is None or self._oracle.covers_until_sim_min < need:
             self._rebuild_oracle()
         else:
+            # Keep the painted track; advance the declared coverage window with the clock.
             self._oracle = ForecastOracle(
                 version=self._oracle.version, run_id=self._oracle.run_id, band="p50",
-                sim_time=self.minutes, covers_until_sim_min=self._oracle.covers_until_sim_min,
+                sim_time=self.minutes, covers_until_sim_min=float(need),
                 wind_kmh=self.wind_kmh, wind_from_deg=self.wind_from_deg,
                 x0=self._oracle.x0, y0=self._oracle.y0, cell_m=self._oracle.cell_m,
                 nrows=self._oracle.nrows, ncols=self._oracle.ncols,
@@ -390,7 +394,8 @@ class TornadoSim:
         now = float(self.minutes)
         outlines = []
         for t_min in range(FORECAST_STEP_MIN, int(horizon_min) + 1, FORECAST_STEP_MIN):
-            uncertain = 40.0 * (t_min / 15.0)
+            # Forecast corridor widens slowly with lead time (not a city-sized cone).
+            uncertain = 25.0 * (t_min / 15.0)
             samples = []
             for lon, lat, half in self._track_samples(now, now + t_min):
                 samples.append((lon, lat, half + uncertain))
@@ -437,10 +442,13 @@ class TornadoSim:
 
     def _rebuild_oracle(self) -> None:
         speed = max(self._storm_speed_m_per_min(), 1.0)
+        # Routing needs ~now + 240 min of declared coverage or every journey goes
+        # indeterminate. Paint only a finite track ahead; cells past the funnel
+        # stay +inf (= not reached) inside that complete window.
         covers = float(self.minutes + ROUTE_WINDOW_MIN + LOOKAHEAD_MIN)
-        covers = min(covers, self.minutes + MAX_PATH_M / speed)
+        paint_until = min(covers, float(self.minutes) + MAX_PATH_M / speed)
         pad = self._peak_core_m() + DEBRIS_PAD_M + CURVE_M_PER_KM * 40 + SINE_AMP_M + 2500
-        end_lon, end_lat = self._centre_at(covers)
+        end_lon, end_lat = self._centre_at(paint_until)
         corners = [
             _offset_ll(self.lon, self.lat, de, dn)
             for de, dn in ((-pad, -pad), (pad, -pad), (-pad, pad), (pad, pad))
@@ -448,7 +456,7 @@ class TornadoSim:
             _offset_ll(end_lon, end_lat, de, dn)
             for de, dn in ((-pad, -pad), (pad, -pad), (-pad, pad), (pad, pad))
         ]
-        for t in (covers * 0.33, covers * 0.66):
+        for t in (paint_until * 0.33, paint_until * 0.66):
             lon, lat = self._centre_at(t)
             corners.extend(_offset_ll(lon, lat, de, dn) for de, dn in ((-pad, 0), (pad, 0), (0, -pad), (0, pad)))
         if self.domain_bbox is not None:
@@ -474,7 +482,7 @@ class TornadoSim:
 
         step = max(0.2, (CELL_M * 0.45) / speed)
         t = 0.0
-        while t <= covers + 1e-9:
+        while t <= paint_until + 1e-9:
             clon, clat = self._centre_at(t)
             cx, cy = TO_UTM.transform(clon, clat)
             rad = self._damage_half_width(t) + CELL_M * 0.75

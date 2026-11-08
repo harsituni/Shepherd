@@ -61,12 +61,17 @@ export function evacZones(hazards) {
   return { type: 'FeatureCollection', features }
 }
 
-// Circles that count for shelter safety: around the fire now and every forecast outline.
+// Circles / rings that count for shelter safety: around the hazard now and every
+// forecast outline. Tornado forecasts are long corridors — wrapping those in
+// evacCircle() would paint a city-sized disc around the corridor centroid.
 export function dangerRings(hazards, forecastOutlines = []) {
-  return [
-    ...(hazards?.features ?? []).filter(isHazardNow),
-    ...forecastOutlines.filter((o) => o.geometry?.type === 'Polygon'),
-  ].map((f) => evacCircle(f.geometry.coordinates[0]))
+  const now = (hazards?.features ?? []).filter(isHazardNow).map((f) => evacCircle(f.geometry.coordinates[0]))
+  const forecast = forecastOutlines
+    .filter((o) => o.geometry?.type === 'Polygon')
+    .map((o) =>
+      o.properties?.kind === 'tornado' ? o.geometry.coordinates[0] : evacCircle(o.geometry.coordinates[0]),
+    )
+  return [...now, ...forecast]
 }
 
 // Ids of shelters inside any danger circle.
