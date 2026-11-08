@@ -77,9 +77,12 @@ export function evacueeId() {
 // route. Skips a beat while the previous one is still in flight (slow networks), and
 // beats again as soon as the page is visible (browsers throttle timers in hidden tabs).
 // `read()` returns { lat, lon, route_id, route_status, shelter_id } or null.
-export function useHeartbeat({ active, everyMs, read, send }) {
+// Returns `beatNow()`: call it on a fresh GPS fix to send it straight away instead of
+// waiting up to `everyMs` (sends at most once per `minGapMs`).
+export function useHeartbeat({ active, everyMs, read, send, minGapMs = 1000 }) {
   const readRef = useRef(read)
   const sendRef = useRef(send)
+  const beatRef = useRef(null)
   useEffect(() => {
     readRef.current = read
     sendRef.current = send
@@ -89,27 +92,66 @@ export function useHeartbeat({ active, everyMs, read, send }) {
     if (!active) return
     const id = evacueeId()
     let inFlight = false
-    const beat = async () => {
+    let lastSent = 0
+    const beat = async ({ throttle = false } = {}) => {
+      const now = Date.now()
+      if (inFlight || (throttle && now - lastSent < minGapMs)) return
       const body = readRef.current?.()
-      if (!body || inFlight) return
+      if (!body) return
       inFlight = true
+      lastSent = now
       try {
         await sendRef.current({ id, ...body })
       } catch {
-        // a missed beat is fine; the next one follows shortly
+        // a missed (or timed out) beat is fine; the next one follows shortly
       } finally {
         inFlight = false
       }
     }
+    beatRef.current = () => beat({ throttle: true })
     const onVisible = () => document.visibilityState === 'visible' && beat()
     beat()
-    const timer = setInterval(beat, everyMs)
+    const timer = setInterval(() => beat({ throttle: true }), everyMs)
     document.addEventListener('visibilitychange', onVisible)
     return () => {
+      beatRef.current = null
       clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [active, everyMs])
+  }, [active, everyMs, minGapMs])
+
+  return useCallback(() => beatRef.current?.(), [])
+}
+
+// ---------- screen wake lock ----------
+
+// Keep the screen on while `active` (a trip in progress). Browsers stop GPS and slow
+// timers once the screen locks, which froze the dot on the dashboard mid-drive. The
+// lock drops whenever the page is hidden, so take it again when it comes back.
+// Silently does nothing where unsupported (older Safari, plain http).
+export function useWakeLock(active) {
+  useEffect(() => {
+    if (!active || !navigator.wakeLock) return
+    let lock = null
+    let cancelled = false
+    const acquire = async () => {
+      if (document.visibilityState !== 'visible' || (lock && !lock.released)) return
+      try {
+        const next = await navigator.wakeLock.request('screen')
+        if (cancelled) next.release().catch(() => {})
+        else lock = next
+      } catch {
+        // denied (battery saver, not visible): nothing to do
+      }
+    }
+    acquire()
+    document.addEventListener('visibilitychange', acquire)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', acquire)
+      lock?.release().catch(() => {})
+    }
+  }, [active])
 }
 
 // ---------- GPS ----------
@@ -119,6 +161,32 @@ function gpsError(err) {
   if (!navigator.geolocation) return "This browser can't share your location. Use Simulated drive."
   if (err?.code === 1) return 'Location permission was denied. Allow it in your browser settings, or use Simulated drive.'
   return "Couldn't get your location. Check that location is on, or use Simulated drive."
+}
+
+// Follow the device's GPS while `active` (Real GPS picked, no trip running; a trip
+// runs its own watch). Before this, the pin only took one fix when Real GPS was
+// picked, so a phone driving around without pressing Start evacuating kept sending
+// the same spot. onFix([lon, lat]) per fix; onError(message) if permission is denied.
+export function useFollowGps({ active, onFix, onError }) {
+  const fixRef = useRef(onFix)
+  const errorRef = useRef(onError)
+  useEffect(() => {
+    fixRef.current = onFix
+    errorRef.current = onError
+  }, [onFix, onError])
+
+  useEffect(() => {
+    if (!active || !window.isSecureContext || !navigator.geolocation) return
+    const id = navigator.geolocation.watchPosition(
+      (p) => fixRef.current?.([p.coords.longitude, p.coords.latitude]),
+      (err) => {
+        // Weak signal: keep the last position quietly; the watch keeps trying.
+        if (err?.code === 1) errorRef.current?.(gpsError(err))
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
+    )
+    return () => navigator.geolocation.clearWatch(id)
+  }, [active])
 }
 
 // One fresh fix for "Real GPS" being picked: resolves { lngLat: [lon, lat] } or
