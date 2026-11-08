@@ -15,6 +15,10 @@ LOCATIONS = {
     "Kinsmen": (-113.516, 53.519),
     "Terwillegar": (-113.595, 53.440),
     "Commonwealth": (-113.473, 53.559),
+    "Clareview": (-113.391, 53.601),
+    "Mill Woods": (-113.413, 53.457),
+    "The Meadows": (-113.370, 53.473),
+    "Jasper Place": (-113.582, 53.522),
     "Wildfire start": (-113.663, 53.535),
 }
 MAX_SNAP_METRES = 1000
