@@ -149,6 +149,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .traffic-metric-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
 .traffic-metrics strong { font-weight: 650; color: var(--text); }
 .traffic-compare-btn { min-height: 44px; width: 100%; }
+.traffic-demand {
+  margin: 0 0 10px; padding: 8px 10px; border-radius: 6px;
+  background: color-mix(in srgb, var(--blue) 8%, var(--surface));
+  color: var(--text); font-size: var(--fs-sm); line-height: 1.35;
+}
 .traffic-compare-label, .traffic-side-compare {
   margin: 0; padding: 10px 12px; border-radius: 8px; font-weight: 650;
   background: color-mix(in srgb, #6B8F71 18%, var(--surface));

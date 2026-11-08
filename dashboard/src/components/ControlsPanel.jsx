@@ -56,6 +56,7 @@ export default function ControlsPanel({
   trafficBusy,
   onTrafficConfig,
   onTrafficCompare,
+  evacDemand = null,
 }) {
   const windTimer = useRef(null)
   useEffect(() => () => clearTimeout(windTimer.current), [])
@@ -177,18 +178,7 @@ export default function ControlsPanel({
             className="icon-btn primary"
             aria-label={running ? 'Pause' : idle ? 'Start simulation' : 'Resume'}
             disabled={!canPlay}
-            onClick={() =>
-              onPlay(
-                {
-                  windKmh,
-                  windFrom,
-                  humidity,
-                  efRating,
-                  trafficCount: traffic?.simulated_count ?? 10000,
-                },
-                speed,
-              )
-            }
+            onClick={() => onPlay({ windKmh, windFrom, humidity, efRating }, speed)}
           >
             {running ? <PauseIcon /> : <PlayIcon />}
           </button>
@@ -273,6 +263,7 @@ export default function ControlsPanel({
         busy={trafficBusy}
         onConfig={onTrafficConfig}
         onCompare={onTrafficCompare}
+        evacDemand={evacDemand}
       />
     </aside>
   )

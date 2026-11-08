@@ -3,6 +3,7 @@ import {
   compareTraffic,
   deleteHazards,
   getClosedRoads,
+  getEvacProjection,
   getEvacuees,
   getForecast,
   getHazards,
@@ -56,6 +57,7 @@ export default function App() {
   const [evacuees, setEvacuees] = useState(null) // GET /evacuees: phones that set a location
   const [traffic, setTraffic] = useState(null) // GET /traffic (roads + metrics)
   const [closedRoads, setClosedRoads] = useState(null) // GET /roads/closed
+  const [evacDemand, setEvacDemand] = useState(null) // GET /traffic/projection
   const [trafficBusy, setTrafficBusy] = useState(false)
   const [viewing, setViewing] = useState(null) // history slider: null = live, else a sim minute
   const [popup, setPopup] = useState(null) // 'reports' | 'notify' | null: which centred pop-up is open
@@ -133,7 +135,7 @@ export default function App() {
         // fuel_dryness is no longer sent; the backend uses its default (0.7 in the contract).
         // `tornado` is not a contract v1 scenario yet; it reuses wind_kmh / wind_from_deg
         // as the storm's travel speed and direction.
-        await startSim(
+        const started = await startSim(
           hazardKind === 'tornado'
             ? {
                 scenario: 'tornado',
@@ -151,17 +153,31 @@ export default function App() {
               },
         )
         await setSimSpeed(speed)
-        // Turn traffic on at start so the map shows jammed roads without a second step.
-        // Default to thousands so judges see gridlock + reroutes as soon as the
-        // disaster drops (slider value wins if they already tuned Traffic).
-        await setTrafficConfig({
-          enabled: true,
-          anti_gridlock: true,
-          simulated_count: conditions.trafficCount ?? traffic?.simulated_count ?? 10000,
-        })
+        // Backend sizes the traffic crowd from pin + Edmonton day/time.
+        if (started?.evac_demand) setEvacDemand(started.evac_demand)
       }),
-    [run, sim, startPoint, hazardKind, traffic],
+    [run, sim, startPoint, hazardKind],
   )
+
+  // Preview how many people/cars the pin would evacuate (updates as they click).
+  useEffect(() => {
+    if (!startPoint || !simIdle) return
+    let cancelled = false
+    getEvacProjection({
+      lat: startPoint.lat,
+      lon: startPoint.lng,
+      scenario: hazardKind,
+    })
+      .then((d) => {
+        if (!cancelled) setEvacDemand(d)
+      })
+      .catch(() => {
+        if (!cancelled) setEvacDemand(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [startPoint, hazardKind, simIdle])
 
   const reset = useCallback(
     () =>
@@ -172,6 +188,7 @@ export default function App() {
         await setTrafficConfig({ enabled: false }).catch(() => null)
         setTraffic(null)
         setClosedRoads(null)
+        setEvacDemand(null)
         setStartPoint(null)
         setViewing(null)
         snapshots.current.clear()
@@ -293,6 +310,7 @@ export default function App() {
           trafficBusy={trafficBusy}
           onTrafficConfig={changeTraffic}
           onTrafficCompare={runCompare}
+          evacDemand={evacDemand}
         />
         <main className="centre">
           <MapView

@@ -24,10 +24,17 @@ function formatCompareLabel(compare) {
 
 // Left-panel traffic controls (contract v2.1): on/off, crowd size, anti-gridlock,
 // metrics, and Compare (naive pile-up vs spread-out clearance).
-export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onCompare }) {
+export default function TrafficPanel({
+  traffic,
+  canSimulate,
+  busy,
+  onConfig,
+  onCompare,
+  evacDemand = null,
+}) {
   const enabled = !!traffic?.enabled
   const anti = traffic?.anti_gridlock !== false
-  const count = traffic?.simulated_count ?? 10000
+  const count = traffic?.simulated_count ?? evacDemand?.cars ?? 10000
   const [slider, setSlider] = useState(count)
   const metrics = traffic?.metrics ?? {}
   const compare = traffic?.compare
@@ -43,9 +50,14 @@ export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onC
         Traffic
       </h2>
       <p className="hint">
-        Up to 100k evacuating cars (projected onto the road network) + judge phones.
-        Anti-gridlock spreads them and phones get mid-trip reroutes.
+        Crowd size is estimated from the hazard pin + Edmonton day/time (zone density).
+        You can still override with the slider (up to 100k, projected onto the network).
       </p>
+      {evacDemand?.label && (
+        <p className="traffic-demand num" role="status">
+          {evacDemand.label}
+        </p>
+      )}
 
       <label className="toggle-row">
         <span>Simulate traffic</span>
