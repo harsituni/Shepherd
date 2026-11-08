@@ -254,15 +254,47 @@ export default function App() {
         // "leave by T+X", a later poll can't push that deadline out while the fire grows.
         setRoute((prev) => ratchetLeaveBy(prev, r))
         setRouteError(null)
-        // Banner when a faster traffic-aware route exists (contract v2.1).
+        // Traffic hint (contract v2.1): while driving, auto-take the faster path
+        // so judges see Shepherd clearing jams; otherwise show the banner.
         try {
           const hintBody = await getTrafficHint(loc[1], loc[0], chosenRef.current ?? r?.best_route_id)
           const hint = hintBody?.hint
-          if (hint?.saves_min >= 3) {
+          if (hint?.saves_min >= 1) {
             setTrafficBanner(hint)
-            const now = Date.now()
-            if (now - trafficHintAt.current > 20000) {
-              trafficHintAt.current = now
+            const driving =
+              evacuatingRef.current && tripRef.current && !tripRef.current.arrived
+            const onHint =
+              (chosenRef.current ?? tripRef.current?.route?.route_id) === hint.route_id
+            if (driving && !onHint) {
+              const pick =
+                r?.options?.find((o) => o.id === hint.route_id) ||
+                r?.options?.find(
+                  (o) =>
+                    o.shelter_id === hint.shelter_id &&
+                    (o.status === 'ok' || o.status === 'tight'),
+                )
+              if (pick?.geometry) {
+                const reason =
+                  hint.message ||
+                  `Traffic: faster route saves ${Math.round(hint.saves_min)} min`
+                chosenRef.current = pick.id
+                setChosen(pick.id)
+                const flat = {
+                  ...r,
+                  ...pick,
+                  route_id: pick.id,
+                  best_route_id: r.best_route_id,
+                  options: r.options,
+                  rerouted: true,
+                  reroute_reason: reason,
+                }
+                rerouteRef.current?.(flat, reason)
+                showToastRef.current?.(`Rerouted: ${reason}`, 5000)
+                setFocusKey(Date.now())
+                trafficHintAt.current = Date.now()
+              }
+            } else if (Date.now() - trafficHintAt.current > 20000) {
+              trafficHintAt.current = Date.now()
               showToastRef.current?.(hint.message, 5000)
             }
           } else {

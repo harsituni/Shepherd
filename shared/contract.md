@@ -313,7 +313,7 @@ Returns `/sim/state` shape (below), after forecast rebuild has been kicked off (
   "traffic": {
     "enabled": false,
     "anti_gridlock": true,
-    "simulated_count": 80,
+    "simulated_count": 2000,
     "real_count": 0,
     "active_count": 0,
     "metrics": {
@@ -372,25 +372,25 @@ new route saves **≥ 3 minutes** (with a cooldown so routes do not flip-flop).
 
 #### POST /traffic/config
 ```json
-{ "enabled": true, "anti_gridlock": true, "simulated_count": 200 }
+{ "enabled": true, "anti_gridlock": true, "simulated_count": 2000 }
 ```
-All fields optional; omitted keys stay unchanged. `simulated_count` is clamped to `0…500`.
+All fields optional; omitted keys stay unchanged. `simulated_count` is clamped to `0…5000`.
 
 #### GET /traffic (and `/traffic/state`)
 ```json
 {
   "enabled": true,
   "anti_gridlock": true,
-  "simulated_count": 200,
+  "simulated_count": 2000,
   "real_count": 3,
-  "active_count": 203,
+  "active_count": 2003,
   "sim_time": 30,
   "metrics": {
     "clearance_min": 41.0,
     "avg_eta_min": 18.2,
     "max_vc": 1.6,
     "jammed_edges": 24,
-    "agents_active": 203,
+    "agents_active": 2003,
     "agents_arrived": 0,
     "reroutes": 12
   },
@@ -461,7 +461,7 @@ Leaves anti-gridlock **on** afterward (the “after” state) when traffic remai
   }
 }
 ```
-`hint` is `null` when traffic is off, no better route exists, or the saving is under 3 minutes.
+`hint` is `null` when traffic is off, no better route exists, or the saving is under 1 minute.
 
 **Dashboard (v2.1):** colour roads from `GET /traffic` → `edges`, evacuee-count slider + anti-gridlock switch via `POST /traffic/config`, metrics from `traffic.metrics` / `/sim/state`, Compare button → `POST /traffic/compare`.  
 **Phone (v2.1):** show `+N min traffic` from `traffic_delay_min` on route cards; poll `/route/traffic_hint` for the faster-route banner; when the phone swaps routes for traffic, surface `reason: "traffic"`.

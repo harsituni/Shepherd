@@ -21,18 +21,19 @@ from backend.routing.road_graph import SPEED_KM_PER_MIN, RoadGraph, shortest_pat
 
 log = logging.getLogger(__name__)
 
-# Full /route for every simulated car freezes the API. Crowd cars use a free-flow
+# Full /route for every simulated car freezes the API. Crowd cars use a fast
 # Dijkstra on the road graph; only this many get a unique path, the rest clone.
-MAX_UNIQUE_ROUTES = 48
+# Higher with multi-thousand crowds so anti-gridlock still paints distinct corridors.
+MAX_UNIQUE_ROUTES = 96
 
 # BPR (Bureau of Public Roads) — standard volume-delay.
 BPR_ALPHA = 0.15
 BPR_BETA = 4.0
 
 # Static loading capacity (vehicles that can share an edge before it jams).
-# Tuned for demo N≈50–500, not real hourly freeway flow.
+# Tuned for demo N≈hundreds–thousands, not real hourly freeway flow.
 # Per-lane static loading capacity (cars sharing an edge before it jams). Kept
-# intentionally low so a few hundred evacuating cars can create visible gridlock.
+# intentionally low so evacuating crowds create visible gridlock on the map.
 CAP_PER_LANE = {
     "motorway": 40,
     "motorway_link": 24,
@@ -68,11 +69,13 @@ DEFAULT_LANES = {
     "road": 1,
 }
 
-REBALANCE_EVERY_MIN = 5
-SWITCH_SAVE_MIN = 3.0
-SWITCH_COOLDOWN_MIN = 10
-DEFAULT_SIMULATED = 250
-MAX_SIMULATED = 500
+REBALANCE_EVERY_MIN = 2
+# Demo-facing: switch / hint as soon as another path is meaningfully faster so
+# judges see Shepherd actively rerouting people out of jams.
+SWITCH_SAVE_MIN = 1.0
+SWITCH_COOLDOWN_MIN = 2
+DEFAULT_SIMULATED = 2000
+MAX_SIMULATED = 5000
 # How many congested edges to return for the dashboard map (sorted by v/c).
 MAP_EDGE_LIMIT = 2500
 
@@ -703,26 +706,63 @@ class TrafficEngine:
 
     def faster_route_hint(self, lat: float, lon: float, current_route_id: Optional[str],
                           sim_time: int = 0) -> Optional[dict]:
-        """Phone banner: faster route available, saves N min."""
+        """Phone banner / auto-reroute: faster route available, saves N min."""
         if not self.enabled or not current_route_id:
             return None
         with self._lock:
             pick = self._pick_route_locked(lat, lon)
             if pick is None or pick["route_id"] == current_route_id:
                 return None
-            agent = next((a for a in self._agents.values()
-                          if a.route_id == current_route_id and abs(a.lat - lat) < 1e-4), None)
-            current_eta = agent.eta_min if agent else None
-            if current_eta is None:
-                return None
+            # Prefer the caller's phone pin, then any car already on that route.
+            agent = next(
+                (
+                    a for a in self._agents.values()
+                    if a.route_id == current_route_id and abs(a.lat - lat) < 2e-3 and abs(a.lon - lon) < 2e-3
+                ),
+                None,
+            )
+            if agent is None:
+                agent = next((a for a in self._agents.values() if a.route_id == current_route_id), None)
+            if agent is not None:
+                current_eta = float(agent.eta_min)
+            else:
+                # Judge phones may not be on a crowd corridor yet — cost the free-flow
+                # path to their current shelter under live BPR, then compare to pick.
+                sid = None
+                if current_route_id.startswith("rt_") and current_route_id.endswith("_fastest"):
+                    sid = current_route_id[len("rt_"):-len("_fastest")]
+                current_eta = None
+                if sid and self._shelters_fn:
+                    for shelter in self._shelters_fn():
+                        if shelter.get("id") != sid:
+                            continue
+                        coords = shelter.get("geometry", {}).get("coordinates")
+                        if not coords or len(coords) < 2:
+                            break
+                        rg = self._rg
+                        if rg is None:
+                            break
+                        start, _ = rg.nearest_node(lat, lon)
+                        end, _ = rg.nearest_node(float(coords[1]), float(coords[0]))
+                        tree = shortest_paths(
+                            rg.n_nodes, rg.edge_u, rg.edge_v, rg.edge_time_min,
+                            start, rg.edge_permitted,
+                        )
+                        edges = tree.edges_to(start, end)
+                        if edges is not None:
+                            current_eta = self._travel_min_unlocked([int(e) for e in edges])
+                        break
+                if current_eta is None:
+                    return None
             saves = current_eta - pick["eta_min"]
             if saves < SWITCH_SAVE_MIN:
                 return None
+            mins = max(1, int(round(saves)))
             return {
                 "route_id": pick["route_id"],
                 "shelter_id": pick["shelter_id"],
-                "saves_min": int(round(saves)),
-                "message": f"Faster route available, saves {int(round(saves))} min",
+                "saves_min": mins,
+                "message": f"Faster route available, saves {mins} min",
                 "reason": "traffic",
             }
 

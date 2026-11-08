@@ -147,13 +147,15 @@ export default function App() {
         )
         await setSimSpeed(speed)
         // Turn traffic on at start so the map shows jammed roads without a second step.
+        // Default to thousands so judges see gridlock + reroutes as soon as the
+        // disaster drops (slider value wins if they already tuned Traffic).
         await setTrafficConfig({
           enabled: true,
           anti_gridlock: true,
-          simulated_count: conditions.trafficCount ?? 250,
+          simulated_count: conditions.trafficCount ?? traffic?.simulated_count ?? 2000,
         })
       }),
-    [run, sim, startPoint, hazardKind],
+    [run, sim, startPoint, hazardKind, traffic],
   )
 
   const reset = useCallback(

@@ -1,5 +1,7 @@
 // Mid-trip rerouting: decide when the live /route answer means we should leave
 // the path we're driving and take another, and build a short reason for the UI.
+// Demo rule: whenever a better usable recommendation exists, take it so judges
+// see Shepherd actively helping people off jammed / unsafe roads.
 
 const usable = (o) => o?.status === 'ok' || o?.status === 'tight'
 
@@ -41,8 +43,11 @@ function shortReason(prev, next, currentOpt) {
     return `Heading to ${next.shelter_name} instead`
   }
   const saves = (currentOpt?.eta_min ?? 0) - (next.eta_min ?? 0)
-  if (saves >= 3 && (currentOpt?.traffic_delay_min > 0 || next.traffic_delay_min >= 0)) {
-    return `Traffic: faster route saves ${Math.round(saves)} min`
+  const delay = currentOpt?.traffic_delay_min ?? 0
+  if (delay > 0 || saves >= 1) {
+    return saves >= 1
+      ? `Traffic: faster route saves ${Math.max(1, Math.round(saves))} min`
+      : 'Traffic: clearing a jam on your route'
   }
   return 'Taking a safer path'
 }
@@ -51,9 +56,9 @@ function shortReason(prev, next, currentOpt) {
  * If the person should leave their current drive for a new recommendation,
  * returns { route, reason }. Otherwise null.
  *
- * Stay put while the current option is still Clear — avoid thrashing when the
- * backend's ranking jitters. Switch when the current path is gone / blocked /
- * unconfirmed and a usable alternative exists.
+ * Always hop onto the current best usable option when it differs from the path
+ * we're driving — hazard growth, closed roads, and traffic jams all surface as
+ * a visible mid-trip reroute (judge demo).
  */
 export function shouldReroute(trip, routeBody) {
   if (!trip?.route || trip.arrived || !routeBody) return null
@@ -63,33 +68,6 @@ export function shouldReroute(trip, routeBody) {
   const current = optionOf(routeBody, currentId)
   const best = optionOf(routeBody, routeBody.best_route_id)
   if (!best || !usable(best)) return null
-
-  // Still Clear on the same route → keep driving it (unless traffic saves 3+ min).
-  if (current && usable(current) && current.status === 'ok' && current.id === best.id) return null
-  if (current && usable(current) && current.status === 'ok' && current.id !== best.id) {
-    const saves = (current.eta_min ?? 0) - (best.eta_min ?? 0)
-    if (saves >= 3) {
-      const next = flattenOption(routeBody, best)
-      if (next?.geometry) return { route: next, reason: `Traffic: faster route saves ${Math.round(saves)} min` }
-    }
-    return null
-  }
-
-  // Same usable recommendation (tight is fine to keep if it's still the best).
-  if (current && usable(current) && current.id === best.id) return null
-
-  // Current is missing, blocked, indeterminate, or no longer best while unsafe-ish.
-  if (current && usable(current) && current.id !== best.id) {
-    const saves = (current.eta_min ?? 0) - (best.eta_min ?? 0)
-    if (saves >= 3) {
-      const next = flattenOption(routeBody, best)
-      if (next?.geometry) return { route: next, reason: `Traffic: faster route saves ${Math.round(saves)} min` }
-    }
-    // Tight but still usable and not the best: only hop if the shelter changed
-    // (destination itself is the problem) or margin got much worse.
-    if (current.shelter_id === best.shelter_id) return null
-  }
-
   if (best.id === currentId) return null
 
   const next = flattenOption(routeBody, best)

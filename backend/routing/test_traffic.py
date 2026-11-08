@@ -48,7 +48,9 @@ class TrafficEngineTests(unittest.TestCase):
         self.assertEqual(out.get("error"), "traffic_unavailable")
 
     def test_switch_threshold_constant(self):
-        self.assertGreaterEqual(SWITCH_SAVE_MIN, 3.0)
+        # Demo: switch/hint as soon as another path saves about a minute.
+        self.assertGreaterEqual(SWITCH_SAVE_MIN, 1.0)
+        self.assertLessEqual(SWITCH_SAVE_MIN, 3.0)
 
 
 class TrafficWithTinyGraph(unittest.TestCase):

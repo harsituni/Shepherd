@@ -14,7 +14,7 @@ function Metric({ label, value }) {
 export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onCompare }) {
   const enabled = !!traffic?.enabled
   const anti = traffic?.anti_gridlock !== false
-  const count = traffic?.simulated_count ?? 200
+  const count = traffic?.simulated_count ?? 2000
   const [slider, setSlider] = useState(count)
   const metrics = traffic?.metrics ?? {}
   const compare = traffic?.compare
@@ -29,7 +29,8 @@ export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onC
         Traffic
       </h2>
       <p className="hint">
-        Simulated cars + phones jam roads. Anti-gridlock spreads them so clearance drops.
+        Thousands of cars + judge phones jam roads. Anti-gridlock spreads them and
+        phones get mid-trip reroutes.
       </p>
 
       <label className="toggle-row">
@@ -44,13 +45,13 @@ export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onC
 
       <label className="field">
         <span className="field-row">
-          Evacuating cars <strong className="num">{slider}</strong>
+          Evacuating cars <strong className="num">{slider.toLocaleString()}</strong>
         </span>
         <input
           type="range"
           min="0"
-          max="400"
-          step="20"
+          max="5000"
+          step="100"
           value={slider}
           disabled={!canSimulate || busy}
           onChange={(e) => setSlider(+e.target.value)}

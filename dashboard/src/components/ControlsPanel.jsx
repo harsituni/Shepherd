@@ -177,7 +177,18 @@ export default function ControlsPanel({
             className="icon-btn primary"
             aria-label={running ? 'Pause' : idle ? 'Start simulation' : 'Resume'}
             disabled={!canPlay}
-            onClick={() => onPlay({ windKmh, windFrom, humidity, efRating }, speed)}
+            onClick={() =>
+              onPlay(
+                {
+                  windKmh,
+                  windFrom,
+                  humidity,
+                  efRating,
+                  trafficCount: traffic?.simulated_count ?? 2000,
+                },
+                speed,
+              )
+            }
           >
             {running ? <PauseIcon /> : <PlayIcon />}
           </button>
