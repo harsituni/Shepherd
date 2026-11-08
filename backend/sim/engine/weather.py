@@ -11,6 +11,8 @@ Bearings are grid bearings: grid north = UTM 12N north. UTM grid convergence
 (≤ ~2° here) is ignored.
 """
 
+from __future__ import annotations
+
 import bisect
 import math
 from dataclasses import dataclass

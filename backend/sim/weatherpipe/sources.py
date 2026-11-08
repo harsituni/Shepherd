@@ -4,6 +4,8 @@ The API key comes from the OPENWEATHER_API_KEY environment variable, or failing
 that from the repo-root .env file (gitignored; see .env.example).
 """
 
+from __future__ import annotations
+
 import json
 import os
 from datetime import datetime, timedelta, timezone

@@ -6,7 +6,7 @@ ValidationError whose message names the field. Unknown fields and non-finite num
 
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import numpy as np
 from pydantic import (
@@ -77,8 +77,8 @@ class Scenario(ValidatedModel):
     horizon_min: int = Field(gt=0)
     step_min: int = Field(gt=0)
     bbox: tuple[float, float, float, float]
-    initial_perimeter: PerimeterGeometry | None = None
-    ignition: IgnitionPoint | None = None
+    initial_perimeter: Optional[PerimeterGeometry] = None
+    ignition: Optional[IgnitionPoint] = None
     weather: list[WeatherEntry] = Field(min_length=1)
     n_ensemble: int = Field(default=1, ge=1, le=100)
     cell_m: int = Field(default=100, ge=1)
@@ -87,7 +87,7 @@ class Scenario(ValidatedModel):
     weather_end_policy: Literal["error", "hold"] = "error"
     weather_source: dict = Field(default_factory=dict)
     execution_mode: Literal["recompute"] = "recompute"
-    revision_of: str | None = None
+    revision_of: Optional[str] = None
     fbp: FbpParams = Field(default_factory=FbpParams)
 
     @field_validator("t0")
