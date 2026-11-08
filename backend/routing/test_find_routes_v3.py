@@ -112,10 +112,16 @@ class FindRoutesV3Tests(unittest.TestCase):
         self.assertEqual(usual["status"], "blocked")
         self.assertIn("already", usual["reason"])
         self.assertIn(list(BEND), usual["geometry"]["coordinates"])
-        # The 900 m parallel road was dropped for the 300 m one, so sh_a has no detour.
-        self.assertFalse(any(o["shelter_id"] == "sh_a" and o["status"] != "blocked" for o in body["options"]))
-        self.assertEqual(body["best_route_id"], "rt_sh_c_fastest")
-        detour = self.option(body, "rt_sh_b_safest")
+        # The distinct 900 m parallel road avoids the burning bend (F04).
+        detour = self.option(body, "rt_sh_a_safest")
+        self.assertEqual(detour["status"], "ok")
+        self.assertEqual(detour["distance_km"], 0.9)
+        self.assertNotIn(list(BEND), detour["geometry"]["coordinates"])
+        self.assertEqual(body["best_route_id"], "rt_sh_a_safest")
+        # B's safe path contains A's entire safe path, so display diversity may
+        # retain A alone. Explicit selection still rebuilds and verifies B.
+        selected_b = self.routes(fc, check="rt_sh_b_safest")
+        detour = self.option(selected_b, "rt_sh_b_safest")
         self.assertEqual(detour["status"], "ok")
         self.assertTrue(detour["rerouted"])
         self.assertNotIn(list(BEND), detour["geometry"]["coordinates"])
@@ -140,28 +146,38 @@ class FindRoutesV3Tests(unittest.TestCase):
                          shelter("full", 3, occupancy=100), shelter("isolated", 5),
                          shelter("open", 4)]
         body = self.routes()
-        self.assertEqual([o["id"] for o in body["options"]], ["rt_open_fastest"])
+        self.assertEqual([o["id"] for o in body["options"]], ["rt_open_fastest", "rt_isolated_fastest"])
+        self.assertEqual(body["options"][1]["status"], "indeterminate")
+        self.assertFalse(body["options"][1]["access"]["complete"])
         self.assertEqual(body["shelter_id"], "open")
         self.assertEqual({e["shelter_id"]: e["reason"] for e in body["excluded"]},
-                         {"closed": "Shelter closed", "full": "Shelter full", "isolated": "Not reachable by road"})
+                         {"closed": "Shelter closed", "full": "Shelter full"})
 
     def test_no_path_does_not_enable_backup(self):
         self.shelters = [shelter("isolated", 5)]
-        with self.assertRaises(router.NoRouteError) as raised:
-            self.routes()
-        self.assertIn("No open shelter can be reached by road", str(raised.exception))
+        body = self.routes()
+        self.assertIsNone(body["best_route_id"])
+        self.assertIsNone(body["no_safe_route"])
+        self.assertEqual(body["options"][0]["access"]["destination"]["status"], "unverified")
         self.assertFalse(router._backup_mode)
 
     def test_backup_is_labelled_and_checks_forecast(self):
         with patch.object(router, "_graph", None), patch.object(router, "_backup_mode", True):
             body = self.routes()
-            self.assertTrue(body["approximate"])
+            self.assertIsNone(body["best_route_id"])
+            self.assertIsNone(body["no_safe_route"])
+            self.assertFalse(body["search"]["complete"])
             self.assertEqual(len(body["options"]), 3)
             for option in body["options"]:
                 self.assertTrue(option["approximate"])
                 self.assertIn("not navigation instructions", option["warning"])
-                self.assertEqual(len(option["geometry"]["coordinates"]), 2)
-            self.assert_all_blocked(self.routes(self.forecast(lambda lat, lon: 0)))
+                self.assertIsNone(option["geometry"])
+                self.assertIsNone(option["eta_min"])
+                self.assertEqual(option["status"], "indeterminate")
+            burned = self.routes(self.forecast(lambda lat, lon: 0))
+            self.assertTrue(all(o["status"] == "blocked" for o in burned["options"]))
+            self.assertIsNone(burned["best_route_id"])
+            self.assertIsNone(burned["no_safe_route"])  # no graph: no complete feasibility search
 
     def test_check_route_updates_selected_timing(self):
         body = self.routes(self.forecast(lambda lat, lon: 120), sim_time=10, check="rt_sh_c_fastest")
@@ -252,6 +268,7 @@ class FindRoutesV3Tests(unittest.TestCase):
 
     def test_advancing_clock_switches_to_detour(self):
         self.shelters = [shelter("sh_a", 2)]
+        self.graph.remove_edge(1, 2, 0)  # isolate the via-4 detour; parallel roads have their own regression
         self.graph.add_edge(4, 2, length=600.0)  # a detour that misses the bend
         fc = self.forecast()
         fc.at_point(BEND, 31)
@@ -264,14 +281,24 @@ class FindRoutesV3Tests(unittest.TestCase):
         self.assertTrue(later["rerouted"])
         self.assertEqual(self.option(later, "rt_sh_a_fastest")["status"], "blocked")
 
-    def test_unknown_forecast_has_no_invented_deadline(self):
+    def test_clear_forecast_has_expiry_deadline_but_no_invented_fire(self):
         for fc in (None, self.forecast()):  # no fire, and a fire that reaches none of these roads
             body = self.routes(fc)
             self.assertTrue(body["forecast_complete"])
-            self.assertIsNone(body["leave_by_sim_min"])
+            if fc is None:
+                self.assertIsNone(body["leave_by_sim_min"])
+            else:
+                self.assertEqual(body["leave_by_sim_min"], 99909)
             for option in body["options"]:
                 self.assertEqual(option["status"], "ok")
-                self.assertIsNone(option["margin_min"])
+                if fc is None:
+                    self.assertIsNone(option["margin_min"])
+                    self.assertIsNone(option["leave_by_sim_min"])
+                else:
+                    # H=100000, reserve=90, trips are 0.6 and 3 minutes.
+                    deadline = {"rt_sh_a_fastest": 99909, "rt_sh_c_fastest": 99907}[option["id"]]
+                    self.assertEqual(option["leave_by_sim_min"], deadline)
+                    self.assertEqual(option["margin_min"], deadline)
                 self.assertIsNone(option["clear_until_sim_min"])
                 self.assertIsNone(option["hazard_intercept"])
 
@@ -283,6 +310,7 @@ class FindRoutesV3Tests(unittest.TestCase):
         self.assertEqual(body["options"][0]["margin_min"], 79)
 
     def test_check_route_keeps_shelter_with_a_detour(self):
+        self.graph.remove_edge(1, 2, 0)  # exercise the via-4 path rather than the newly retained parallel
         self.graph.add_edge(4, 2, length=600.0)
         fc = self.forecast()
         fc.at_point(BEND, 0)

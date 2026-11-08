@@ -4,9 +4,8 @@
 afterwards, so request threads share it without locks.
 
 - Nodes: OSM ids, lon/lat, and x/y in UTM zone 12N metres (the fire grid's CRS).
-- Edges: one per directed (u, v), the shortest of any parallel roads, sorted by
-  u * N + v. One-way roads stay one-way. Self-loops are dropped: they are never
-  on a shortest path.
+- Edges: every directed (u, v, key), including parallel roads, sorted by
+  (u, v, length, key). Self-loops are retained for access to points inside their geometry.
 - `csr_time`: travel minutes at SPEED_KM_PER_MIN as a SciPy CSR matrix, for
   `scipy.sparse.csgraph.dijkstra(..., directed=True)`.
 - `nearest_node()`: a cKDTree on node x/y.
@@ -24,13 +23,14 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
+import shapely
 from pyproj import Transformer
 from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra
 from scipy.spatial import cKDTree
 
 SPEED_KM_PER_MIN = 0.5
 GRID_CRS = "EPSG:32612"  # UTM zone 12N, the same CRS as the fire grid
-MIN_WEIGHT_MIN = 1e-6    # csr_matrix drops nothing, but a zero weight would read as "no edge"
 ON_BORDER = 1e-9         # grid units: closer than this to a cell border counts as on it
 
 TO_GRID = Transformer.from_crs("EPSG:4326", GRID_CRS, always_xy=True)
@@ -54,16 +54,64 @@ def road_name(edge: dict) -> str:
 
 def masked_csr(n: int, edge_u: np.ndarray, edge_v: np.ndarray, weights: np.ndarray,
                allowed: Optional[np.ndarray] = None) -> csr_matrix:
-    """CSR matrix of `weights` on the allowed edges.
+    """Minimum allowed weight per directed pair, never a sum of parallel roads.
 
-    Edges must already be sorted by (u, v) with no duplicates: the matrix is built
-    straight from indptr/indices, never through COO, which would add duplicates.
+    This reduction is per search, not a deletion from the road graph. Hazard
+    pruning still evaluates every original edge independently.
     """
-    if allowed is not None:
-        edge_u, edge_v, weights = edge_u[allowed], edge_v[allowed], weights[allowed]
+    return _csr_with_edges(n, edge_u, edge_v, weights, allowed)[0]
+
+
+def _csr_with_edges(n, edge_u, edge_v, weights, allowed=None):
+    ids = np.arange(len(edge_u)) if allowed is None else np.flatnonzero(allowed)
+    keys = edge_u[ids].astype(np.int64) * n + edge_v[ids]
+    # Inputs are sorted by pair. For ties select the first original edge index.
+    if len(ids):
+        starts = np.r_[0, np.flatnonzero(np.diff(keys)) + 1]
+        minima = np.minimum.reduceat(weights[ids], starts)
+        winners = weights[ids] == np.repeat(minima, np.diff(np.r_[starts, len(ids)]))
+        ids, keys = ids[winners], keys[winners]
+        ids = ids[np.r_[True, np.diff(keys) != 0]]
+    edge_u, edge_v, weights = edge_u[ids], edge_v[ids], weights[ids]
     indptr = np.zeros(n + 1, dtype=np.int64)
     np.cumsum(np.bincount(edge_u, minlength=n), out=indptr[1:])
-    return csr_matrix((np.maximum(weights, MIN_WEIGHT_MIN), edge_v, indptr), shape=(n, n))
+    return csr_matrix((weights, edge_v, indptr), shape=(n, n)), ids
+
+
+@dataclass
+class SearchTree:
+    distance: np.ndarray
+    pred: np.ndarray
+    pred_edge: np.ndarray
+
+    def __iter__(self):
+        # Preserve the existing (distance, predecessor-node) inspection interface.
+        yield self.distance
+        yield self.pred
+
+    def edges_to(self, start, target):
+        return edge_path(self.pred, self.pred_edge, start, target)
+
+
+def edge_path(pred, pred_edge, start, target):
+    """Recover exact chosen edges, never infer a parallel road from node pairs."""
+    edges = []
+    while target != start:
+        if pred[target] < 0 or pred_edge[target] < 0 or len(edges) >= len(pred):
+            return None
+        edges.append(int(pred_edge[target]))
+        target = int(pred[target])
+    return np.array(edges[::-1], dtype=np.int64)
+
+
+def shortest_paths(n, edge_u, edge_v, weights, start, allowed=None):
+    matrix, chosen = _csr_with_edges(n, edge_u, edge_v, weights, allowed)
+    dist, pred = dijkstra(matrix, directed=True, indices=start, return_predecessors=True)
+    pred_edge = np.full(n, -1, dtype=np.int64)
+    targets = np.flatnonzero(pred >= 0)
+    keys = edge_u[chosen].astype(np.int64) * n + edge_v[chosen]
+    pred_edge[targets] = chosen[np.searchsorted(keys, pred[targets].astype(np.int64)*n + targets)]
+    return SearchTree(dist, pred, pred_edge)
 
 
 @dataclass(frozen=True, eq=False)
@@ -76,6 +124,7 @@ class RoadGraph:
     edge_u: np.ndarray        # (E,) node index
     edge_v: np.ndarray        # (E,) node index
     edge_key: np.ndarray      # (E,) u * N + v, sorted
+    edge_osm_key: tuple       # original NetworkX multigraph keys, one per edge
     edge_len_m: np.ndarray
     edge_time_min: np.ndarray
     edge_name: tuple
@@ -88,6 +137,9 @@ class RoadGraph:
     bbox: tuple               # (min_lon, min_lat, max_lon, max_lat) over every road point
     tree: cKDTree
     osmid_index: dict
+    edge_lines: np.ndarray
+    edge_tree: object
+    edge_permitted: np.ndarray
 
     @property
     def n_nodes(self) -> int:
@@ -99,8 +151,8 @@ class RoadGraph:
 
     @property
     def edge_weight(self) -> np.ndarray:
-        """Travel minutes as stored in csr_time (never zero)."""
-        return np.maximum(self.edge_time_min, MIN_WEIGHT_MIN)
+        """Exact travel minutes used by the judge; CSR preserves explicit zeros."""
+        return self.edge_time_min
 
     @classmethod
     def from_networkx(cls, graph) -> "RoadGraph":
@@ -111,30 +163,26 @@ class RoadGraph:
         node_lat = np.array([float(graph.nodes[o]["y"]) for o in osmids], dtype=float)
         node_x, node_y = (np.asarray(a, dtype=float) for a in TO_GRID.transform(node_lon, node_lat))
 
-        # Parallel roads: keep the shortest per (u, v).
-        best = {}
-        for u, v, data in graph.edges(data=True):
-            if u == v:
-                continue
-            key = (index[u], index[v])
-            length = float(data.get("length", 0.0))
-            if key not in best or length < best[key][0]:
-                best[key] = (length, data)
-        pairs = sorted(best, key=lambda uv: uv[0] * n + uv[1])
-        edge_u = np.array([u for u, _ in pairs], dtype=np.int32)
-        edge_v = np.array([v for _, v in pairs], dtype=np.int32)
-        edge_len_m = np.array([best[p][0] for p in pairs], dtype=float)
+        source = (graph.edges(keys=True, data=True) if graph.is_multigraph()
+                  else ((u, v, 0, data) for u, v, data in graph.edges(data=True)))
+        roads = [(index[u], index[v], key, data) for u, v, key, data in source]
+        roads.sort(key=lambda e: (e[0], e[1], float(e[3].get("length", 0.0)),
+                                  type(e[2]).__name__, repr(e[2])))
+        edge_u = np.array([e[0] for e in roads], dtype=np.int32)
+        edge_v = np.array([e[1] for e in roads], dtype=np.int32)
+        edge_len_m = np.array([float(e[3].get("length", 0.0)) for e in roads])
+        if not np.all(np.isfinite(edge_len_m) & (edge_len_m >= 0)):
+            raise ValueError("road lengths must be finite and nonnegative")
 
         names, lons, lats, counts = [], [], [], []
-        for (u, v) in pairs:
-            data = best[(u, v)][1]
+        for u, v, _, data in roads:
             names.append(road_name(data))
             coords = _travel_coords(data.get("geometry"), (node_lon[u], node_lat[u]),
                                     (node_lon[v], node_lat[v]))
             lons.extend(c[0] for c in coords)
             lats.extend(c[1] for c in coords)
             counts.append(len(coords))
-        geom_ptr = np.zeros(len(pairs) + 1, dtype=np.int64)
+        geom_ptr = np.zeros(len(roads) + 1, dtype=np.int64)
         np.cumsum(counts, out=geom_ptr[1:])
         geom_lon = np.array(lons, dtype=float)
         geom_lat = np.array(lats, dtype=float)
@@ -149,11 +197,21 @@ class RoadGraph:
                 if n else (0.0, 0.0, 0.0, 0.0))
 
         edge_time_min = edge_len_m / 1000.0 / SPEED_KM_PER_MIN
+        lines = np.array([shapely.LineString(np.column_stack([geom_x[a:b], geom_y[a:b]]))
+                          for a, b in zip(geom_ptr[:-1], geom_ptr[1:])], dtype=object)
+        def permitted(data):
+            for key in ("access", "vehicle", "motor_vehicle", "motorcar"):
+                value = data.get(key)
+                values = value if isinstance(value, list) else [value]
+                if any(str(v).lower() in ("no", "private") for v in values):
+                    return False
+            return True
         return cls(
             node_osmid=np.array(osmids, dtype=object),
             node_lon=node_lon, node_lat=node_lat, node_x=node_x, node_y=node_y,
             edge_u=edge_u, edge_v=edge_v,
             edge_key=edge_u.astype(np.int64) * n + edge_v,
+            edge_osm_key=tuple(e[2] for e in roads),
             edge_len_m=edge_len_m, edge_time_min=edge_time_min,
             edge_name=tuple(names),
             geom_ptr=geom_ptr, geom_lon=geom_lon, geom_lat=geom_lat, geom_x=geom_x, geom_y=geom_y,
@@ -161,6 +219,8 @@ class RoadGraph:
             bbox=bbox,
             tree=cKDTree(np.column_stack([node_x, node_y])) if n else None,
             osmid_index=index,
+            edge_lines=lines, edge_tree=shapely.STRtree(lines),
+            edge_permitted=np.array([permitted(data) for _, _, _, data in roads], dtype=bool),
         )
 
     # ---------- lookups ----------
@@ -175,7 +235,10 @@ class RoadGraph:
         return self.osmid_index[osmid]
 
     def edge_index(self, u, v) -> np.ndarray:
-        """Edge indices for node index pairs (arrays or scalars). Every pair must exist."""
+        """Shortest-length edge for each pair, for explicit distance-only lookups.
+
+        Hazard-aware routes must use SearchTree.pred_edge instead.
+        """
         keys = np.asarray(u, dtype=np.int64) * self.n_nodes + np.asarray(v, dtype=np.int64)
         found = np.searchsorted(self.edge_key, keys)
         if np.any(found >= len(self.edge_key)) or np.any(self.edge_key[np.minimum(found, len(self.edge_key) - 1)] != keys):

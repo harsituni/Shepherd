@@ -1,7 +1,7 @@
 """Picking and ordering the 2-4 options shown to the user (routing v3).
 
-Order: safe first, then tight, then unsafe; unsafe options are kept, greyed, and
-never dropped for being unsafe. Among `ok` routes the quicker one wins: `ok`
+Order: ok, tight, indeterminate, then blocked. Only complete ok/tight routes
+can be recommended. Among `ok` routes the quicker one wins: `ok`
 already means at least an hour to spare.
 """
 
@@ -12,6 +12,7 @@ from typing import Optional
 
 from backend.routing.candidates import MAX_OVERLAP, Candidate, overlap
 from backend.routing.road_graph import RoadGraph
+from backend.routing.safety import viable
 
 ROLE_ORDER = {"fastest": 0, "safest": 1, "alternative": 2}
 THREAT_WINDOW_MIN = 120   # a shelter the fire reaches this soon after arrival ranks lower
@@ -28,18 +29,22 @@ def rank_key(c: Candidate) -> tuple:
         threatened = (j.shelter_threat_sim_min is not None
                       and j.shelter_threat_sim_min <= j.arrival_sim_min + THREAT_WINDOW_MIN)
         return (2 if threatened else 1, c.path.total_min, 0) + tail
-    group = 3 if j.status == "tight" else 4
+    if j.status == "indeterminate":
+        return (4, 0, c.path.total_min) + tail
+    group = 3 if j.status == "tight" else 5
     return (group, -j.margin_min, c.path.total_min) + tail
 
 
 @dataclass
 class Selection:
     options: list              # display order; the recommended option first
-    best: Optional[Candidate]  # None when every option is unsafe
-    no_safe_route: bool
+    best: Optional[Candidate]  # None when no option is established as viable
+    no_safe_route: Optional[bool]  # null when no viable route is established and some are unknown
+    route_status: str             # viable | blocked | indeterminate, within declared search scope
 
 
-def select(rg: Optional[RoadGraph], candidates: list, check_route_id: Optional[str] = None) -> Selection:
+def select(rg: Optional[RoadGraph], candidates: list, check_route_id: Optional[str] = None,
+           search_complete: bool = True) -> Selection:
     ranked = sorted(candidates, key=rank_key)
     pool = []
     for c in ranked:  # plan 2.6: no two options share more than 80% of the shorter road
@@ -74,24 +79,26 @@ def select(rg: Optional[RoadGraph], candidates: list, check_route_id: Optional[s
                 picks.append(c)
     picks = sorted(picks, key=rank_key)[:MAX_OPTIONS]
 
-    best = picks[0] if picks and picks[0].status != "blocked" else None
+    best = next((p for p in picks if viable(p.judgement)), None)
     if check_route_id:
         chosen = next((c for c in ranked if c.id == check_route_id), None)
         if chosen is not None:
             if chosen not in picks:
                 # No near-duplicate lines, but a greyed pick never pushes out a usable one.
                 picks = [p for p in picks if _overlap(rg, p, chosen) <= MAX_OVERLAP
-                         or (chosen.status == "blocked" and p.status != "blocked")]
+                         or (not viable(chosen.judgement) and viable(p.judgement))]
                 if len(picks) >= MAX_OPTIONS:
                     picks = picks[:MAX_OPTIONS - 1]
                 picks = sorted(picks + [chosen], key=rank_key)
-            if chosen.status != "blocked":
+            if viable(chosen.judgement):
                 best = chosen
             else:
-                best = next((p for p in picks if p.status != "blocked"), None)
+                best = next((p for p in picks if viable(p.judgement)), None)
     if best is not None:
         picks = [best] + [p for p in picks if p is not best]
-    return Selection(picks, best, best is None)
+    unknown = not search_complete or any(c.status == "indeterminate" for c in candidates)
+    status = "viable" if best is not None else ("indeterminate" if unknown else "blocked")
+    return Selection(picks, best, False if best is not None else (None if unknown else True), status)
 
 
 def _count(picks, c) -> int:

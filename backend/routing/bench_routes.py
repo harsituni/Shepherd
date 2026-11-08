@@ -55,7 +55,6 @@ def p95(values) -> float:
 def bench_in_process(rounds: int) -> None:
     from backend.api.main import SHELTERS
     from backend.routing import router
-    from backend.routing.candidates import MAX_FIXPOINT_ROUNDS
     from backend.routing.road_graph import FireGrid, build_cell_table
     from backend.routing.safety import EdgeFire
     from backend.sim.controller import SimController
@@ -73,7 +72,13 @@ def bench_in_process(rounds: int) -> None:
     clock = time.perf_counter()
     for lat, lon in zip(lats, lons):
         rg.nearest_node(lat, lon)
-    check("snap to road, per call", (time.perf_counter() - clock) * 1000 / len(lats), 1.0)
+    check("legacy nearest-node lookup, per call", (time.perf_counter() - clock) * 1000 / len(lats), 1.0)
+
+    from backend.routing.access import snaps
+    clock = time.perf_counter()
+    for lat, lon in zip(lats, lons):
+        snaps(rg, lon, lat)
+    check("directed edge access lookup, per call", (time.perf_counter() - clock) * 1000 / len(lats), 1.0)
 
     times = []
     for start in rng.integers(0, rg.n_nodes, 50):
@@ -103,7 +108,7 @@ def bench_in_process(rounds: int) -> None:
     c.reset()
     c.start(dict(FIRE))
     router.prepare_forecast(c.oracle())
-    totals, rounds_seen = [], []
+    totals, rounds_seen, fallbacks = [], [], []
     for _ in range(rounds):
         c.tick()
         for lat, lon in PINS:
@@ -111,10 +116,14 @@ def bench_in_process(rounds: int) -> None:
             body = router.find_routes_v3(lat, lon, c.oracle(), SHELTERS, sim_time=c.sim_time, debug=True)
             totals.append((time.perf_counter() - clock) * 1000)
             rounds_seen.append(body["timings"]["fixpoint_rounds"])
+            fallbacks.append(body["timings"]["exact_fallbacks"])
+            if not body["search"]["complete"]:
+                failures.append("incomplete feasibility search")
     print(f"/route with a fire: {len(totals)} requests over {rounds} sim minutes")
     check("whole route, 1 client, mean", statistics.mean(totals), 100.0)
     check("whole route, 1 client, p95", p95(totals), 150.0)
-    check("safe-search rounds, most seen", max(rounds_seen), MAX_FIXPOINT_ROUNDS, "rounds")
+    print(f"  Exact feasibility searches: compiled rounds max {max(rounds_seen)}, "
+          f"heap fallbacks {sum(fallbacks)} (no correctness cap)")
 
 
 def get(url: str):

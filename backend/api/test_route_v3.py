@@ -44,8 +44,11 @@ class RouteFlagTests(unittest.TestCase):
     def test_v3_shape_is_served(self):
         self.start_fire()
         body = api.get_route(*PIN, check_route_id=None, debug=False)
-        for key in ("best_route_id", "no_safe_route", "forecast", "options", "excluded"):
+        for key in ("best_route_id", "no_safe_route", "forecast", "options", "excluded", "search"):
             self.assertIn(key, body)
+        self.assertTrue(body["search"]["complete"])
+        self.assertEqual(body["search"]["scope"], "all_eligible_shelters_on_loaded_directed_graph")
+        self.assertGreater(body["search"]["shelters_evaluated"], 0)
         self.assertTrue(all(o["id"].startswith("rt_") for o in body["options"]))
         self.assertEqual(body["forecast"]["band"], "p50")
         self.assertNotIn("timings", body)
@@ -54,7 +57,7 @@ class RouteFlagTests(unittest.TestCase):
         self.start_fire()
         body = api.get_route(*PIN, check_route_id=None, debug=True)
         self.assertEqual(set(body["timings"]),
-                         {"snap_ms", "search_ms", "safety_ms", "fixpoint_rounds", "total_ms"})
+                         {"snap_ms", "search_ms", "safety_ms", "fixpoint_rounds", "exact_fallbacks", "total_ms"})
 
     def test_out_of_area_is_404(self):
         response = api.get_route(53.0, -113.5, check_route_id=None, debug=False)

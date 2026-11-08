@@ -37,25 +37,29 @@ class RoadGraphTests(unittest.TestCase):
     def setUp(self):
         self.rg = RoadGraph.from_networkx(fake_graph())
 
-    def test_parallel_edges_keep_the_shortest(self):
+    def test_parallel_edges_preserved_with_minimum_plain_distance(self):
         u, v = self.rg.node_index(1), self.rg.node_index(2)
+        pair = (self.rg.edge_u == u) & (self.rg.edge_v == v)
+        self.assertEqual(sorted(self.rg.edge_len_m[pair]), [300.0, 900.0])
         e = int(self.rg.edge_index(u, v))
         self.assertEqual(self.rg.edge_len_m[e], 300.0)
         # csr_matrix would add the 900 m and 300 m roads together if both went in.
         self.assertAlmostEqual(self.rg.csr_time[u, v], 300.0 / 1000 / SPEED_KM_PER_MIN)
 
     def test_edges_sorted_and_directed(self):
-        self.assertTrue(np.all(np.diff(self.rg.edge_key) > 0))
+        self.assertTrue(np.all(np.diff(self.rg.edge_key) >= 0))
+        identities = list(zip(self.rg.edge_u, self.rg.edge_v, self.rg.edge_osm_key))
+        self.assertEqual(len(identities), len(set(identities)))
         n1, n3 = self.rg.node_index(1), self.rg.node_index(3)
         self.assertEqual(self.rg.csr_time[n3, n1], 0)  # no road back from 3 to 1
         with self.assertRaises(KeyError):
             self.rg.edge_index(n3, n1)
 
-    def test_self_loops_dropped_and_geometry_runs_u_to_v(self):
+    def test_self_loops_retained_for_mid_edge_access_and_geometry_runs_u_to_v(self):
         graph = fake_graph()
         graph.add_edge(4, 4, length=50.0)
         rg = RoadGraph.from_networkx(graph)
-        self.assertFalse(np.any(rg.edge_u == rg.edge_v))
+        self.assertEqual(int(np.sum(rg.edge_u == rg.edge_v)), 1)
         e = int(rg.edge_index(rg.node_index(1), rg.node_index(2)))
         coords = rg.edge_coords_ll(e)
         self.assertEqual(coords[0].tolist(), [-113.50, 53.54])  # stored 2 -> bend -> 1, reversed
@@ -207,7 +211,7 @@ class SafetyTests(unittest.TestCase):
         e = self.rg.path_edges([s, int(self.rg.node_index("X"))])
         x_ll = ll(2000, 0)
         return RoutePath(pin_ll, TO_GRID.transform(*pin_ll), (self.rg.node_lon[s], self.rg.node_lat[s]),
-                         (self.rg.node_x[s], self.rg.node_y[s]), e, 2000.0, x_ll, TO_GRID.transform(*x_ll), "X")
+                         (self.rg.node_x[s], self.rg.node_y[s]), e, 2000.0, x_ll, TO_GRID.transform(*x_ll), "X", access_verified=True)
 
     def judged(self, pin_ll=None, t_now=0):
         oracle = self.fc.oracle(sim_time=t_now)
@@ -352,14 +356,21 @@ class ShelterChoiceTests(RouterCase):
     def test_no_road_within_300_m(self):
         with self.assertRaises(router.NoRouteError) as raised:
             self.routes([shelter("near_road", ll(0, -1000))], pin=(-400, 0), fire=False)
-        self.assertEqual(str(raised.exception), "No road near this location")
+        self.assertIn("within 300 m", str(raised.exception))
 
-    def test_line_starts_at_the_pin(self):
+    def test_unmapped_pin_is_explicit_and_not_drawn_as_a_connector(self):
+        # The nearest road (S->N, 120 m) is one-way away from Q, so the journey
+        # starts on S->Q, 130 m away; neither gap is drawn or driven.
         body = self.routes([shelter("near_road", ll(0, -1000))], pin=(120, 50), fire=False)
         option = body["options"][0]
-        self.assertEqual(option["geometry"]["coordinates"][0], list(ll(120, 50)))
-        self.assertEqual(option["connector_m"], 130)
-        self.assertAlmostEqual(option["distance_km"], 1.1)
+        origin = option["access"]["origin"]
+        self.assertNotEqual(option["geometry"]["coordinates"][0], list(ll(120, 50)))
+        self.assertEqual(origin["person_point"], list(ll(120, 50)))
+        self.assertEqual(option["geometry"]["coordinates"][0], origin["point"])
+        self.assertAlmostEqual(origin["unmodeled_m"], 130, places=3)
+        self.assertEqual(option["status"], "ok")
+        self.assertEqual(body["best_route_id"], option["id"])
+        self.assertEqual((option["distance_km"], option["eta_min"], option["connector_m"]), (1.0, 2, 0))
 
 
 class FallbackDepthTests(RouterCase):

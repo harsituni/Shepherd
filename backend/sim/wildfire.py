@@ -40,11 +40,11 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import numpy as np
-from shapely.geometry import Point, box, mapping
+from shapely.geometry import Point, mapping
 
 from backend.sim.engine import run_simulation
 from backend.sim.engine.contracts import WeatherEntry
-from backend.sim.engine.grid import TO_WGS84, seed_mask, to_utm, to_wgs84
+from backend.sim.engine.grid import TO_WGS84, domain_mask, to_utm, to_wgs84
 from backend.sim.engine.weather import KMH_PER_MS, interpolate_wind
 from backend.sim.oracle import ForecastOracle
 
@@ -205,7 +205,7 @@ class WildfireSim:
             grid = result.grid
             if self._in_domain is None:
                 # The cells the engine can burn: the lon/lat domain box, rasterised.
-                mask = seed_mask(to_utm(box(*self._bbox)), grid).reshape(-1).copy()
+                mask = domain_mask(self._bbox, grid).reshape(-1).copy()
                 mask.flags.writeable = False
                 self._in_domain = mask
             kmh, from_deg = self._wind_now()

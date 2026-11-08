@@ -4,7 +4,7 @@ Routes and distances run between snapped road nodes, not building entrances.
 eta_min is illustrative at 30 km/h, not an actual traffic estimate.
 """
 
-from math import ceil, floor
+from math import ceil, floor, isfinite
 import gzip
 import heapq
 import logging
@@ -15,17 +15,19 @@ import threading
 import time
 import weakref
 
+import numpy as np
 import networkx as nx
 import osmnx as ox
 
 from shapely.geometry import LineString, Point, shape
 
 from backend.routing.candidates import (
-    K_SHELTERS, NoRouteError, Stats, build_candidates, straight_line_candidates,
+    NoRouteError, Stats, build_candidates, straight_line_candidates,
 )
 from backend.routing.road_graph import CellTable, FireGrid, RoadGraph, build_cell_table
 from backend.routing.safety import EdgeFire, t_label
 from backend.routing.select import select
+from backend.sim.oracle import validation_error
 
 
 ROUTING_DIR = Path(__file__).resolve().parent
@@ -757,7 +759,7 @@ def prepare_forecast(oracle) -> None:
 
     The API calls this on /sim/start and /sim/wind so phones don't pay for it.
     """
-    if oracle is None or _graph is None or len(_graph) == 0:
+    if oracle is None or validation_error(oracle) or _graph is None or len(_graph) == 0:
         return
     rg = _road_graph()
     EdgeFire.for_oracle(rg, _cell_table(rg, oracle), oracle)
@@ -768,13 +770,17 @@ def find_routes_v3(lat: float, lon: float, oracle, shelters: list[dict], sim_tim
     """2-4 road routes from the pin, each checked cell by cell against one forecast snapshot.
 
     `oracle` is the sim's frozen ForecastOracle, or None with no fire running.
-    Unsafe routes are kept and marked `blocked`; when every route is unsafe the
-    answer still lists them, with `no_safe_route: true`. Raises NoRouteError only
+    Known conflicts are `blocked`; a complete feasibility search is required
+    before `no_safe_route` can be true. Unknown paths produce `indeterminate`;
+    without a viable recommendation, `no_safe_route` is null. Raises NoRouteError only
     outside the demo area, with no road within 300 m, or with no open shelter
     reachable by road.
     """
     started = time.perf_counter()
-    t_now = float(oracle.sim_time) if oracle is not None else float(sim_time)
+    forecast_error = validation_error(oracle) if oracle is not None else None
+    t_now = float(oracle.sim_time) if oracle is not None and not forecast_error else float(sim_time)
+    if not isfinite(t_now) or t_now < 0:
+        t_now = 0.0  # display fallback only; invalid forecasts remain indeterminate
     stats = Stats()
     if not _inside_demo(lat, lon):
         raise NoRouteError("No route in the Edmonton demo area")
@@ -782,27 +788,33 @@ def find_routes_v3(lat: float, lon: float, oracle, shelters: list[dict], sim_tim
         if not _backup_mode:
             raise RuntimeError("Road graph is not loaded. Call load_graph() at startup.")
         rg = None
-        candidates = straight_line_candidates(lat, lon, shelters, oracle, t_now, K_SHELTERS,
+        candidates = straight_line_candidates(lat, lon, shelters, oracle, t_now,
                                               _inside_demo, stats)
     else:
         if len(_graph) == 0:
             raise NoRouteError("No route in the Edmonton demo area")
         rg = _road_graph()
-        edge_fire = EdgeFire.for_oracle(rg, _cell_table(rg, oracle), oracle) if oracle is not None else None
+        edge_fire = (EdgeFire.for_oracle(rg, _cell_table(rg, oracle), oracle)
+                     if oracle is not None and not forecast_error else None)
         candidates = build_candidates(rg, edge_fire, oracle, lat, lon, shelters, t_now, stats,
                                       keep_id=check_route_id)
-    chosen = select(rg, candidates, check_route_id)
+        rg = stats.routing_graph
+    chosen = select(rg, candidates, check_route_id, search_complete=stats.search_complete)
 
     options = [_v3_option(c, rg) for c in chosen.options]
     body = {
         "lat": lat, "lon": lon, "sim_time": int(t_now),
         "best_route_id": chosen.best.id if chosen.best is not None else None,
         "no_safe_route": chosen.no_safe_route,
+        "route_status": chosen.route_status,
+        "forecast_error": forecast_error,
+        "search": {"complete": bool(stats.search_complete), "scope": stats.search_scope,
+                   "shelters_evaluated": stats.shelters_evaluated},
         "leave_by_sim_min": None, "leave_by_label": None,
-        "forecast": None if oracle is None else {
+        "forecast": None if oracle is None or forecast_error else {
             "run_id": oracle.run_id, "band": oracle.band,
-            "covers_until_sim_min": oracle.covers_until_sim_min,
-            "wind_kmh": oracle.wind_kmh, "wind_from_deg": oracle.wind_from_deg,
+            "covers_until_sim_min": float(oracle.covers_until_sim_min),
+            "wind_kmh": float(oracle.wind_kmh), "wind_from_deg": float(oracle.wind_from_deg),
         },
         "options": options,
         "excluded": stats.excluded,
@@ -819,6 +831,7 @@ def find_routes_v3(lat: float, lon: float, oracle, shelters: list[dict], sim_tim
         body["timings"] = {
             "snap_ms": round(stats.snap_ms, 2), "search_ms": round(stats.search_ms, 2),
             "safety_ms": round(stats.safety_ms, 2), "fixpoint_rounds": stats.fixpoint_rounds,
+            "exact_fallbacks": stats.exact_fallbacks,
             "total_ms": round((time.perf_counter() - started) * 1000, 2),
         }
     return body
@@ -831,8 +844,13 @@ def _v3_option(c, rg) -> dict:
         "role": c.role,
         "shelter_id": c.shelter["id"],
         "shelter_name": c.shelter["properties"].get("name", c.shelter["id"]),
-        "distance_km": round(path.total_m / 1000.0, 1),
-        "eta_min": int(ceil(path.total_min - 1e-9)),
+        "distance_km": round(path.total_m / 1000.0, 1) if path.access_verified else None,
+        "eta_min": int(ceil(path.total_min - 1e-9)) if path.access_verified else None,
+        "arrival_sim_min": j.arrival_sim_min if path.access_verified else None,
+        "modeled_distance_km": round(path.total_m / 1000., 3),
+        "modeled_duration_min": path.total_min,
+        "access": path.access or {"complete": False, "reason": "Road graph unavailable"},
+        "geometry_scope": "complete_journey" if path.access_verified else "modeled_road_portions",
         "status": j.status,
         "margin_min": j.margin_min,
         "leave_by_sim_min": j.leave_by_sim_min,
@@ -842,11 +860,11 @@ def _v3_option(c, rg) -> dict:
         "reason": j.reason,
         "hazard_intercept": j.hazard_intercept,
         "shelter_threat_sim_min": j.shelter_threat_sim_min,
-        "connector_m": int(round(path.connector_m)),
-        "geometry": {"type": "LineString", "coordinates": _v3_coordinates(path, rg)},
+        "connector_m": int(round(path.connector_m)) if path.access_verified else None,
+        "geometry": _v3_geometry(path, rg),
         "steps": _v3_steps(path, rg),
         "rerouted": c.role == "safest",
-        "reroute_reason": "Route changed because of predicted fire arrival" if c.role == "safest" else None,
+        "reroute_reason": "Route evaluated against mapped access and forecast constraints" if c.role == "safest" else None,
         "approximate": path.approximate,
         "warning": (BACKUP_WARNING + " Forecast checks are not a safety guarantee."
                     if path.approximate else V3_WARNING),
@@ -854,18 +872,32 @@ def _v3_option(c, rg) -> dict:
     }
 
 
-def _v3_coordinates(path, rg) -> list:
-    """Pin, the connector's road point, then each road's own shape in travel order."""
-    points = [list(path.pin_ll), list(path.join_ll)]
+def _v3_geometry(path, rg):
+    """Only mapped portions; never draw a connecting chord across an unknown gap."""
+    if not len(path.edges):
+        return None
+    from backend.routing.access import ON_ROAD_M
+    lines, previous = [], None
     for e in path.edges:
-        points.extend(rg.edge_coords_ll(int(e)).tolist())
-    if path.approximate:
-        points = [list(path.pin_ll), list(path.shelter_ll)]
-    line = [points[0]]
-    for p in points[1:]:
-        if p != line[-1]:
-            line.append(p)
-    return line if len(line) > 1 else line * 2
+        points = rg.edge_coords_ll(int(e)).tolist()
+        xy = rg.edge_coords_xy(int(e))
+        if previous is None or np.linalg.norm(previous - xy[0]) > ON_ROAD_M:
+            lines.append(points)
+        else:
+            lines[-1].extend(points[1:])
+        previous = xy[-1]
+    if path.access["origin"]["status"] == "mapped":
+        lines[0][0] = list(path.access["origin"]["point"])  # the pin, or its road point
+    if path.access["destination"]["status"] == "mapped":
+        lines[-1][-1] = list(path.shelter_ll)
+    for i, points in enumerate(lines):
+        dedup = [points[0]]
+        for p in points[1:]:
+            if p != dedup[-1]:
+                dedup.append(p)
+        lines[i] = dedup if len(dedup) > 1 else dedup * 2
+    return ({"type": "LineString", "coordinates": lines[0]} if len(lines) == 1 else
+            {"type": "MultiLineString", "coordinates": lines})
 
 
 def _v3_steps(path, rg) -> list:
