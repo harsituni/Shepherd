@@ -4,7 +4,7 @@
 // reason and can't be picked (no "pick anyway" confirm): a blocked route is one
 // the fire is forecast to cut, so the phone never offers it.
 
-const STATUS = {
+export const STATUS = {
   ok: { label: 'Clear', hint: 'Fire not expected on this route soon' },
   tight: { label: 'Tight', hint: 'Fire is forecast near this route' },
   blocked: { label: 'Blocked', hint: null },
@@ -25,7 +25,7 @@ function ordered(options, bestId) {
   return [...options].sort((a, b) => rank(a) - rank(b) || b.margin_min - a.margin_min || a.eta_min - b.eta_min)
 }
 
-function clearLine(o) {
+export function clearLine(o) {
   // Blocked: one short line. The backend's reason (coordinates, arrival minutes) is
   // too much to read at a glance on a card.
   if (o.status === 'blocked') return 'Fire forecast on this route'

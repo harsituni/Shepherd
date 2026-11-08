@@ -19,7 +19,7 @@ import EvacCard from './components/EvacCard.jsx'
 import MapView from './components/MapView.jsx'
 import { mostSevere, NotificationPopup } from './components/Notifications.jsx'
 import MapScreen from './components/MapScreen.jsx'
-import { MapKey, RouteDetails } from './components/RouteTab.jsx'
+import { MapKey, RouteDetails, RouteMore } from './components/RouteTab.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
 import { SHEPHERD_VERSION } from './version.js'
 
@@ -288,6 +288,7 @@ export default function App() {
           )
         }
         details={<RouteDetails {...detailProps} />}
+        more={<RouteMore route={shown} shelters={shelters} trip={trip} evacMode={evacMode} />}
         mapKey={<MapKey hazards={hazards} shelters={shelters} route={shown} location={location} />}
         areaName={areaName}
         notifications={notifications}
