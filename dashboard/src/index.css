@@ -320,6 +320,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .shelter-marker.is-unsafe { background: var(--closed); }
 .shelter-marker.is-unsafe .shelter-popup { color: var(--closed); border-color: var(--closed); }
 .shelter-popup-warning { max-width: 220px; margin-top: 4px; white-space: normal; font-weight: 600; }
+/* Priority resident: navy-outlined diamond (matches the legend swatch), pop-up on hover/focus. */
+.priority-marker { position: relative; width: 20px; height: 20px; cursor: default; }
+.priority-marker:hover, .priority-marker:focus-visible { z-index: 5; }
+.priority-diamond {
+  position: absolute; inset: 3px; background: var(--surface); border: 3px solid var(--navy);
+  transform: rotate(45deg);
+}
+.priority-marker:hover .shelter-popup, .priority-marker:focus-visible .shelter-popup { display: block; }
+.priority-popup { color: var(--text); }
+.priority-popup .shelter-popup-title { color: var(--navy); }
+.priority-popup-line { max-width: 240px; white-space: normal; color: var(--muted); }
 .now-label { font: 600 var(--fs-sm) var(--font); color: #fff; pointer-events: none; }
 .predicted-label {
   font: 600 var(--fs-sm) var(--font); color: var(--navy); pointer-events: none;

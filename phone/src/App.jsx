@@ -7,10 +7,12 @@ import {
   getSimState,
   postEvacuee,
   postReport,
+  postPriority,
+  deletePriority,
   withChoice,
 } from './api.js'
 import { POLL_MS } from './config.js'
-import { locateOnce, useEvacuation, useHeartbeat } from './evacuate.js'
+import { evacueeId, locateOnce, useEvacuation, useHeartbeat } from './evacuate.js'
 import { dangerRings, demoteUnsafeRoute, evacZones, unsafeShelterIds } from './evacuation.js'
 import { isCurrentCore, nearestHazard, pointInRing } from './geo.js'
 import { placeName } from './placeName.js'
@@ -22,6 +24,7 @@ import { mostSevere, NotificationPopup } from './components/Notifications.jsx'
 import MapScreen from './components/MapScreen.jsx'
 import { MapKey, RouteDetails, RouteMore } from './components/RouteTab.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
+import PrioritySheet from './components/PrioritySheet.jsx'
 import { SHEPHERD_VERSION } from './version.js'
 
 // Resolves to [lon, lat], or null if unavailable, denied or slow.
@@ -59,6 +62,26 @@ function ratchetLeaveBy(prev, next) {
   return next
 }
 
+// Priority registration is remembered on this phone (only the ID's last 4
+// characters, never the full number) so it can be re-sent if the backend restarts.
+const PRIORITY_KEY = 'shepherd.priority'
+function loadPriority() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PRIORITY_KEY) ?? 'null')
+    return v?.id_type && v?.id_last4 && Array.isArray(v.needs) ? v : null
+  } catch {
+    return null
+  }
+}
+function savePriority(v) {
+  try {
+    if (v) localStorage.setItem(PRIORITY_KEY, JSON.stringify(v))
+    else localStorage.removeItem(PRIORITY_KEY)
+  } catch {
+    // storage blocked: it lasts for this page load
+  }
+}
+
 export default function App() {
   const [location, setLocation] = useState(null) // [lon, lat]
   const [autoLocation, setAutoLocation] = useState(null) // the launch GPS fix, shown with the panel collapsed
@@ -69,6 +92,9 @@ export default function App() {
   const [shelters, setShelters] = useState(null)
   const [focusKey, setFocusKey] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [priorityOpen, setPriorityOpen] = useState(false)
+  const [priority, setPriority] = useState(loadPriority) // { id_type, id_last4, needs, note } | null
+  const [prioritySending, setPrioritySending] = useState(false)
   const [sending, setSending] = useState(false)
   const [toast, setToast] = useState(null)
   const [locating, setLocating] = useState(false) // waiting on a GPS fix
@@ -256,6 +282,49 @@ export default function App() {
     [showToast, setLocationAndRoute],
   )
 
+  // Priority residents: register this phone's id with an Alberta disability ID so the
+  // dashboard marks it. Sent again on launch in case the backend restarted.
+  const registerPriority = useCallback(
+    async (details) => {
+      setPrioritySending(true)
+      try {
+        await postPriority({ id: evacueeId(), ...details })
+        setPriority(details)
+        savePriority(details)
+        setPriorityOpen(false)
+        showToast(
+          locationRef.current
+            ? "You're registered as a priority resident. Responders can see you on their map."
+            : "You're registered as a priority resident. Set your location so responders can see you.",
+          5000,
+        )
+      } catch (err) {
+        showToast(`Couldn't register: ${err.message || 'check your connection and try again.'}`, 5000)
+      } finally {
+        setPrioritySending(false)
+      }
+    },
+    [showToast],
+  )
+  const removePriority = useCallback(async () => {
+    setPrioritySending(true)
+    try {
+      await deletePriority(evacueeId())
+      setPriority(null)
+      savePriority(null)
+      setPriorityOpen(false)
+      showToast('Priority status removed.')
+    } catch {
+      showToast("Couldn't remove it. Check your connection and try again.")
+    } finally {
+      setPrioritySending(false)
+    }
+  }, [showToast])
+  useEffect(() => {
+    const saved = loadPriority()
+    if (saved) postPriority({ id: evacueeId(), ...saved }).catch(() => {})
+  }, [])
+
   // The route on screen: the card the user picked, or the backend's best.
   const { shown, lost } = withChoice(route, chosen)
   const shownRef = useRef(shown)
@@ -439,6 +508,8 @@ export default function App() {
         version={SHEPHERD_VERSION}
         actions={{
           report: () => setSheetOpen(true),
+          priority: () => setPriorityOpen(true),
+          isPriority: priority != null,
           help: askHelp,
           canReport: !!location && !sending,
           sending,
@@ -491,6 +562,16 @@ export default function App() {
             </span>
           </div>
         )
+      )}
+
+      {priorityOpen && (
+        <PrioritySheet
+          registered={priority}
+          sending={prioritySending}
+          onSubmit={registerPriority}
+          onRemove={removePriority}
+          onClose={() => setPriorityOpen(false)}
+        />
       )}
 
       {sheetOpen && (

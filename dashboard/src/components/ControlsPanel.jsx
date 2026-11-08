@@ -39,6 +39,8 @@ export default function ControlsPanel({
   reportCount,
   onOpenReports,
   onOpenNotify,
+  onlyPriority,
+  onOnlyPriorityChange,
 }) {
   const windTimer = useRef(null)
   useEffect(() => () => clearTimeout(windTimer.current), [])
@@ -46,7 +48,6 @@ export default function ControlsPanel({
   const [windFrom, setWindFrom] = useState(270)
   const [humidity, setHumidity] = useState(22)
   const [speed, setSpeed] = useState(4)
-  const [showPriority, setShowPriority] = useState(true)
 
   const idle = !sim || sim.state === 'idle'
   const running = sim?.state === 'running'
@@ -171,8 +172,8 @@ export default function ControlsPanel({
         <input type="checkbox" checked={showPredicted} onChange={(e) => onShowPredictedChange(e.target.checked)} />
       </label>
       <label className="toggle-row">
-        <span>Show priority residents</span>
-        <input type="checkbox" checked={showPriority} onChange={(e) => setShowPriority(e.target.checked)} />
+        <span>Show only priority residents</span>
+        <input type="checkbox" checked={onlyPriority} onChange={(e) => onOnlyPriorityChange(e.target.checked)} />
       </label>
 
       <div className="panel-actions">

@@ -1,13 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { AlertsTab } from './Notifications.jsx'
 import TurnCue from './TurnCue.jsx'
-import { BellIcon, ChevronUpIcon, CloseIcon, CrookIcon, InfoIcon, WarningIcon } from './icons.jsx'
+import { BellIcon, ChevronUpIcon, CloseIcon, CrookIcon, InfoIcon, PriorityIcon, WarningIcon } from './icons.jsx'
 
 // The phone app's one screen, map-first (modelled on scooter apps like Lime and
 // Bird): the map fills the screen and everything else floats over it.
 //   top left    area chip (Shepherd mark + place name)
 //   top right   compact alert / evacuation card; tap it for the details
-//   right rail  Alerts, Map key, Report (just above the route panel)
+//   right rail  Alerts, Map key, Report, Priority (just above the route panel)
 //   bottom      route panel: shelter cards you swipe sideways + Start evacuating,
 //               closable to a one-line strip; full-width Need help bar under it
 //
@@ -18,7 +18,7 @@ import { BellIcon, ChevronUpIcon, CloseIcon, CrookIcon, InfoIcon, WarningIcon } 
 //   more                     <RouteMore/>: extra detail you scroll the panel down to
 //   mapKey                   <MapKey/>
 //   areaName, notifications, location, route, routeError, trip, version
-//   actions: { report, help, canReport, sending }
+//   actions: { report, priority, isPriority, help, canReport, sending }
 
 // Map padding (px) roughly matching the floating chrome, so "frame my route"
 // keeps the route clear of the top cards, the rail and the route panel.
@@ -172,6 +172,15 @@ export default function MapScreen({
           <button type="button" className="ms-fab" disabled={!actions.canReport} onClick={actions.report}>
             <WarningIcon />
             <span>Report</span>
+          </button>
+          <button
+            type="button"
+            className={actions.isPriority ? 'ms-fab is-on' : 'ms-fab'}
+            aria-label={actions.isPriority ? 'Priority resident (registered)' : 'Register as a priority resident'}
+            onClick={actions.priority}
+          >
+            <PriorityIcon />
+            <span>Priority</span>
           </button>
         </div>
 

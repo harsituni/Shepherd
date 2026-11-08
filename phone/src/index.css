@@ -626,6 +626,21 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
   background: #fff; color: var(--text); font-size: var(--fs-sm); font-weight: 500;
 }
 .choice[aria-checked='true'] { border-color: var(--navy); background: var(--navy); color: #fff; font-weight: 600; }
+
+/* Priority resident sheet: taller than the report sheet, so it scrolls. */
+.priority-sheet { max-height: calc(100% - 24px); overflow-y: auto; overscroll-behavior: contain; }
+.priority-intro { margin: 0; }
+.priority-sheet .choice { padding: 6px; line-height: 1.25; }
+.text-input {
+  min-height: 48px; border: 1px solid var(--border); border-radius: var(--radius); padding: 0 12px;
+  font: inherit; font-size: var(--fs-body); color: var(--text); background: #fff;
+}
+.priority-status { display: flex; flex-direction: column; gap: 4px; color: var(--text); }
+.priority-status strong { font-size: var(--fs-body); font-weight: 700; }
+.priority-status span { font-size: var(--fs-sm); color: var(--muted); }
+/* Rail button once registered: navy, like a selected choice. */
+.ms-fab.is-on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.btn-outline:disabled { border-color: var(--divider); color: var(--muted-2); background: #fff; cursor: default; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--muted); }
 .field textarea {
   border: 1px solid var(--border); border-radius: var(--radius); padding: 10px;
