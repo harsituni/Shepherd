@@ -97,21 +97,28 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), ms)
   }, [])
 
+  const refreshBusy = useRef(false)
+
   const refresh = useCallback(async () => {
-    const [h, s, n, st] = await Promise.allSettled([getHazards(), getShelters(), getNotifications(), getSimState()])
-    if (h.status === 'fulfilled') setHazards(h.value)
-    // Sim clock from /sim/state; older backends without it fall back to /hazards' sim_time at 1x.
-    if (st.status === 'fulfilled' && st.value) setClock((c) => nextClock(c, st.value))
-    else if (h.status === 'fulfilled') setClock((c) => nextClock(c, { sim_time: h.value?.sim_time }))
-    if (s.status === 'fulfilled') setShelters(s.value)
-    if (n.status === 'fulfilled') {
-      const fresh = n.value.filter((x) => !seenNotes.current.has(x.id))
-      if (fresh.length) {
-        fresh.forEach((x) => seenNotes.current.add(x.id))
-        setNotifications(n.value)
-        setPopup(mostSevere(fresh)) // pop up the most important new one
+    // Skip stacked polls while a slow /route is still in flight (was stacking
+    // every 2s and flashing "Reconnecting…" when the backend took longer).
+    if (refreshBusy.current) return
+    refreshBusy.current = true
+    try {
+      const [h, s, n, st] = await Promise.allSettled([getHazards(), getShelters(), getNotifications(), getSimState()])
+      if (h.status === 'fulfilled') setHazards(h.value)
+      // Sim clock from /sim/state; older backends without it fall back to /hazards' sim_time at 1x.
+      if (st.status === 'fulfilled' && st.value) setClock((c) => nextClock(c, st.value))
+      else if (h.status === 'fulfilled') setClock((c) => nextClock(c, { sim_time: h.value?.sim_time }))
+      if (s.status === 'fulfilled') setShelters(s.value)
+      if (n.status === 'fulfilled') {
+        const fresh = n.value.filter((x) => !seenNotes.current.has(x.id))
+        if (fresh.length) {
+          fresh.forEach((x) => seenNotes.current.add(x.id))
+          setNotifications(n.value)
+          setPopup(mostSevere(fresh)) // pop up the most important new one
+        }
       }
-    }
 
     const loc = locationRef.current
     if (!loc) return
@@ -131,12 +138,8 @@ export default function App() {
         setRouteError('network')
         return
       }
-      // Contract only has error "no_route". Outside the demo box (or idle with
-      // no fire) should not panic people into calling 911.
-      const features = h.status === 'fulfilled' ? (h.value?.features ?? []) : []
-      const fireOn = features.some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
-      const outOfArea = /demo area/i.test(err.message ?? '')
-      setRouteError(fireOn && !outOfArea ? 'no_route' : 'out_of_area')
+    } finally {
+      refreshBusy.current = false
     }
   }, [])
 

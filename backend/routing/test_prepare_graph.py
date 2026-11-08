@@ -100,7 +100,7 @@ class PrepareGraphTests(unittest.TestCase):
         with patch.dict(os.environ, {"SHEPHERD_GRAPH_PATH": str(self.path)}), \
              patch.object(router, "_graph", None):
             router.load_graph()
-            self.assertEqual(len(router._graph), 4)
+            self.assertEqual(len(router._graph), len(prepare_graph.LOCATIONS))
             prepare_graph.check_graph(router._graph)
 
     def test_empty_graph_fails(self):
@@ -111,14 +111,14 @@ class PrepareGraphTests(unittest.TestCase):
         for node in self.graph.nodes:
             self.graph.nodes[node]["x"] = -113.51
             self.graph.nodes[node]["y"] = 53.54
-        with self.assertRaisesRegex(ValueError, "cover all four"):
+        with self.assertRaisesRegex(ValueError, "cover all demo locations"):
             prepare_graph.check_graph(self.graph)
 
     def test_far_road_nodes_fail_even_inside_bounds(self):
         for node, point in enumerate([(-113.70, 53.42), (-113.70, 53.58),
                                       (-113.43, 53.42), (-113.43, 53.58)]):
             self.graph.nodes[node]["x"], self.graph.nodes[node]["y"] = point
-        with self.assertRaisesRegex(ValueError, "cover all four"):
+        with self.assertRaisesRegex(ValueError, "cover all demo locations"):
             prepare_graph.check_graph(self.graph)
 
     def test_one_way_disconnection_fails(self):
@@ -155,7 +155,7 @@ class PrepareGraphTests(unittest.TestCase):
             self.graph.nodes[node]["x"] = -113.51
             self.graph.nodes[node]["y"] = 53.54
         self.download.return_value = self.graph
-        with self.assertRaisesRegex(ValueError, "Graph saved.*cover all four"):
+        with self.assertRaisesRegex(ValueError, "Graph saved.*cover all demo locations"):
             prepare_graph.prepare_graph(self.path, download=True)
         saved_graph = prepare_graph.ox.load_graphml(self.path)
         self.assertTrue(nx.utils.graphs_equal(saved_graph, self.graph))

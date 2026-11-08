@@ -19,6 +19,10 @@ dist/
 *.graphml
 data/
 cache/
+# Ship a compressed Edmonton drive graph so demos get real roads out of the box.
+!backend/routing/data/
+backend/routing/data/*
+!backend/routing/data/edmonton_demo_drive.graphml.gz
 
 # OS / editors
 .DS_Store

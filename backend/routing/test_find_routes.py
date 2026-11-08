@@ -31,14 +31,10 @@ class FindRoutesTests(unittest.TestCase):
         self.assertTrue(all(option["status"] == "ok" for option in body["options"]))
         self.assertIsNone(body["leave_by_sim_min"])
         self.assertIsNone(body["options"][0]["margin_min"])
-        self.assertEqual(
-    body["options"][0]["clear_until_label"],
-    "Fire timing unknown; no safety guarantee"
-)
+        self.assertIsNone(body["options"][0]["clear_until_label"])
         self.assertFalse(body["options"][0]["forecast_complete"])
         self.assertIn("not a safety guarantee", body["warning"])
         self.assertIn("unknown", body["warning"])
-        self.assertNotIn("Fire timing unknown", body["options"][0].get("clear_until_label") or "")
         self.assertEqual(body["shelter_id"], "sh_a")
         self.assertAlmostEqual(body["distance_km"], 0.3)
         self.assertIn(list(BEND), body["geometry"]["coordinates"])

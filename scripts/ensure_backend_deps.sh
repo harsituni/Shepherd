@@ -12,10 +12,11 @@ ensure_backend_deps() {
       return 1
     fi
   fi
-  # Road graph is gitignored; without it routing falls back to straight lines.
+  # Prefer unpacked GraphML; otherwise the shipped .gz is enough for load_graph().
   local graph="backend/routing/data/edmonton_demo_drive.graphml"
-  if [[ ! -f "$graph" ]]; then
-    echo "Note: missing $graph — routes use straight-line backup until you run:"
-    echo "  python -B -m backend.routing.prepare_graph --download"
+  local graph_gz="backend/routing/data/edmonton_demo_drive.graphml.gz"
+  if [[ ! -f "$graph" && ! -f "$graph_gz" ]]; then
+    echo "Note: missing road graph — routes use straight-line backup until you add:"
+    echo "  $graph_gz  (shipped) or run: python -B -m backend.routing.prepare_graph --download"
   fi
 }

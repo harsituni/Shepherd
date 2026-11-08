@@ -103,7 +103,7 @@ export function RouteDetails({
         </a>
       </div>
     )
-  } else if (routeError) {
+  } else if (routeError && !route) {
     details = (
       <div className="notice">
         <span>Can't reach Shepherd right now. Retrying…</span>

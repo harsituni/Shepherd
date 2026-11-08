@@ -5,10 +5,12 @@ eta_min is illustrative at 30 km/h, not an actual traffic estimate.
 """
 
 from math import ceil, floor
+import gzip
 import heapq
 import logging
 import os
 from pathlib import Path
+import tempfile
 
 import networkx as nx
 import osmnx as ox
@@ -18,6 +20,7 @@ from shapely.geometry import LineString, Point, shape
 
 ROUTING_DIR = Path(__file__).resolve().parent
 GRAPH_PATH = ROUTING_DIR / "data" / "edmonton_demo_drive.graphml"
+GRAPH_GZ_PATH = ROUTING_DIR / "data" / "edmonton_demo_drive.graphml.gz"
 # West, south, east, north. Includes contract shelters; a bit larger than the
 # downloaded graph so east/south pins still get backup routes instead of 404.
 DEMO_BBOX = (-113.75, 53.40, -113.32, 53.62)
@@ -34,28 +37,52 @@ class NoRouteError(Exception):
     """Used when no eligible shelter can be reached on the demo roads."""
 
 
+def _resolve_graph_path() -> Path:
+    """Prefer SHEPHERD_GRAPH_PATH, then unpacked GraphML, then the shipped .gz."""
+    saved_path = os.environ.get("SHEPHERD_GRAPH_PATH")
+    if saved_path is not None:
+        return Path(saved_path)
+    if GRAPH_PATH.is_file():
+        return GRAPH_PATH
+    if GRAPH_GZ_PATH.is_file():
+        return GRAPH_GZ_PATH
+    return GRAPH_PATH
+
+
+def _load_graphml(graph_path: Path):
+    """Load GraphML from a plain or gzip-compressed file."""
+    if graph_path.suffix == ".gz" or str(graph_path).endswith(".graphml.gz"):
+        with gzip.open(graph_path, "rb") as compressed:
+            payload = compressed.read()
+        with tempfile.NamedTemporaryFile(suffix=".graphml", delete=False) as tmp:
+            tmp.write(payload)
+            tmp_path = Path(tmp.name)
+        try:
+            return ox.load_graphml(tmp_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+    return ox.load_graphml(graph_path)
+
+
 def load_graph() -> None:
     """Load saved roads once, or use estimate-only backup mode. Never download."""
     global _graph, _backup_mode
     if _graph is not None or _backup_mode:
         return
 
-    saved_path = os.environ.get("SHEPHERD_GRAPH_PATH")
-    graph_path = GRAPH_PATH
+    graph_path = _resolve_graph_path()
     try:
-        if saved_path is not None:
-            graph_path = Path(saved_path)
         if not graph_path.is_file():
             raise FileNotFoundError(f"Saved road graph is missing or not a file: {graph_path}")
-        graph = ox.load_graphml(graph_path)
+        graph = _load_graphml(graph_path)
         if len(graph) == 0 or graph.number_of_edges() == 0:
             raise ValueError("Saved graph contains no usable roads")
         graph.graph["routing_bbox"] = (
-    min(float(n["x"]) for _, n in graph.nodes(data=True)),
-    min(float(n["y"]) for _, n in graph.nodes(data=True)),
-    max(float(n["x"]) for _, n in graph.nodes(data=True)),
-    max(float(n["y"]) for _, n in graph.nodes(data=True)),
-)
+            min(float(n["x"]) for _, n in graph.nodes(data=True)),
+            min(float(n["y"]) for _, n in graph.nodes(data=True)),
+            max(float(n["x"]) for _, n in graph.nodes(data=True)),
+            max(float(n["y"]) for _, n in graph.nodes(data=True)),
+        )
     except Exception as error:
         # Only loading errors enable the backup, never routing failures.
         _backup_mode = True
@@ -231,6 +258,38 @@ def _path_roads(graph, path):
     return roads
 
 
+def _road_name(edge) -> str:
+    name = edge.get("name")
+    if isinstance(name, list):
+        name = next((part for part in name if part), None)
+    if name:
+        return str(name)
+    highway = edge.get("highway")
+    if isinstance(highway, list):
+        highway = highway[0] if highway else None
+    if highway:
+        return str(highway).replace("_", " ")
+    return "Unnamed road"
+
+
+def _steps_from_roads(graph, roads) -> list[dict]:
+    """Collapse consecutive same-named edges into turn-by-turn style steps."""
+    steps = []
+    for start, end, key in roads:
+        edge = graph[start][end][key]
+        name = _road_name(edge)
+        distance_km = float(edge["length"]) / 1000.0
+        instruction = f"Continue on {name}"
+        if steps and steps[-1]["instruction"] == instruction:
+            steps[-1]["distance_km"] = round(steps[-1]["distance_km"] + distance_km, 2)
+        else:
+            steps.append({
+                "instruction": instruction,
+                "distance_km": round(distance_km, 2),
+            })
+    return steps
+
+
 def _choose_route(graph, lat, lon, hazards, shelters):
     """Find the shortest reachable shelter on the given roads."""
 
@@ -290,6 +349,22 @@ def find_route(lat: float, lon: float,
     if len(_graph) == 0 or not _inside_demo(lat, lon):
         raise NoRouteError("No route in the Edmonton demo area")
 
+    # No core polygons → one shortest-path search (skip the clone + second pass).
+    if not hazards:
+        nearest, best_distance, best_coordinates, roads = _choose_route(
+            _graph, lat, lon, [], shelters
+        )
+        return {
+            "shelter_id": nearest["id"],
+            "shelter_name": nearest["properties"]["name"],
+            "distance_km": round(best_distance, 1),
+            "eta_min": ceil(best_distance / ILLUSTRATIVE_SPEED_KMH * 60),
+            "rerouted": False,
+            "reroute_reason": None,
+            "steps": _steps_from_roads(_graph, roads),
+            "geometry": {"type": "LineString", "coordinates": best_coordinates},
+        }
+
     normal_shelter, _, _, normal_roads = _choose_route(_graph, lat, lon, [], shelters)
 
     # Remove blocked roads from a copy of the map.
@@ -311,7 +386,7 @@ def find_route(lat: float, lon: float,
         "eta_min": ceil(best_distance / ILLUSTRATIVE_SPEED_KMH * 60),
         "rerouted": rerouted,
         "reroute_reason": reason,
-        "steps": [],
+        "steps": _steps_from_roads(available_graph, roads),
         "geometry": {"type": "LineString", "coordinates": best_coordinates},
     }
 
@@ -337,8 +412,9 @@ def _line_samples(coordinates, minutes, elapsed=0.0):
     for index, length in enumerate(lengths):
         lon, lat = coordinates[index]
         end_lon, end_lat = coordinates[index + 1]
-        # Check bends and points at most 50 metres apart.
-        count = max(1, ceil(length / 50))
+        # Sample bends / long edges about every 120 m (was 50 m — too slow on
+        # the full Edmonton graph when every Dijkstra edge is checked).
+        count = max(1, ceil(length / 120))
         for step in range(count + 1):
             fraction = step / count
             offset = 0.0
@@ -484,6 +560,11 @@ def _select_option(body, option):
         body[field] = option[field]
 
 
+def _shelter_straight_km(lat, lon, shelter) -> float:
+    end_lon, end_lat = shelter["geometry"]["coordinates"]
+    return float(ox.distance.great_circle(lat, lon, end_lat, end_lon)) / 1000.0
+
+
 def find_routes(lat: float, lon: float, arrival_min_fn,
                 shelters: list[dict], sim_time: int = 0) -> dict:
     """Return up to three road options, checked against the supplied forecast.
@@ -493,10 +574,18 @@ def find_routes(lat: float, lon: float, arrival_min_fn,
     """
     options = []
     excluded = []
+    # Only the closest few shelters — we return at most 3 options anyway, and
+    # fire-aware Dijkstra on every shelter was multi-second on the demo graph.
+    eligible = []
     for shelter in shelters:
         properties = shelter["properties"]
         if not properties["open"] or properties["occupancy"] >= properties["capacity"]:
             continue
+        eligible.append(shelter)
+    eligible.sort(key=lambda shelter: _shelter_straight_km(lat, lon, shelter))
+    candidates = eligible[:3]
+
+    for shelter in candidates:
         try:
             option = find_route(lat, lon, [], [shelter])
         except NoRouteError as error:
@@ -504,28 +593,36 @@ def find_routes(lat: float, lon: float, arrival_min_fn,
             continue
         # Shelter-based IDs stay stable when another option disappears.
         option["id"] = "rt_" + shelter["id"]
-        if _graph is None:
-            option.update(_route_timing(option, arrival_min_fn, sim_time))
-        else:
+        # Fast path: time the normal shortest road. Only run the expensive
+        # fire-avoiding search when that path is already forecast-blocked.
+        timing = _route_timing(option, arrival_min_fn, sim_time)
+        if (
+            _graph is not None
+            and timing.get("status") == "blocked"
+        ):
             try:
                 distance, coordinates, timing = _forecast_route(
                     lat, lon, shelter, arrival_min_fn, sim_time
                 )
-                changed = (coordinates != option["geometry"]["coordinates"]
-                           or distance != option["distance_km"])
+                changed = (
+                    coordinates != option["geometry"]["coordinates"]
+                    or round(distance, 1) != option["distance_km"]
+                )
                 option["geometry"]["coordinates"] = coordinates
-                option["distance_km"] = distance
+                option["distance_km"] = round(distance, 1)
                 option["eta_min"] = ceil(distance / ILLUSTRATIVE_SPEED_KMH * 60)
                 option["rerouted"] = changed
                 if changed:
-                    option["reroute_reason"] = "Route changed because of predicted fire arrival"
-                option.update(timing)
+                    option["reroute_reason"] = (
+                        "Route changed because of predicted fire arrival"
+                    )
             except NoRouteError as error:
-                option.update({
+                timing = {
                     "status": "blocked", "reason": str(error), "margin_min": None,
                     "clear_until_sim_min": None, "clear_until_label": None,
                     "_leave_by": None, "forecast_complete": False,
-                })
+                }
+        option.update(timing)
         option["leave_by_sim_min"] = option.pop("_leave_by")
         option["approximate"] = option.get("approximate", False)
         warning = option.get("warning", "Road geometry with illustrative travel times only.")

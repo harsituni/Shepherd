@@ -52,7 +52,7 @@ def check_graph(graph):
             covered = False
         nodes[name] = node
     if not covered:
-        raise ValueError("The graph does not cover all four demo locations")
+        raise ValueError("The graph does not cover all demo locations")
 
     # Check both directions, including one-way roads.
     for start_name, start in nodes.items():
@@ -66,7 +66,7 @@ def check_graph(graph):
             if distance <= 0:
                 raise ValueError(f"No usable road route from {start_name} to {end_name}")
             print(f"{start_name} -> {end_name}: {distance / 1000:.2f} km")
-    print("All four locations passed the baseline road checks (no hazards).")
+    print("All demo locations passed the baseline road checks (no hazards).")
 
 
 def prepare_graph(path, download=False):
