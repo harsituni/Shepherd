@@ -120,6 +120,7 @@ export default function MapScreen({
   areaName,
   notifications,
   location,
+  placeKey,
   autoLocation,
   route,
   routeError,
@@ -130,8 +131,9 @@ export default function MapScreen({
   const [sheet, setSheet] = useState(null) // 'alerts' | 'key' | null
   // The route panel opens for each new location; closing or opening it applies to
   // that one. The location found automatically on launch starts collapsed, so the
-  // map stays clear until the person opens the panel.
-  const here = location ? location.join(',') : 'none'
+  // map stays clear until the person opens the panel. Keyed on where the location was
+  // set (placeKey), not the live coordinates, so a pin following GPS keeps the choice.
+  const here = location ? (placeKey ?? location.join(',')) : 'none'
   const auto = autoLocation ? autoLocation.join(',') : null
   const [choice, setChoice] = useState(null) // { for: key, open: bool }
   // Slide up only when the person reopens the panel from the strip.

@@ -13,7 +13,7 @@ import {
   withChoice,
 } from './api.js'
 import { MAP_CENTER, POLL_MS } from './config.js'
-import { evacueeId, locateOnce, useEvacuation, useHeartbeat } from './evacuate.js'
+import { evacueeId, locateOnce, useEvacuation, useFollowGps, useHeartbeat, useWakeLock } from './evacuate.js'
 import { dangerRings, demoteUnsafeRoute, evacZones, unsafeShelterIds } from './evacuation.js'
 import { isCurrentCore, nearestHazard, pointInRing } from './geo.js'
 import { noSafeRoute, shouldReroute } from './reroute.js'
@@ -87,6 +87,9 @@ function savePriority(v) {
 export default function App() {
   const [location, setLocation] = useState(null) // [lon, lat]
   const [autoLocation, setAutoLocation] = useState(null) // the launch GPS fix, shown with the panel collapsed
+  // Where the location was last *set* (tap, launch fix, Real GPS picked). The route panel
+  // keys its open/closed state on this, so a pin that follows GPS doesn't reopen it.
+  const [placeKey, setPlaceKey] = useState(null)
   const [route, setRoute] = useState(null)
   const [routeError, setRouteError] = useState(null)
   const [chosen, setChosen] = useState(null) // id of the route card the user picked
@@ -112,6 +115,7 @@ export default function App() {
   const locationRef = useRef(location)
   const chosenRef = useRef(chosen)
   const evacuatingRef = useRef(false)
+  const followingRef = useRef(false) // pin follows Real GPS without a trip
   const [areaName, setAreaName] = useState('Edmonton')
   const areaTimer = useRef(null)
   const areaAbort = useRef(null)
@@ -203,9 +207,9 @@ export default function App() {
 
       const loc = locationRef.current
       if (!loc) return
-      // While evacuating the dot moves every frame, so a response for where it was
-      // 2 s ago is still the one to show. Otherwise a moved pin makes it stale.
-      const stale = () => !evacuatingRef.current && locationRef.current !== loc
+      // While evacuating (or following GPS) the dot keeps moving, so a response for where
+      // it was a moment ago is still the one to show. Otherwise a moved pin makes it stale.
+      const stale = () => !evacuatingRef.current && !followingRef.current && locationRef.current !== loc
       try {
         // Prefer the route we're actually driving so /route keeps it in `options`
         // even after it turns unsafe (needed to decide a mid-trip reroute).
@@ -283,6 +287,7 @@ export default function App() {
     (lngLat) => {
       locationRef.current = lngLat
       setLocation(lngLat)
+      setPlaceKey(lngLat.join(','))
       setRoute(null)
       setRouteError(null)
       chosenRef.current = null
@@ -381,10 +386,14 @@ export default function App() {
   // "Start evacuating" (issue #56): a simulated drive along the chosen route, or the
   // phone's real GPS. Either way the dot moves without resetting the route choice.
   const [evacMode, setEvacMode] = useState('sim') // 'sim' | 'gps'
+  const evacModeRef = useRef(evacMode)
+  const beatNowRef = useRef(null)
   const moveTo = useCallback((lngLat) => {
     if (!lngLat) return
     locationRef.current = lngLat
     setLocation(lngLat)
+    // A real GPS fix goes to the dashboard right away, not on the next 2 s tick.
+    if (evacModeRef.current === 'gps') beatNowRef.current?.()
   }, [])
   const gpsFailed = useCallback((message) => showToast(message, 6000), [showToast])
   const { trip, start: startTrip, stop: stopTrip, reroute: rerouteTrip } = useEvacuation({
@@ -419,7 +428,6 @@ export default function App() {
   // Picking Real GPS moves the pin to the phone's actual location right away (and
   // routes from there), instead of waiting for Start evacuating. Simulated drive
   // keeps whatever location was tapped, for demos.
-  const evacModeRef = useRef(evacMode)
   const chooseEvacMode = useCallback(
     async (mode) => {
       evacModeRef.current = mode
@@ -549,7 +557,26 @@ export default function App() {
       shelter_id: r?.shelter_id ?? null,
     }
   }, [])
-  useHeartbeat({ active: evacuating || location != null, everyMs: POLL_MS, read: readHeartbeat, send: postEvacuee })
+  const beatNow = useHeartbeat({
+    active: evacuating || location != null,
+    everyMs: POLL_MS,
+    read: readHeartbeat,
+    send: postEvacuee,
+  })
+  useEffect(() => {
+    beatNowRef.current = beatNow
+  }, [beatNow])
+
+  // With Real GPS picked, the pin follows the phone even before Start evacuating
+  // (a trip runs its own watch). Waits for the first fix so it can't race it.
+  const following = evacMode === 'gps' && !evacuating && location != null && !locating
+  useEffect(() => {
+    followingRef.current = following
+  }, [following])
+  useFollowGps({ active: following, onFix: moveTo, onError: gpsFailed })
+
+  // Keep the screen on during a trip: a locked screen stops GPS in the browser.
+  useWakeLock(evacuating)
 
   // During a wildfire the evacuation card (leave-by countdown) takes the banner's place.
   const wildfire =
@@ -625,6 +652,7 @@ export default function App() {
         areaName={areaName}
         notifications={notifications}
         location={location}
+        placeKey={placeKey}
         autoLocation={autoLocation}
         route={driveRoute}
         routeError={routeError}
