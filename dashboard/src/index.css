@@ -314,9 +314,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Orange edge, dark red centre: solid colours, no gradient. */
 .swatch-hazard { width: 12px; height: 12px; border-radius: 3px; background: var(--hazard-high); border: 3px solid var(--hazard); }
 .swatch-predicted { width: 12px; height: 12px; border-radius: 3px; border: 2px dotted var(--predicted); }
-.swatch-traffic-busy { width: 14px; height: 3px; border-radius: 2px; background: #E6A817; }
+.swatch-traffic-busy { width: 14px; height: 3px; border-radius: 2px; background: #E39B2E; }
 .swatch-traffic-jammed { width: 14px; height: 3px; border-radius: 2px; background: #D9480F; }
-.swatch-traffic-gridlock { width: 14px; height: 3px; border-radius: 2px; background: #8B1A1A; }
+.swatch-traffic-gridlock { width: 14px; height: 3px; border-radius: 2px; background: #B83210; }
 .swatch-closed {
   width: 14px; height: 3px; border-radius: 2px;
   background: repeating-linear-gradient(90deg, var(--closed) 0 4px, transparent 4px 7px);

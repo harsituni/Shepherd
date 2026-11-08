@@ -85,11 +85,12 @@ DEFAULT_SIMULATED = 10_000
 # thousand agents and scale each one's road load (projection) so the API stays fast.
 MAX_SIMULATED = 100_000
 MAX_SIM_AGENTS = 2_500
-# Congested edges for the dashboard map (sorted by v/c). Keep this modest so
-# the overlay reads as corridors, not a spaghetti of every residential edge.
-MAP_EDGE_LIMIT = 900
-# Skip near-empty roads on the map — only paint busy / jammed / gridlock.
-MAP_MIN_VC = 0.5
+# Seed congested edges, then grow along connected volume so corridors look continuous.
+MAP_SEED_LIMIT = 700
+MAP_EDGE_LIMIT = 1800
+# Seeds need real congestion; gap-fill keeps any connected edge that still has cars.
+MAP_MIN_VC = 0.45
+MAP_FILL_MIN_VOLUME = 0.25
 
 
 def _highway_key(value) -> str:
@@ -679,14 +680,177 @@ class TrafficEngine:
 
     # ----- map payload -----
 
+    def _traffic_level(self, ratio: float) -> str:
+        if ratio < 0.9:
+            return "busy"
+        if ratio < 1.3:
+            return "jammed"
+        return "gridlock"
+
+    def _node_edge_index_locked(self) -> list[list[int]]:
+        """Undirected adjacency: node → incident edge ids (built once per graph)."""
+        rg = self._rg
+        cached = getattr(self, "_node_edges", None)
+        if cached is not None and getattr(self, "_node_edges_n", 0) == rg.n_edges:
+            return cached
+        buckets: list[list[int]] = [[] for _ in range(rg.n_nodes)]
+        for e in range(rg.n_edges):
+            buckets[int(rg.edge_u[e])].append(e)
+            buckets[int(rg.edge_v[e])].append(e)
+        self._node_edges = buckets
+        self._node_edges_n = rg.n_edges
+        return buckets
+
+    def _expand_corridor_edges_locked(self, seeds: list[int], vc: np.ndarray) -> list[int]:
+        """Grow from congested seeds along any connected edge that still has cars."""
+        if not seeds:
+            return []
+        node_edges = self._node_edge_index_locked()
+        rg = self._rg
+        chosen = set(int(e) for e in seeds)
+        queue = list(chosen)
+        while queue and len(chosen) < MAP_EDGE_LIMIT:
+            e = queue.pop()
+            for node in (int(rg.edge_u[e]), int(rg.edge_v[e])):
+                for nxt in node_edges[node]:
+                    if nxt in chosen:
+                        continue
+                    if self._volume[nxt] < MAP_FILL_MIN_VOLUME and float(vc[nxt]) < MAP_MIN_VC * 0.6:
+                        continue
+                    chosen.add(nxt)
+                    queue.append(nxt)
+                    if len(chosen) >= MAP_EDGE_LIMIT:
+                        break
+        return list(chosen)
+
+    def _merge_corridor_features_locked(self, edge_ids: list[int], vc: np.ndarray,
+                                        factors: np.ndarray) -> list[dict]:
+        """Chain connected edges into longer LineStrings so traffic reads continuous."""
+        if not edge_ids:
+            return []
+        rg = self._rg
+        remaining = set(int(e) for e in edge_ids)
+        # node → edges still available
+        at_node: dict[int, list[int]] = {}
+        for e in remaining:
+            at_node.setdefault(int(rg.edge_u[e]), []).append(e)
+            at_node.setdefault(int(rg.edge_v[e]), []).append(e)
+
+        def take_edge(e: int, from_node: int) -> tuple[list[list[float]], int]:
+            """Walk one edge away from from_node; return coords in travel order + far node."""
+            u, v = int(rg.edge_u[e]), int(rg.edge_v[e])
+            coords = rg.edge_coords_ll(e).tolist()
+            if from_node == u:
+                return coords, v
+            # reverse geometry when entering from v
+            return list(reversed(coords)), u
+
+        def detach(e: int) -> None:
+            remaining.discard(e)
+            for n in (int(rg.edge_u[e]), int(rg.edge_v[e])):
+                bucket = at_node.get(n)
+                if bucket and e in bucket:
+                    bucket.remove(e)
+
+        def extend(tip: int, chain: list[int], coords: list) -> int:
+            while True:
+                candidates = [e for e in at_node.get(tip, []) if e in remaining]
+                if not candidates:
+                    return tip
+                name = rg.edge_name[chain[-1]]
+                candidates.sort(
+                    key=lambda e: (0 if rg.edge_name[e] == name else 1, -float(vc[e])),
+                )
+                nxt = candidates[0]
+                detach(nxt)
+                piece, tip = take_edge(nxt, tip)
+                if coords and piece and coords[-1] == piece[0]:
+                    coords.extend(piece[1:])
+                else:
+                    coords.extend(piece)
+                chain.append(nxt)
+
+        features: list[dict] = []
+        feat_i = 0
+        while remaining:
+            # Prefer a dead-end so the chain grows into a long corridor.
+            start_e = next(iter(remaining))
+            for e in list(remaining):
+                deg_u = len(at_node.get(int(rg.edge_u[e]), []))
+                deg_v = len(at_node.get(int(rg.edge_v[e]), []))
+                if deg_u <= 1 or deg_v <= 1:
+                    start_e = e
+                    break
+            u, v = int(rg.edge_u[start_e]), int(rg.edge_v[start_e])
+            detach(start_e)
+            chain = [start_e]
+            coords = rg.edge_coords_ll(start_e).tolist()
+            # Grow both directions for one continuous ribbon.
+            extend(v, chain, coords)
+            # Prepend by growing from u with reversed pieces.
+            left: list[int] = []
+            left_coords: list = []
+            tip = u
+            while True:
+                candidates = [e for e in at_node.get(tip, []) if e in remaining]
+                if not candidates:
+                    break
+                name = rg.edge_name[chain[0] if not left else left[-1]]
+                candidates.sort(
+                    key=lambda e: (0 if rg.edge_name[e] == name else 1, -float(vc[e])),
+                )
+                nxt = candidates[0]
+                detach(nxt)
+                piece, tip = take_edge(nxt, tip)
+                left.append(nxt)
+                if left_coords and piece and left_coords[-1] == piece[0]:
+                    left_coords.extend(piece[1:])
+                else:
+                    left_coords.extend(piece)
+            if left:
+                chain = list(reversed(left)) + chain
+                # left_coords runs away from the seed; reverse to lead into seed.
+                prefix = list(reversed(left_coords))
+                if prefix and coords and prefix[-1] == coords[0]:
+                    coords = prefix[:-1] + coords
+                else:
+                    coords = prefix + coords
+
+            ratios = [float(vc[e]) for e in chain]
+            ratio = max(ratios) if ratios else 0.0
+            level = self._traffic_level(ratio)
+            vol = float(sum(float(self._volume[e]) for e in chain))
+            name = rg.edge_name[chain[0]]
+            features.append({
+                "type": "Feature",
+                "id": f"tr_c_{feat_i}",
+                "properties": {
+                    "edge": int(chain[0]),
+                    "edges": len(chain),
+                    "name": name,
+                    "highway": self._highway[chain[0]] if chain[0] < len(self._highway) else "road",
+                    "lanes": int(self._lanes[chain[0]]) if chain[0] < len(self._lanes) else 1,
+                    "volume": round(vol, 1),
+                    "capacity": round(float(self._capacity[chain[0]]), 1),
+                    "vc_ratio": round(ratio, 2),
+                    "level": level,
+                    "free_min": round(float(sum(rg.edge_time_min[e] for e in chain)), 3),
+                    "travel_min": round(float(sum(rg.edge_time_min[e] * factors[e] for e in chain)), 3),
+                },
+                "geometry": {"type": "LineString", "coordinates": coords},
+            })
+            feat_i += 1
+        return features
+
     def edge_features(self, limit: int = MAP_EDGE_LIMIT) -> dict:
         with self._lock:
             if self._rg is None:
                 return {"type": "FeatureCollection", "features": []}
+            if not self.enabled:
+                return {"type": "FeatureCollection", "features": []}
             rg = self._rg
-            factors = bpr_factor(self._volume, self._capacity) if self.enabled else np.ones(rg.n_edges)
+            factors = bpr_factor(self._volume, self._capacity)
             vc = self._volume / np.maximum(self._capacity, 1.0)
-            # Prefer jammed arterials over quiet residential spaghetti.
             hwy_bonus = np.zeros(rg.n_edges, dtype=np.float64)
             for i, hwy in enumerate(self._highway):
                 if hwy in ("motorway", "trunk", "primary"):
@@ -695,43 +859,18 @@ class TrafficEngine:
                     hwy_bonus[i] = 0.15
             score = vc + (self._volume > 0).astype(np.float64) + hwy_bonus
             order = np.argsort(-score)
-            features = []
+            seeds: list[int] = []
             for idx in order:
-                if len(features) >= max(1, int(limit)):
+                if len(seeds) >= MAP_SEED_LIMIT:
                     break
-                if not self.enabled:
+                if float(vc[idx]) < MAP_MIN_VC or self._volume[idx] <= 0:
                     continue
-                ratio = float(vc[idx])
-                # Map only shows congested corridors (busy+); free-flow stays basemap.
-                if ratio < MAP_MIN_VC or self._volume[idx] <= 0:
-                    continue
-                coords = rg.edge_coords_ll(int(idx)).tolist()
-                if len(coords) < 2:
-                    continue
-                if ratio < 0.9:
-                    level = "busy"
-                elif ratio < 1.3:
-                    level = "jammed"
-                else:
-                    level = "gridlock"
-                free = float(rg.edge_time_min[idx])
-                features.append({
-                    "type": "Feature",
-                    "id": f"tr_{idx}",
-                    "properties": {
-                        "edge": int(idx),
-                        "name": rg.edge_name[idx],
-                        "highway": self._highway[idx] if idx < len(self._highway) else "road",
-                        "lanes": int(self._lanes[idx]) if idx < len(self._lanes) else 1,
-                        "volume": round(float(self._volume[idx]), 1),
-                        "capacity": round(float(self._capacity[idx]), 1),
-                        "vc_ratio": round(ratio, 2),
-                        "level": level,
-                        "free_min": round(free, 3),
-                        "travel_min": round(free * float(factors[idx]), 3),
-                    },
-                    "geometry": {"type": "LineString", "coordinates": coords},
-                })
+                seeds.append(int(idx))
+            edge_ids = self._expand_corridor_edges_locked(seeds, vc)
+            # Prefer keeping highest-score edges if we still overflow.
+            if len(edge_ids) > limit:
+                edge_ids = sorted(edge_ids, key=lambda e: -float(score[e]))[: int(limit)]
+            features = self._merge_corridor_features_locked(edge_ids, vc, factors)
             return {"type": "FeatureCollection", "features": features}
 
     def payload(self) -> dict:

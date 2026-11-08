@@ -327,40 +327,76 @@ export default function MapView({
         layout: { 'line-join': 'round' },
         paint: { 'line-color': EVAC_EDGE, 'line-width': 2 },
       })
-      // Traffic / closed / phone routes: uniform stroke width, soft casing, and
-      // only congested corridors — keeps the overlay tidy instead of spaghetti.
+      // Traffic / closed / phone routes: one continuous stroke language (round
+      // caps/joins, shared width). Backend merges edges into long corridors so
+      // the overlay reads as continuous traffic, not broken dashes.
       const ROAD_WIDTH = [
         'interpolate',
         ['linear'],
         ['zoom'],
         10,
-        1.75,
+        2.25,
         12,
-        2.5,
-        14,
         3.25,
+        14,
+        4.25,
         16,
-        4,
+        5.25,
       ]
       const ROAD_CASE = [
         'interpolate',
         ['linear'],
         ['zoom'],
         10,
-        2.75,
+        3.5,
         12,
-        3.75,
-        14,
         4.75,
+        14,
+        6,
         16,
-        5.75,
+        7.25,
       ]
       map.addSource('traffic', { type: 'geojson', data: EMPTY })
       map.addLayer({
         id: 'traffic-roads-case',
         type: 'line',
         source: 'traffic',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        layout: { 'line-cap': 'round', 'line-join': 'round', 'line-round-limit': 1.05 },
+        paint: {
+          'line-color': SURFACE,
+          'line-width': ROAD_CASE,
+          'line-opacity': 0.95,
+        },
+      })
+      map.addLayer({
+        id: 'traffic-roads',
+        type: 'line',
+        source: 'traffic',
+        layout: { 'line-cap': 'round', 'line-join': 'round', 'line-round-limit': 1.05 },
+        paint: {
+          // Tight warm ramp so corridors look like one system, not confetti.
+          'line-color': [
+            'match',
+            ['get', 'level'],
+            'busy',
+            '#E39B2E',
+            'jammed',
+            '#D9480F',
+            'gridlock',
+            '#B83210',
+            '#E39B2E',
+          ],
+          'line-width': ROAD_WIDTH,
+          'line-opacity': 0.92,
+        },
+      })
+      // Fire-closed OSM edges (arrival_min − 30). Same width; soft dash.
+      map.addSource('closed-roads', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'closed-roads-case',
+        type: 'line',
+        source: 'closed-roads',
+        layout: { 'line-cap': 'round', 'line-join': 'round', 'line-round-limit': 1.05 },
         paint: {
           'line-color': SURFACE,
           'line-width': ROAD_CASE,
@@ -368,49 +404,15 @@ export default function MapView({
         },
       })
       map.addLayer({
-        id: 'traffic-roads',
-        type: 'line',
-        source: 'traffic',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: {
-          'line-color': [
-            'match',
-            ['get', 'level'],
-            'busy',
-            '#E6A817',
-            'jammed',
-            '#D9480F',
-            'gridlock',
-            '#8B1A1A',
-            '#E6A817',
-          ],
-          'line-width': ROAD_WIDTH,
-          'line-opacity': 0.88,
-        },
-      })
-      // Fire-closed OSM edges (arrival_min − 30). Dashed, same width language.
-      map.addSource('closed-roads', { type: 'geojson', data: EMPTY })
-      map.addLayer({
-        id: 'closed-roads-case',
-        type: 'line',
-        source: 'closed-roads',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: {
-          'line-color': SURFACE,
-          'line-width': ROAD_CASE,
-          'line-opacity': 0.85,
-        },
-      })
-      map.addLayer({
         id: 'closed-roads',
         type: 'line',
         source: 'closed-roads',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        layout: { 'line-cap': 'round', 'line-join': 'round', 'line-round-limit': 1.05 },
         paint: {
           'line-color': CLOSED,
           'line-width': ROAD_WIDTH,
-          'line-opacity': 0.92,
-          'line-dasharray': [1.2, 1.4],
+          'line-opacity': 0.9,
+          'line-dasharray': [2, 1.25],
         },
       })
       // Live phone evacuation routes (from heartbeat route_coords).
