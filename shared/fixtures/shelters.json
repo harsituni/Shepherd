@@ -4,20 +4,44 @@
     {
       "type": "Feature",
       "id": "sh_kinsmen",
-      "properties": { "name": "Kinsmen Sports Centre", "capacity": 2000, "occupancy": 0, "open": true },
+      "properties": { "name": "Kinsmen Sports Centre", "capacity": 4000, "occupancy": 0, "open": true },
       "geometry": { "type": "Point", "coordinates": [-113.516, 53.519] }
     },
     {
       "type": "Feature",
       "id": "sh_terwillegar",
-      "properties": { "name": "Terwillegar Rec Centre", "capacity": 2500, "occupancy": 0, "open": true },
+      "properties": { "name": "Terwillegar Rec Centre", "capacity": 3500, "occupancy": 0, "open": true },
       "geometry": { "type": "Point", "coordinates": [-113.595, 53.440] }
     },
     {
       "type": "Feature",
       "id": "sh_commonwealth",
-      "properties": { "name": "Commonwealth Rec Centre", "capacity": 1500, "occupancy": 0, "open": true },
+      "properties": { "name": "Commonwealth Rec Centre", "capacity": 5000, "occupancy": 0, "open": true },
       "geometry": { "type": "Point", "coordinates": [-113.473, 53.559] }
+    },
+    {
+      "type": "Feature",
+      "id": "sh_clareview",
+      "properties": { "name": "Clareview Rec Centre", "capacity": 3000, "occupancy": 0, "open": true },
+      "geometry": { "type": "Point", "coordinates": [-113.391, 53.601] }
+    },
+    {
+      "type": "Feature",
+      "id": "sh_millwoods",
+      "properties": { "name": "Mill Woods Rec Centre", "capacity": 3000, "occupancy": 0, "open": true },
+      "geometry": { "type": "Point", "coordinates": [-113.413, 53.457] }
+    },
+    {
+      "type": "Feature",
+      "id": "sh_meadows",
+      "properties": { "name": "The Meadows Rec Centre", "capacity": 3200, "occupancy": 0, "open": true },
+      "geometry": { "type": "Point", "coordinates": [-113.370, 53.473] }
+    },
+    {
+      "type": "Feature",
+      "id": "sh_jasper_place",
+      "properties": { "name": "Jasper Place Leisure Centre", "capacity": 2800, "occupancy": 0, "open": true },
+      "geometry": { "type": "Point", "coordinates": [-113.582, 53.522] }
     }
   ]
 }
