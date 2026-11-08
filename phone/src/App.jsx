@@ -17,9 +17,9 @@ import { nextClock } from './simClock.js'
 import AlertBanner from './components/AlertBanner.jsx'
 import EvacCard from './components/EvacCard.jsx'
 import MapView from './components/MapView.jsx'
-import { AlertsTab, mostSevere, NotificationPopup } from './components/Notifications.jsx'
-import RouteTab from './components/RouteTab.jsx'
-import { CrookIcon } from './components/icons.jsx'
+import { mostSevere, NotificationPopup } from './components/Notifications.jsx'
+import MapScreen from './components/MapScreen.jsx'
+import { MapKey, RouteDetails } from './components/RouteTab.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
 import { SHEPHERD_VERSION } from './version.js'
 
@@ -36,13 +36,7 @@ function deviceLocation() {
   })
 }
 
-const TABS = [
-  ['route', 'Route'],
-  ['gov', 'Alerts'],
-]
-
 export default function App() {
-  const [tab, setTab] = useState('route')
   const [location, setLocation] = useState(null) // [lon, lat]
   const [route, setRoute] = useState(null)
   const [routeError, setRouteError] = useState(null)
@@ -173,14 +167,12 @@ export default function App() {
         setSending(false)
         if (!loc) {
           showToast("Couldn't get your location. Tap the map where you are, or call 911.")
-          setTab('route')
           return false
         }
         setLocationAndRoute(loc)
       }
       if (!loc) {
         showToast('Tap the map to set your location first.')
-        setTab('route')
         return false
       }
       setSending(true)
@@ -245,121 +237,73 @@ export default function App() {
     route?.leave_by_sim_min != null ||
     (hazards?.features ?? []).some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
 
+  const detailProps = {
+    location,
+    route: shown,
+    lost,
+    routeError,
+    shelters,
+    onChoose: (shelterId) => {
+      setChosen(shelterId)
+      setFocusKey(Date.now()) // frame the newly picked route
+    },
+    trip,
+    evacMode,
+    onEvacMode: setEvacMode,
+    onStartEvacuating: () => {
+      setFocusKey(Date.now()) // frame the route the dot will follow
+      startTrip(evacMode, shown)
+    },
+    onStopEvacuating: stopTrip,
+  }
+
   return (
     <div className="phone">
-      <header className="header">
-        <span className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <CrookIcon />
-          </span>
-          Shepherd
-        </span>
-        <span className="header-meta">
-          <span className="city" aria-live="polite" title={areaName}>
-            {areaName}
-          </span>
-          <span className="build-ver num" title="Git revision for this UI build">
-            {SHEPHERD_VERSION}
-          </span>
-        </span>
-      </header>
-
       {popup && <NotificationPopup key={popup.id} notification={popup} onDismiss={() => setPopup(null)} />}
-
-      {wildfire ? (
-        <EvacCard
-          location={location}
-          route={shown}
-          routeError={routeError}
-          near={location ? nearestHazard(location, hazards) : null}
-          clock={clock}
-          trip={trip}
-        />
-      ) : (
-        <AlertBanner hazards={hazards} location={location} notifications={notifications} />
-      )}
-
-      <nav className="tabs" role="tablist" aria-label="Sections">
-        {TABS.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            id={`tab-${id}`}
-            aria-selected={tab === id}
-            aria-controls="tab-panel"
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      <main className="content" id="tab-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
-        {/* Keep the map mounted across tab switches; just hide it. */}
-        <div hidden={tab !== 'route'}>
-          <RouteTab
-            map={
-              <MapView
-                hazards={hazards}
-                shelters={shelters}
-                route={shown}
-                location={location}
-                onTap={evacuating ? undefined : setLocationAndRoute}
-                onViewChange={onViewChange}
-                focusKey={focusKey}
-                tall={!location}
-              />
-            }
+      <MapScreen
+        renderMap={(framePadding) => (
+          <MapView
             hazards={hazards}
-            location={location}
-            route={shown}
-            lost={lost}
-            routeError={routeError}
             shelters={shelters}
-            onChoose={(shelterId) => {
-              setChosen(shelterId)
-              setFocusKey(Date.now()) // frame the newly picked route
-            }}
-            trip={trip}
-            evacMode={evacMode}
-            onEvacMode={setEvacMode}
-            onStartEvacuating={() => {
-              setFocusKey(Date.now()) // frame the route the dot will follow
-              startTrip(evacMode, shown)
-            }}
-            onStopEvacuating={stopTrip}
+            route={shown}
+            location={location}
+            onTap={evacuating ? undefined : setLocationAndRoute}
+            onViewChange={onViewChange}
+            focusKey={focusKey}
+            framePadding={framePadding}
           />
-        </div>
-        {tab === 'gov' && <AlertsTab notifications={notifications} />}
-      </main>
-
-      <div className="action-bar">
-        <button
-          type="button"
-          className="action"
-          disabled={!location || sending}
-          onClick={() => setSheetOpen(true)}
-        >
-          Report hazard
-        </button>
-        <button
-          type="button"
-          className="action"
-          disabled={!location || sending}
-          onClick={() => sendReport('safe')}
-        >
-          I'm safe
-        </button>
-        <button
-          type="button"
-          className="action action-help"
-          disabled={sending}
-          onClick={() => sendReport('sos')}
-        >
-          Need help
-        </button>
-      </div>
+        )}
+        alert={
+          wildfire ? (
+            <EvacCard
+              location={location}
+              route={shown}
+              routeError={routeError}
+              near={location ? nearestHazard(location, hazards) : null}
+              clock={clock}
+              trip={trip}
+            />
+          ) : (
+            <AlertBanner hazards={hazards} location={location} notifications={notifications} />
+          )
+        }
+        details={<RouteDetails {...detailProps} />}
+        mapKey={<MapKey hazards={hazards} shelters={shelters} route={shown} location={location} />}
+        areaName={areaName}
+        notifications={notifications}
+        location={location}
+        route={shown}
+        routeError={routeError}
+        trip={trip}
+        version={SHEPHERD_VERSION}
+        actions={{
+          report: () => setSheetOpen(true),
+          safe: () => sendReport('safe'),
+          help: () => sendReport('sos'),
+          canReport: !!location && !sending,
+          sending,
+        }}
+      />
 
       {toast && (
         <div className="toast" role="status">

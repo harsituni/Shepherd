@@ -127,6 +127,36 @@ class ImportTests(unittest.TestCase):
                 self.assertFalse(self.output.exists())
                 self.assertEqual(list(self.output.parent.glob("osm_import_*")), [])
 
+    def test_explicit_guards_and_separate_output_preserve_old_map(self):
+        old_map = self.output.parent / "edmonton_demo_drive.graphml"
+        old_map.write_bytes(b"existing map must stay unchanged")
+        original = self.source.read_bytes()
+        with patch.object(import_osm, "check_graph"), \
+             patch.object(import_osm, "MAX_ROAD_NODES", 1), \
+             patch.object(import_osm, "MAX_XML_BYTES", 1):
+            import_osm.import_graph(self.source, self.output, 10, 10000)
+        self.assertEqual(old_map.read_bytes(), b"existing map must stay unchanged")
+        self.assertEqual(self.source.read_bytes(), original)
+        graph = import_osm.ox.load_graphml(self.output)
+        self.assertEqual(set(graph.edges()), {(1, 2), (3, 2), (3, 4), (4, 3), (4, 5)})
+
+    def test_explicit_guards_stop_before_graph_loading(self):
+        for nodes, size in [(1, 10000), (10, 1), (0, 10000), (10, -1)]:
+            with self.subTest(nodes=nodes, size=size), \
+                 patch.object(import_osm.ox, "graph_from_xml") as load:
+                with self.assertRaises(ValueError):
+                    import_osm.import_graph(self.source, self.output, nodes, size)
+                load.assert_not_called()
+                self.assertFalse(self.output.exists())
+                self.assertEqual(list(self.output.parent.glob("osm_import_*")), [])
+
+    def test_command_passes_source_output_and_guards(self):
+        arguments = ["import_osm", "--source", str(self.source), "--path", str(self.output),
+                     "--max-road-nodes", "1234", "--max-xml-mb", "20"]
+        with patch("sys.argv", arguments), patch.object(import_osm, "import_graph") as run:
+            import_osm.main()
+        run.assert_called_once_with(self.source, self.output, 1234, 20_000_000)
+
 
 if __name__ == "__main__":
     unittest.main()

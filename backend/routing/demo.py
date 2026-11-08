@@ -7,15 +7,20 @@ from backend.routing.router import find_route, load_graph
 
 def main():
     shelters = []
-    for identifier, name, lon, lat in [
-        ("sh_kinsmen", "Kinsmen Sports Centre", -113.516, 53.519),
-        ("sh_terwillegar", "Terwillegar Rec Centre", -113.595, 53.440),
-        ("sh_commonwealth", "Commonwealth Rec Centre", -113.473, 53.559),
+    for identifier, name, lon, lat, capacity in [
+        ("sh_kinsmen", "Kinsmen Sports Centre", -113.516, 53.519, 4000),
+        ("sh_terwillegar", "Terwillegar Rec Centre", -113.595, 53.440, 3500),
+        ("sh_commonwealth", "Commonwealth Rec Centre", -113.473, 53.559, 5000),
+        ("sh_clareview", "Clareview Rec Centre", -113.391, 53.601, 3000),
+        ("sh_millwoods", "Mill Woods Rec Centre", -113.413, 53.457, 3000),
+        ("sh_meadows", "The Meadows Rec Centre", -113.370, 53.473, 3200),
+        ("sh_jasper_place", "Jasper Place Leisure Centre", -113.582, 53.522, 2800),
+        ("sh_castle_downs", "Castle Downs Rec Centre", -113.520, 53.612, 3000),
     ]:
         shelters.append({
             "type": "Feature",
             "id": identifier,
-            "properties": {"name": name, "open": True, "capacity": 100, "occupancy": 0},
+            "properties": {"name": name, "open": True, "capacity": capacity, "occupancy": 0},
             "geometry": {"type": "Point", "coordinates": [lon, lat]},
         })
 

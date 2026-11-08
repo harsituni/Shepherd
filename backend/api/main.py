@@ -26,13 +26,14 @@ _next_report_id: int = 1
 STALE_EVACUEE_SEC = 30
 evacuees: dict[str, dict[str, Any]] = {}
 
+# Large Edmonton reception centres (approx. coords). Capacities are demo-scale.
 SHELTERS: list[dict] = [
     {
         "type": "Feature",
         "id": "sh_kinsmen",
         "properties": {
             "name": "Kinsmen Sports Centre",
-            "capacity": 2000,
+            "capacity": 4000,
             "occupancy": 0,
             "open": True,
         },
@@ -43,7 +44,7 @@ SHELTERS: list[dict] = [
         "id": "sh_terwillegar",
         "properties": {
             "name": "Terwillegar Rec Centre",
-            "capacity": 2500,
+            "capacity": 3500,
             "occupancy": 0,
             "open": True,
         },
@@ -54,11 +55,66 @@ SHELTERS: list[dict] = [
         "id": "sh_commonwealth",
         "properties": {
             "name": "Commonwealth Rec Centre",
-            "capacity": 1500,
+            "capacity": 5000,
             "occupancy": 0,
             "open": True,
         },
         "geometry": {"type": "Point", "coordinates": [-113.473, 53.559]},
+    },
+    {
+        "type": "Feature",
+        "id": "sh_clareview",
+        "properties": {
+            "name": "Clareview Rec Centre",
+            "capacity": 3000,
+            "occupancy": 0,
+            "open": True,
+        },
+        "geometry": {"type": "Point", "coordinates": [-113.391, 53.601]},
+    },
+    {
+        "type": "Feature",
+        "id": "sh_millwoods",
+        "properties": {
+            "name": "Mill Woods Rec Centre",
+            "capacity": 3000,
+            "occupancy": 0,
+            "open": True,
+        },
+        "geometry": {"type": "Point", "coordinates": [-113.413, 53.457]},
+    },
+    {
+        "type": "Feature",
+        "id": "sh_meadows",
+        "properties": {
+            "name": "The Meadows Rec Centre",
+            "capacity": 3200,
+            "occupancy": 0,
+            "open": True,
+        },
+        "geometry": {"type": "Point", "coordinates": [-113.370, 53.473]},
+    },
+    {
+        "type": "Feature",
+        "id": "sh_jasper_place",
+        "properties": {
+            "name": "Jasper Place Leisure Centre",
+            "capacity": 2800,
+            "occupancy": 0,
+            "open": True,
+        },
+        "geometry": {"type": "Point", "coordinates": [-113.582, 53.522]},
+    },
+    {
+        "type": "Feature",
+        "id": "sh_castle_downs",
+        "properties": {
+            "name": "Castle Downs Rec Centre",
+            "capacity": 3000,
+            "occupancy": 0,
+            "open": True,
+        },
+        "geometry": {"type": "Point", "coordinates": [-113.520, 53.612]},
     },
 ]
 

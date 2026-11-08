@@ -31,7 +31,10 @@ class FindRoutesTests(unittest.TestCase):
         self.assertTrue(all(option["status"] == "ok" for option in body["options"]))
         self.assertIsNone(body["leave_by_sim_min"])
         self.assertIsNone(body["options"][0]["margin_min"])
-        self.assertIsNone(body["options"][0]["clear_until_label"])
+        self.assertEqual(
+    body["options"][0]["clear_until_label"],
+    "Fire timing unknown; no safety guarantee"
+)
         self.assertFalse(body["options"][0]["forecast_complete"])
         self.assertIn("not a safety guarantee", body["warning"])
         self.assertIn("unknown", body["warning"])
