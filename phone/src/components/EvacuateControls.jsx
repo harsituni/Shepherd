@@ -23,7 +23,8 @@ export default function EvacuateControls({ route, trip, mode, onMode, onStart, o
   if (trip) {
     const sim = trip.mode === 'sim'
     const left = 1 - (trip.fraction ?? 0)
-    const km = routeLengthKm(trip.route.geometry?.coordinates) * left
+    const totalKm = trip.totalKm ?? routeLengthKm(trip.route.geometry?.coordinates)
+    const km = totalKm * left
     return (
       <div className="trip-status" role="status">
         <strong>
