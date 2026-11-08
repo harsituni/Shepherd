@@ -10,7 +10,7 @@ import { WarningIcon } from './icons.jsx'
 const onTheWay = (near) =>
   near?.inside
     ? near.kind === 'tornado'
-      ? "You're in the tornado path. Keep going."
+      ? `You're in the ${near.feature?.properties?.ef_label ?? 'tornado'} path. Keep going.`
       : "You're in the fire zone. Keep going."
     : hazardSentence(near)
 
@@ -19,8 +19,10 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
   const leaveBy = route?.leave_by_sim_min
   const paused = clock?.state === 'paused'
   const where = route?.shelter_name ? `${route.shelter_name}, ${route.eta_min} min drive` : null
-  const kindWord = near?.kind === 'tornado' ? 'Tornado' : 'Wildfire'
-  const title = near?.kind === 'tornado' ? 'Tornado evacuation' : 'Wildfire evacuation'
+  const ef = near?.feature?.properties?.ef_label
+  const kindWord = near?.kind === 'tornado' ? (ef ? `${ef} tornado` : 'Tornado') : 'Wildfire'
+  const title =
+    near?.kind === 'tornado' ? `${ef ? `${ef} ` : ''}Tornado evacuation` : 'Wildfire evacuation'
 
   let label = null // small line above the big text
   let big // the largest text on screen

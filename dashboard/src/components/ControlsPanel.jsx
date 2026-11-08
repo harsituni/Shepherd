@@ -19,6 +19,16 @@ const HAZARDS = [
   ['tornado', 'Tornado'],
 ]
 
+// Enhanced Fujita peak rating for tornado starts (backend scales width + wind estimate).
+const EF_RATINGS = [
+  { value: 0, label: 'EF0', hint: 'Light' },
+  { value: 1, label: 'EF1', hint: 'Moderate' },
+  { value: 2, label: 'EF2', hint: 'Considerable' },
+  { value: 3, label: 'EF3', hint: 'Severe' },
+  { value: 4, label: 'EF4', hint: 'Devastating' },
+  { value: 5, label: 'EF5', hint: 'Incredible' },
+]
+
 // The simulation itself runs on the backend (/sim/*). This panel picks the scenario
 // and conditions, sends them on play, and drives pause / resume / reset / speed.
 // Wind speed and direction apply to both hazards (a tornado travels with the wind);
@@ -47,6 +57,7 @@ export default function ControlsPanel({
   const [windKmh, setWindKmh] = useState(18)
   const [windFrom, setWindFrom] = useState(270)
   const [humidity, setHumidity] = useState(22)
+  const [efRating, setEfRating] = useState(3)
   const [speed, setSpeed] = useState(4)
 
   const idle = !sim || sim.state === 'idle'
@@ -127,6 +138,31 @@ export default function ControlsPanel({
             />
           </label>
         )}
+        {hazardKind === 'tornado' && (
+          <div className="stack-8">
+            <span className="field">
+              Peak category{' '}
+              <strong className="num">
+                {EF_RATINGS[efRating].label} · {EF_RATINGS[efRating].hint}
+              </strong>
+            </span>
+            <div className="choice-grid ef-grid" role="group" aria-label="Enhanced Fujita rating">
+              {EF_RATINGS.map((ef) => (
+                <button
+                  key={ef.value}
+                  type="button"
+                  className="choice"
+                  aria-pressed={efRating === ef.value}
+                  disabled={locked}
+                  title={ef.hint}
+                  onClick={() => setEfRating(ef.value)}
+                >
+                  {ef.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </fieldset>
 
       <div className="stack-8">
@@ -136,7 +172,7 @@ export default function ControlsPanel({
             className="icon-btn primary"
             aria-label={running ? 'Pause' : idle ? 'Start simulation' : 'Resume'}
             disabled={!canPlay}
-            onClick={() => onPlay({ windKmh, windFrom, humidity }, speed)}
+            onClick={() => onPlay({ windKmh, windFrom, humidity, efRating }, speed)}
           >
             {running ? <PauseIcon /> : <PlayIcon />}
           </button>
@@ -158,8 +194,38 @@ export default function ControlsPanel({
           </div>
         </div>
         <span className="elapsed num" aria-live="polite">
-          {idle ? 'Not started' : `${sim.state === 'paused' ? 'Paused' : 'Running'} · T+${sim.sim_time ?? 0} min`}
+          {idle
+            ? 'Not started'
+            : `${sim.state === 'paused' ? 'Paused' : 'Running'} · T+${sim.sim_time ?? 0} min`}
         </span>
+        {!idle && sim?.tornado && (
+          <div className="tornado-stats num" aria-live="polite">
+            <div>
+              <span className="tornado-stat-label">Now</span>
+              <strong>{sim.tornado.ef_label}</strong>
+            </div>
+            <div>
+              <span className="tornado-stat-label">Phase</span>
+              <strong>{sim.tornado.phase}</strong>
+            </div>
+            <div>
+              <span className="tornado-stat-label">Winds</span>
+              <strong>{sim.tornado.wind_est_kmh} km/h</strong>
+            </div>
+            <div>
+              <span className="tornado-stat-label">Width</span>
+              <strong>{sim.tornado.path_width_m} m</strong>
+            </div>
+            <div>
+              <span className="tornado-stat-label">Forward</span>
+              <strong>{sim.tornado.forward_speed_kmh} km/h</strong>
+            </div>
+            <div>
+              <span className="tornado-stat-label">Track</span>
+              <strong>{sim.tornado.track_km} km</strong>
+            </div>
+          </div>
+        )}
         {error && (
           <span className="hint sim-error" role="alert">
             {error}

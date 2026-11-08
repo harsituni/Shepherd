@@ -123,7 +123,13 @@ export default function App() {
         // as the storm's travel speed and direction.
         await startSim(
           hazardKind === 'tornado'
-            ? { scenario: 'tornado', ...where, wind_kmh: conditions.windKmh, wind_from_deg: conditions.windFrom }
+            ? {
+                scenario: 'tornado',
+                ...where,
+                wind_kmh: conditions.windKmh,
+                wind_from_deg: conditions.windFrom,
+                ef_rating: conditions.efRating,
+              }
             : {
                 scenario: 'wildfire',
                 ...where,
@@ -203,7 +209,7 @@ export default function App() {
         connectionError={connectionError}
         sampleData={USE_FIXTURES}
       />
-      <IncidentBanner hazards={hazards} mode={mode} />
+      <IncidentBanner hazards={hazards} mode={mode} sim={sim} />
       <div className="layout">
         <ControlsPanel
           canSimulate={canSimulate}

@@ -77,9 +77,20 @@ export function nearestHazard(user, hazards) {
 const KIND_NAME = { wildfire: 'wildfire', tornado: 'tornado', flood: 'flood' }
 const KIND_NOUN = { wildfire: 'Fire', tornado: 'Tornado', flood: 'Flooding' }
 
+function tornadoNoun(near) {
+  const ef = near?.feature?.properties?.ef_label
+  return ef ? `${ef} tornado` : KIND_NOUN.tornado
+}
+
 // "Fire is 2.4 km west of you, moving east." from nearestHazard().
 export function hazardSentence(near) {
   if (!near) return null
+  if (near.kind === 'tornado') {
+    const name = tornadoNoun(near)
+    if (near.inside) return `You are inside the ${name} path. Leave now.`
+    const moving = near.moving ? `, moving ${near.moving}` : ''
+    return `${name[0].toUpperCase()}${name.slice(1)} is ${near.km.toFixed(1)} km ${near.direction} of you${moving}.`
+  }
   if (near.inside) return `You are inside the ${KIND_NAME[near.kind] ?? 'hazard'} zone. Leave now.`
   const moving = near.moving ? `, moving ${near.moving}` : ''
   return `${KIND_NOUN[near.kind] ?? 'Hazard'} is ${near.km.toFixed(1)} km ${near.direction} of you${moving}.`

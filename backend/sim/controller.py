@@ -44,7 +44,7 @@ class SimController:
     def status(self) -> dict[str, Any]:
         # While a fire runs, report the wind blowing now: the forecast's, or the latest override.
         source = self.sim if self.sim is not None else self
-        return {
+        body: dict[str, Any] = {
             "state": self.state,
             "scenario": self.scenario,
             "sim_time": self.sim_time,
@@ -52,6 +52,10 @@ class SimController:
             "wind_kmh": source.wind_kmh,
             "wind_from_deg": source.wind_from_deg,
         }
+        # Tornado adds EF category + live stats (additive; wildfire state unchanged).
+        if self.scenario == "tornado" and isinstance(self.sim, TornadoSim):
+            body["tornado"] = self.sim.stats()
+        return body
 
     def start(self, body: dict[str, Any]) -> dict[str, Any]:
         scenario = body.get("scenario", "wildfire")
@@ -79,11 +83,14 @@ class SimController:
 
         if scenario == "tornado":
             # Tornadoes use the dashboard path direction/speed — no FBP weather series.
+            # Optional ef_rating (0–5) sets peak Enhanced Fujita category.
+            ef = body.get("ef_rating", body.get("ef_peak"))
             self.sim = TornadoSim(
                 lat=lat,
                 lon=lon,
                 wind_kmh=wind_kmh,
                 wind_from_deg=wind_from_deg,
+                ef_rating=None if ef is None else int(ef),
                 weather_source={"provider": "dashboard"},
                 domain_bbox=self.domain_bbox,
             )

@@ -212,6 +212,8 @@ class SimStart(BaseModel):
     wind_from_deg: float = 315
     fuel_dryness: float = 0.7
     humidity_pct: Optional[float] = None
+    # Tornado peak Enhanced Fujita category (0–5). Ignored for wildfire.
+    ef_rating: Optional[int] = None
 
 
 class SimSpeed(BaseModel):

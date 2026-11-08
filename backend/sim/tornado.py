@@ -1,15 +1,15 @@
-"""Supercell tornado for demos — track, life cycle, and damage swath.
+"""Supercell tornado for demos — EF category, track, life cycle, damage swath.
 
 Same public surface as WildfireSim (step / features / forecast / arrival_min /
 set_wind / oracle) so SimController and routing can treat it as another hazard.
 
 Physics (simplified but grounded):
+    • Peak intensity is an Enhanced Fujita (EF0–EF5) rating chosen at start.
     • The *storm* translates roughly with the steering wind (FROM + 180°).
     • The tornado sits on the right-rear flank (N. Hemisphere supercell habit)
       and meanders: slow cyclonic curve, along-track sine, and a small wobble.
-    • Translation speed is storm-like (tens of km/h), not "balloon at wind speed".
-    • Intensity follows a life cycle: organizes → mature → rope-out. Damage width
-      scales with that (narrow → violent corridor → thin again).
+    • Intensity follows a life cycle: organizes → mature → rope-out. Current EF
+      and path width scale with that (narrow → violent corridor → thin again).
     • ``core`` = current circulation on the ground; ``buffer`` = debris/rain wrap
       plus the damage already carved along the track.
 """
@@ -46,24 +46,55 @@ STORM_SPEED_CAP_KMH = 85
 # Right-rear flank offset from the storm centroid (metres).
 FLANK_RIGHT_M = 900
 FLANK_BACK_M = 600
-# Meander: cyclonic (left-of-track in heading frame → curves to the right of
-# the mean path for an eastbound storm) + along-track oscillation.
-CURVE_M_PER_KM = 55          # metres of rightward drift per km of travel
+# Meander: cyclonic curve + along-track oscillation.
+CURVE_M_PER_KM = 55
 SINE_AMP_M = 380
 SINE_WAVELENGTH_M = 6500
 WOBBLE_AMP_M = 90
-# Damage radii (metres) at peak mature stage — EF2–EF3 class corridor for demos.
-CORE_R_ORG = 60
-CORE_R_PEAK = 320
-CORE_R_ROPE = 40
-DEBRIS_PAD_M = 450           # rain-wrapped / flying debris around the funnel
-SCAR_PAD_M = 80              # extra beyond core for the lasting damage path
+DEBRIS_PAD_M = 450
+SCAR_PAD_M = 80
+
+# Enhanced Fujita scale — mid-band estimated winds and typical damage widths.
+# Winds are the *rotational* estimate at the funnel, not storm translation.
+EF_TABLE = {
+    0: {"label": "EF0", "wind_mph": 75,  "wind_kmh": 121, "core_peak_m": 90,  "desc": "Light damage"},
+    1: {"label": "EF1", "wind_mph": 98,  "wind_kmh": 158, "core_peak_m": 160, "desc": "Moderate damage"},
+    2: {"label": "EF2", "wind_mph": 123, "wind_kmh": 198, "core_peak_m": 280, "desc": "Considerable damage"},
+    3: {"label": "EF3", "wind_mph": 150, "wind_kmh": 241, "core_peak_m": 420, "desc": "Severe damage"},
+    4: {"label": "EF4", "wind_mph": 183, "wind_kmh": 295, "core_peak_m": 620, "desc": "Devastating damage"},
+    5: {"label": "EF5", "wind_mph": 220, "wind_kmh": 354, "core_peak_m": 900, "desc": "Incredible damage"},
+}
+CORE_R_ORG_FRAC = 0.22
+CORE_R_ROPE_FRAC = 0.12
 
 _VERSIONS = itertools.count(1)
 
 
 def _clamp_wind(wind_kmh: float, wind_from_deg: float) -> tuple[float, float]:
     return max(0.0, float(wind_kmh)), float(wind_from_deg) % 360.0
+
+
+def _clamp_ef(value) -> int:
+    try:
+        return max(0, min(5, int(value)))
+    except (TypeError, ValueError):
+        return 2
+
+
+def ef_from_steering_wind(wind_kmh: float) -> int:
+    """Default peak EF when the dashboard doesn't pick a category."""
+    w = max(0.0, float(wind_kmh))
+    if w < 12:
+        return 0
+    if w < 22:
+        return 1
+    if w < 35:
+        return 2
+    if w < 48:
+        return 3
+    if w < 58:
+        return 4
+    return 5
 
 
 def _toward_rad(wind_from_deg: float) -> float:
@@ -92,7 +123,6 @@ def _ellipse_ring(lon: float, lat: float, along_m: float, across_m: float,
     ring = []
     for i in range(n):
         a = (i / n) * 2 * math.pi
-        # local: x along-track, y cross-track
         x, y = along_m * math.cos(a), across_m * math.sin(a)
         east = x * sa + y * ca
         north = x * ca - y * sa
@@ -126,11 +156,10 @@ def _swath_ring(centres: list[tuple[float, float, float]], n_cap: int = 12) -> l
         nx, ny = -dy / length, dx / length
         left.append(TO_WGS84.transform(ax + nx * half, ay + ny * half))
         right.append(TO_WGS84.transform(ax - nx * half, ay - ny * half))
-    # Round caps at the ends.
+
     def cap(lon, lat, half, dx, dy, outward_sign):
         length = math.hypot(dx, dy) or 1.0
-        ang0 = math.atan2(dy / length, dx / length)  # along track
-        # outward perpendicular for the starting side
+        ang0 = math.atan2(dy / length, dx / length)
         base = ang0 + outward_sign * math.pi / 2
         pts = []
         cx, cy = TO_UTM.transform(lon, lat)
@@ -153,15 +182,18 @@ def _swath_ring(centres: list[tuple[float, float, float]], n_cap: int = 12) -> l
 class TornadoSim:
     def __init__(self, lat: float, lon: float, wind_kmh: float = 40,
                  wind_from_deg: float = 270, fuel_dryness: float = 0.7, *,
-                 weather=None, t0=None, weather_source: Optional[dict] = None,
+                 ef_rating: Optional[int] = None, weather=None, t0=None,
+                 weather_source: Optional[dict] = None,
                  domain_bbox: Optional[list] = None):
         del fuel_dryness, weather, t0
         self.lat = float(lat)
         self.lon = float(lon)
         self.wind_kmh, self.wind_from_deg = _clamp_wind(wind_kmh, wind_from_deg)
+        self.ef_peak = (
+            _clamp_ef(ef_rating) if ef_rating is not None else ef_from_steering_wind(self.wind_kmh)
+        )
         self.weather_source = dict(weather_source or {"provider": "dashboard"})
         self.domain_bbox = list(domain_bbox) if domain_bbox else None
-        # Deterministic meander phase from the touchdown point (stable across ticks).
         self._phase = ((abs(self.lat) * 1000 + abs(self.lon) * 100) % 6.28)
         self.minutes = 0
         self._version = next(_VERSIONS)
@@ -188,9 +220,14 @@ class TornadoSim:
                 arrival=self._oracle.arrival, in_domain=self._oracle.in_domain,
             )
 
+    def _storm_speed_kmh(self) -> float:
+        return min(STORM_SPEED_CAP_KMH, max(STORM_SPEED_FLOOR_KMH, self.wind_kmh * STORM_SPEED_FRAC))
+
     def _storm_speed_m_per_min(self) -> float:
-        kmh = min(STORM_SPEED_CAP_KMH, max(STORM_SPEED_FLOOR_KMH, self.wind_kmh * STORM_SPEED_FRAC))
-        return (kmh * 1000.0) / 60.0
+        return (self._storm_speed_kmh() * 1000.0) / 60.0
+
+    def _peak_core_m(self) -> float:
+        return float(EF_TABLE[self.ef_peak]["core_peak_m"])
 
     def _intensity(self, t_min: float) -> float:
         """0..1 life-cycle intensity (organize → mature → dissipate)."""
@@ -198,21 +235,40 @@ class TornadoSim:
         if t <= ORGANIZE_MIN:
             return 0.15 + 0.55 * (t / ORGANIZE_MIN)
         if t <= MATURE_MIN:
-            # Peak in the middle of mature phase.
             u = (t - ORGANIZE_MIN) / max(1.0, MATURE_MIN - ORGANIZE_MIN)
             return 0.7 + 0.3 * math.sin(u * math.pi)
         if t <= DISSIPATE_MIN:
             u = (t - MATURE_MIN) / max(1.0, DISSIPATE_MIN - MATURE_MIN)
             return max(0.08, 1.0 - 0.92 * u)
-        # Rope-out remnant, still a thin track.
         return 0.08
 
-    def _core_radius(self, t_min: float) -> float:
+    def _phase_name(self, t_min: float) -> str:
+        t = max(0.0, t_min)
+        if t <= ORGANIZE_MIN:
+            return "organizing"
+        if t <= MATURE_MIN:
+            return "mature"
+        if t <= DISSIPATE_MIN:
+            return "dissipating"
+        return "remnant"
+
+    def _ef_at(self, t_min: float) -> int:
+        """Current EF from peak rating × life-cycle intensity."""
         inten = self._intensity(t_min)
+        if inten < 0.2:
+            return 0
+        # Scale toward peak; floor at 0 during rope-out.
+        scaled = self.ef_peak * inten
+        return max(0, min(self.ef_peak, int(round(scaled))))
+
+    def _core_radius(self, t_min: float) -> float:
+        peak = self._peak_core_m()
+        inten = self._intensity(t_min)
+        rope = peak * CORE_R_ROPE_FRAC
+        org = peak * CORE_R_ORG_FRAC
         if inten < 0.7:
-            # Organize / dissipate: interpolate toward peak width with intensity.
-            return CORE_R_ROPE + (CORE_R_PEAK - CORE_R_ROPE) * (inten / 0.7) * 0.55
-        return CORE_R_ORG + (CORE_R_PEAK - CORE_R_ORG) * ((inten - 0.5) / 0.5)
+            return rope + (peak * 0.55 - rope) * (inten / 0.7)
+        return org + (peak - org) * ((inten - 0.5) / 0.5)
 
     def _damage_half_width(self, t_min: float) -> float:
         return self._core_radius(t_min) + SCAR_PAD_M
@@ -225,26 +281,47 @@ class TornadoSim:
         t = max(0.0, t_min)
         heading = self._heading()
         along = self._storm_speed_m_per_min() * t
-        # Mean storm path.
         east = along * math.sin(heading)
         north = along * math.cos(heading)
-        # Right-rear flank of the parent storm (right = +90° from heading).
         right = heading + math.pi / 2
         east += FLANK_RIGHT_M * math.sin(right) - FLANK_BACK_M * math.sin(heading)
         north += FLANK_RIGHT_M * math.cos(right) - FLANK_BACK_M * math.cos(heading)
-        # Cyclonic curve: drift to the right of the mean track with distance.
         east += (along / 1000.0) * CURVE_M_PER_KM * math.sin(right)
         north += (along / 1000.0) * CURVE_M_PER_KM * math.cos(right)
-        # Along-track / cross-track meander (suction vortices wandering).
         phase = self._phase + along * (2 * math.pi / SINE_WAVELENGTH_M)
         east += SINE_AMP_M * math.sin(phase) * math.sin(right)
         north += SINE_AMP_M * math.sin(phase) * math.cos(right)
-        # Small high-frequency wobble.
         w = self._phase * 3.7 + along * 0.012
         east += WOBBLE_AMP_M * math.sin(w) * math.sin(heading)
         north += WOBBLE_AMP_M * math.cos(w * 1.3) * math.cos(heading)
         lon, lat = _offset_ll(self.lon, self.lat, east, north)
         return lon, lat
+
+    def _track_km(self, t_min: float) -> float:
+        return round(self._storm_speed_m_per_min() * max(0.0, t_min) / 1000.0, 1)
+
+    def stats(self, t_min: Optional[float] = None) -> dict:
+        """Live tornado readout for /sim/state and hazard properties."""
+        t = float(self.minutes if t_min is None else t_min)
+        ef = self._ef_at(t)
+        band = EF_TABLE[ef]
+        peak = EF_TABLE[self.ef_peak]
+        width = round(self._core_radius(t) * 2)
+        return {
+            "ef_rating": ef,
+            "ef_label": band["label"],
+            "ef_peak": self.ef_peak,
+            "ef_peak_label": peak["label"],
+            "ef_desc": band["desc"],
+            "phase": self._phase_name(t),
+            "intensity": round(self._intensity(t), 2),
+            "wind_est_mph": int(band["wind_mph"]),
+            "wind_est_kmh": int(band["wind_kmh"]),
+            "path_width_m": width,
+            "forward_speed_kmh": round(self._storm_speed_kmh(), 1),
+            "track_km": self._track_km(t),
+            "heading_deg": round((self.wind_from_deg + 180.0) % 360.0, 1),
+        }
 
     def _track_samples(self, t0: float, t1: float, spacing_m: float = 220.0) -> list[tuple[float, float, float]]:
         speed = max(self._storm_speed_m_per_min(), 1.0)
@@ -266,9 +343,9 @@ class TornadoSim:
         lon, lat = self._centre_at(now)
         core_r = self._core_radius(now)
         heading = self._heading()
-        # Funnel footprint: slightly elongated along motion (suction / translation smear).
         along = core_r * 1.25
         across = core_r * 0.85
+        stats = self.stats(now)
         features = []
         if now > 1.0:
             scar = _swath_ring(self._track_samples(0.0, now))
@@ -276,14 +353,19 @@ class TornadoSim:
                 features.append({
                     "type": "Feature",
                     "id": "hz_tornado_scar",
-                    "properties": {"kind": "tornado", "zone": "buffer", "source": "sim", "role": "damage_path"},
+                    "properties": {
+                        "kind": "tornado", "zone": "buffer", "source": "sim", "role": "damage_path",
+                        "ef_peak": stats["ef_peak"], "track_km": stats["track_km"],
+                    },
                     "geometry": {"type": "Polygon", "coordinates": [scar]},
                 })
-        # Debris / rain-wrapped mesocyclone around the current circulation.
         features.append({
             "type": "Feature",
             "id": "hz_tornado_debris",
-            "properties": {"kind": "tornado", "zone": "buffer", "source": "sim", "role": "debris"},
+            "properties": {
+                "kind": "tornado", "zone": "buffer", "source": "sim", "role": "debris",
+                "ef_rating": stats["ef_rating"],
+            },
             "geometry": {
                 "type": "Polygon",
                 "coordinates": [_circle_ring(lon, lat, core_r + DEBRIS_PAD_M)],
@@ -294,7 +376,7 @@ class TornadoSim:
             "id": "hz_tornado_core",
             "properties": {
                 "kind": "tornado", "zone": "core", "source": "sim",
-                "intensity": round(self._intensity(now), 2),
+                **stats,
             },
             "geometry": {
                 "type": "Polygon",
@@ -308,19 +390,23 @@ class TornadoSim:
         now = float(self.minutes)
         outlines = []
         for t_min in range(FORECAST_STEP_MIN, int(horizon_min) + 1, FORECAST_STEP_MIN):
-            # Corridor from now → now+t_min, widened by forecast uncertainty.
-            uncertain = 40.0 * (t_min / 15.0)  # metres of extra half-width per 15 min
+            uncertain = 40.0 * (t_min / 15.0)
             samples = []
             for lon, lat, half in self._track_samples(now, now + t_min):
                 samples.append((lon, lat, half + uncertain))
             ring = _swath_ring(samples) if len(samples) > 1 else _circle_ring(
                 *self._centre_at(now + t_min), self._damage_half_width(now + t_min) + uncertain,
             )
+            future = self.stats(now + t_min)
             outlines.append({
                 "t_min": t_min,
                 "type": "Feature",
                 "id": f"fc_{t_min}",
-                "properties": {"kind": "tornado", "t_min": t_min, "zone": "predicted"},
+                "properties": {
+                    "kind": "tornado", "t_min": t_min, "zone": "predicted",
+                    "ef_rating": future["ef_rating"], "ef_label": future["ef_label"],
+                    "phase": future["phase"],
+                },
                 "geometry": {"type": "Polygon", "coordinates": [ring]},
             })
         return outlines
@@ -353,8 +439,7 @@ class TornadoSim:
         speed = max(self._storm_speed_m_per_min(), 1.0)
         covers = float(self.minutes + ROUTE_WINDOW_MIN + LOOKAHEAD_MIN)
         covers = min(covers, self.minutes + MAX_PATH_M / speed)
-        # Bounding box: meander + flank + peak damage + pad.
-        pad = CORE_R_PEAK + DEBRIS_PAD_M + CURVE_M_PER_KM * 40 + SINE_AMP_M + 2500
+        pad = self._peak_core_m() + DEBRIS_PAD_M + CURVE_M_PER_KM * 40 + SINE_AMP_M + 2500
         end_lon, end_lat = self._centre_at(covers)
         corners = [
             _offset_ll(self.lon, self.lat, de, dn)
@@ -363,7 +448,6 @@ class TornadoSim:
             _offset_ll(end_lon, end_lat, de, dn)
             for de, dn in ((-pad, -pad), (pad, -pad), (-pad, pad), (pad, pad))
         ]
-        # Also cover mid-track meander extrema.
         for t in (covers * 0.33, covers * 0.66):
             lon, lat = self._centre_at(t)
             corners.extend(_offset_ll(lon, lat, de, dn) for de, dn in ((-pad, 0), (pad, 0), (0, -pad), (0, pad)))

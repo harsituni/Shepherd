@@ -4,6 +4,15 @@ import { mostSevere, SEVERITY } from './Notifications.jsx'
 
 const KIND_LABEL = { wildfire: 'Wildfire', tornado: 'Tornado', flood: 'Flood' }
 
+function kindTitle(near, features) {
+  if (near?.kind === 'tornado') {
+    const ef = near.feature?.properties?.ef_label
+    return ef ? `${ef} tornado` : 'Tornado'
+  }
+  const kinds = [...new Set(features.map((f) => f.properties.kind))]
+  return kinds.map((k) => KIND_LABEL[k] ?? k).join(' / ')
+}
+
 function Banner({ tone, Icon, title, line, assertive }) {
   return (
     <div className={`alert alert-${tone}`} role={assertive ? 'alert' : 'status'}>
@@ -41,8 +50,12 @@ export default function AlertBanner({ hazards, location, notifications }) {
     return <Banner tone="advisory" Icon={InfoIcon} title="No active hazards" line="We'll alert you here if anything changes." />
   }
 
-  const kinds = [...new Set(features.map((f) => f.properties.kind))]
-  const title = kinds.map((k) => KIND_LABEL[k] ?? k).join(' and ')
+  const title = kindTitle(near, features)
+  const core = features.find((f) => f.properties?.kind === 'tornado')
+  const efBits = core?.properties
+  const tornadoStats =
+    efBits?.ef_label &&
+    `${efBits.ef_label} · ${efBits.wind_est_kmh ?? '—'} km/h · ${efBits.path_width_m ?? '—'} m wide`
 
   if (!location) {
     return (
@@ -50,7 +63,7 @@ export default function AlertBanner({ hazards, location, notifications }) {
         tone="advisory"
         Icon={InfoIcon}
         title={`Active ${title.toLowerCase()} in the Edmonton area`}
-        line="Tap the map to set your location and get a safe route."
+        line={tornadoStats || 'Tap the map to set your location and get a safe route.'}
       />
     )
   }
@@ -60,7 +73,7 @@ export default function AlertBanner({ hazards, location, notifications }) {
       <Banner
         tone="danger"
         Icon={WarningIcon}
-        title={`You are inside the ${(KIND_LABEL[near.kind] ?? 'hazard').toLowerCase()} zone`}
+        title={`You are inside the ${title.toLowerCase()} path`}
         line="Leave now. Follow the route below."
         assertive
       />
