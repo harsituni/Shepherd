@@ -184,7 +184,7 @@ export default function ControlsPanel({
                   windFrom,
                   humidity,
                   efRating,
-                  trafficCount: traffic?.simulated_count ?? 2000,
+                  trafficCount: traffic?.simulated_count ?? 10000,
                 },
                 speed,
               )

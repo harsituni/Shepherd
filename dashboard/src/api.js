@@ -346,7 +346,7 @@ export async function getTraffic() {
   return {
     enabled: false,
     anti_gridlock: true,
-    simulated_count: 2000,
+    simulated_count: 10000,
     real_count: 0,
     active_count: 0,
     metrics: {},

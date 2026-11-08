@@ -157,7 +157,7 @@ export default function App() {
         await setTrafficConfig({
           enabled: true,
           anti_gridlock: true,
-          simulated_count: conditions.trafficCount ?? traffic?.simulated_count ?? 2000,
+          simulated_count: conditions.trafficCount ?? traffic?.simulated_count ?? 10000,
         })
       }),
     [run, sim, startPoint, hazardKind, traffic],

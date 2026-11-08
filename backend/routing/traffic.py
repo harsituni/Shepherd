@@ -80,8 +80,11 @@ REBALANCE_EVERY_MIN = 2
 # judges see Shepherd actively rerouting people out of jams.
 SWITCH_SAVE_MIN = 1.0
 SWITCH_COOLDOWN_MIN = 2
-DEFAULT_SIMULATED = 2000
-MAX_SIMULATED = 5000
+DEFAULT_SIMULATED = 10_000
+# Dashboard can ask for up to 100k evacuating cars. We only instantiate a few
+# thousand agents and scale each one's road load (projection) so the API stays fast.
+MAX_SIMULATED = 100_000
+MAX_SIM_AGENTS = 2_500
 # Congested edges for the dashboard map (sorted by v/c). Keep this modest so
 # the overlay reads as corridors, not a spaghetti of every residential edge.
 MAP_EDGE_LIMIT = 900
@@ -140,6 +143,8 @@ class Agent:
     assigned_sim_min: int = 0
     last_switch_sim_min: int = -10_000
     arrived: bool = False
+    # How many projected cars this agent represents on the network (phones = 1).
+    load_weight: float = 1.0
 
 
 @dataclass
@@ -297,15 +302,27 @@ class TrafficEngine:
         self._assign_thread = threading.Thread(target=worker, daemon=True, name="traffic-assign")
         self._assign_thread.start()
 
+    def _projection_weight_locked(self) -> float:
+        """Cars-per-sim-agent so N agents can stand in for up to 100k evacuating cars."""
+        n = sum(1 for a in self._agents.values() if a.kind == "sim")
+        if n <= 0:
+            return 1.0
+        return max(1.0, float(self.simulated_count) / float(n))
+
     def status_locked(self) -> dict:
         phones = sum(1 for a in self._agents.values() if a.kind == "phone" and not a.arrived)
         sims = sum(1 for a in self._agents.values() if a.kind == "sim" and not a.arrived)
+        weight = self._projection_weight_locked() if sims else 1.0
+        # active_count is the projected crowd (slider) + live phones, not agent structs.
+        projected = int(round(sims * weight)) + phones if self.enabled else phones
         return {
             "enabled": self.enabled,
             "anti_gridlock": self.anti_gridlock,
             "simulated_count": self.simulated_count,
             "real_count": phones,
-            "active_count": phones + sims,
+            "active_count": projected,
+            "projection_agents": sims,
+            "projection_weight": round(weight, 2),
             "metrics": self._metrics.as_dict(),
             "compare": self._compare,
             "last_rebalance_sim_min": None if self._last_rebalance_sim < 0 else int(self._last_rebalance_sim),
@@ -374,10 +391,11 @@ class TrafficEngine:
 
     def _ensure_crowd_locked(self) -> None:
         sims = [a for a in self._agents.values() if a.kind == "sim"]
-        while len(sims) > self.simulated_count:
+        target = min(int(self.simulated_count), MAX_SIM_AGENTS)
+        while len(sims) > target:
             gone = sims.pop()
             self._unload_agent_locked(self._agents.pop(gone.id))
-        need = self.simulated_count - len(sims)
+        need = target - len(sims)
         if need <= 0 or self._rg is None:
             return
         # Prefer nodes within ~4 km of the hazard so corridors actually jam.
@@ -400,27 +418,31 @@ class TrafficEngine:
             )
 
     def _unload_agent_locked(self, agent: Agent) -> None:
+        w = float(agent.load_weight or 1.0)
         if agent.edge_ids:
             for e in agent.edge_ids:
                 if 0 <= e < len(self._volume):
-                    self._volume[e] = max(0.0, self._volume[e] - 1.0)
+                    self._volume[e] = max(0.0, self._volume[e] - w)
         agent.edge_ids = ()
         agent.route_id = None
         agent.shelter_id = None
+        agent.load_weight = 1.0
 
     def _load_agent_locked(self, agent: Agent, edge_ids, route_id, shelter_id,
                            eta_min, free_eta_min, sim_time: int) -> None:
         self._unload_agent_locked(agent)
         ids = tuple(int(e) for e in edge_ids)
+        weight = 1.0 if agent.kind == "phone" else self._projection_weight_locked()
         agent.edge_ids = ids
         agent.route_id = route_id
         agent.shelter_id = shelter_id
         agent.eta_min = float(eta_min)
         agent.free_eta_min = float(free_eta_min)
         agent.assigned_sim_min = int(sim_time)
+        agent.load_weight = float(weight)
         for e in ids:
             if 0 <= e < len(self._volume):
-                self._volume[e] += 1.0
+                self._volume[e] += weight
 
     # ----- assignment -----
 
@@ -607,13 +629,14 @@ class TrafficEngine:
         etas = [_sane_minutes(a.eta_min) for a in active]
         vc = self._volume / np.maximum(self._capacity, 1.0) if len(self._volume) else np.zeros(0)
         raw_max_vc = float(vc.max()) if len(vc) else 0.0
+        projected = int(round(sum(float(a.load_weight or 1.0) for a in active)))
         self._metrics = TrafficMetrics(
             clearance_min=float(max(etas)),
             avg_eta_min=float(sum(etas) / len(etas)),
             # Report real pressure but clamp so "Peak load 5473%" never ships.
             max_vc=float(min(raw_max_vc, MAX_VC_REPORT)),
             jammed_edges=int(np.sum(vc >= 0.9)),
-            agents_active=len(active),
+            agents_active=projected,
             agents_arrived=arrived,
             reroutes=self._metrics.reroutes,
         )

@@ -313,7 +313,7 @@ Returns `/sim/state` shape (below), after forecast rebuild has been kicked off (
   "traffic": {
     "enabled": false,
     "anti_gridlock": true,
-    "simulated_count": 2000,
+    "simulated_count": 10000,
     "real_count": 0,
     "active_count": 0,
     "metrics": {
@@ -372,25 +372,25 @@ new route saves **≥ 3 minutes** (with a cooldown so routes do not flip-flop).
 
 #### POST /traffic/config
 ```json
-{ "enabled": true, "anti_gridlock": true, "simulated_count": 2000 }
+{ "enabled": true, "anti_gridlock": true, "simulated_count": 10000 }
 ```
-All fields optional; omitted keys stay unchanged. `simulated_count` is clamped to `0…5000`.
+All fields optional; omitted keys stay unchanged. `simulated_count` is clamped to `0…100000`. Large counts are a **projection**: the engine keeps a few thousand route agents and scales each one's road load so the map/metrics read as N cars without freezing the API.
 
 #### GET /traffic (and `/traffic/state`)
 ```json
 {
   "enabled": true,
   "anti_gridlock": true,
-  "simulated_count": 2000,
+  "simulated_count": 10000,
   "real_count": 3,
-  "active_count": 2003,
+  "active_count": 10003,
   "sim_time": 30,
   "metrics": {
     "clearance_min": 41.0,
     "avg_eta_min": 18.2,
     "max_vc": 1.6,
     "jammed_edges": 24,
-    "agents_active": 2003,
+    "agents_active": 10003,
     "agents_arrived": 0,
     "reroutes": 12
   },

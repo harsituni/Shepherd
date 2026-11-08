@@ -27,10 +27,11 @@ function formatCompareLabel(compare) {
 export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onCompare }) {
   const enabled = !!traffic?.enabled
   const anti = traffic?.anti_gridlock !== false
-  const count = traffic?.simulated_count ?? 2000
+  const count = traffic?.simulated_count ?? 10000
   const [slider, setSlider] = useState(count)
   const metrics = traffic?.metrics ?? {}
   const compare = traffic?.compare
+  const weight = traffic?.projection_weight
 
   useEffect(() => {
     setSlider(count)
@@ -42,8 +43,8 @@ export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onC
         Traffic
       </h2>
       <p className="hint">
-        Thousands of cars + judge phones jam roads. Anti-gridlock spreads them and
-        phones get mid-trip reroutes.
+        Up to 100k evacuating cars (projected onto the road network) + judge phones.
+        Anti-gridlock spreads them and phones get mid-trip reroutes.
       </p>
 
       <label className="toggle-row">
@@ -63,14 +64,19 @@ export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onC
         <input
           type="range"
           min="0"
-          max="5000"
-          step="100"
+          max="100000"
+          step="1000"
           value={slider}
           disabled={!canSimulate || busy}
           onChange={(e) => setSlider(+e.target.value)}
           onMouseUp={() => onConfig({ simulated_count: slider, enabled: true })}
           onTouchEnd={() => onConfig({ simulated_count: slider, enabled: true })}
         />
+        {enabled && weight > 1 && (
+          <span className="hint">
+            Projected · each sim agent ≈ {Number(weight).toLocaleString()} cars
+          </span>
+        )}
       </label>
 
       <label className="toggle-row">

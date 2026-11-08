@@ -50,6 +50,11 @@ class TrafficEngineTests(unittest.TestCase):
         st = eng.configure(enabled=False)
         self.assertFalse(st["enabled"])
 
+    def test_projected_count_clamps_high(self):
+        eng = TrafficEngine()
+        st = eng.configure(enabled=False, simulated_count=250_000)
+        self.assertEqual(st["simulated_count"], 100_000)
+
     def test_compare_needs_router(self):
         eng = TrafficEngine()
         out = eng.compare()
