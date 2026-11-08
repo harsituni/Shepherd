@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   compareTraffic,
   deleteHazards,
+  getClosedRoads,
   getEvacuees,
   getForecast,
   getHazards,
@@ -20,6 +21,7 @@ import {
 import { POLL_MS, USE_FIXTURES } from './config.js'
 import { forecastHorizon, hazardsForView, recordSnapshot } from './history.js'
 import { dangerRings, unsafeShelterIds } from './evacuation.js'
+import { nextCutoff, phoneRerouteCount } from './cutoff.js'
 import MapView from './components/MapView.jsx'
 import Header from './components/Header.jsx'
 import IncidentBanner from './components/IncidentBanner.jsx'
@@ -53,6 +55,7 @@ export default function App() {
   const [forecast, setForecast] = useState(null) // GET /forecast
   const [evacuees, setEvacuees] = useState(null) // GET /evacuees: phones that set a location
   const [traffic, setTraffic] = useState(null) // GET /traffic (roads + metrics)
+  const [closedRoads, setClosedRoads] = useState(null) // GET /roads/closed
   const [trafficBusy, setTrafficBusy] = useState(false)
   const [viewing, setViewing] = useState(null) // history slider: null = live, else a sim minute
   const [popup, setPopup] = useState(null) // 'reports' | 'notify' | null: which centred pop-up is open
@@ -73,8 +76,10 @@ export default function App() {
       // Same for evacuees: a failure only hides the phone dots until the next poll.
       const ev = await getEvacuees().catch(() => null)
       const tr = await getTraffic().catch(() => null)
+      const cr = await getClosedRoads().catch(() => null)
       if (ev) setEvacuees(ev)
       if (tr) setTraffic(tr)
+      if (cr) setClosedRoads(cr)
       if (h.status === 'fulfilled') setHazards(h.value)
       if (s.status === 'fulfilled') setShelters(s.value)
       if (r.status === 'fulfilled') setReports(r.value)
@@ -231,6 +236,8 @@ export default function App() {
     () => unsafeShelterIds(shelters, dangerRings(hazards, forecast?.outlines)),
     [shelters, hazards, forecast],
   )
+  const cutoff = useMemo(() => nextCutoff(shelters, hazards, forecast), [shelters, hazards, forecast])
+  const phoneReroutes = useMemo(() => phoneRerouteCount(evacuees), [evacuees])
 
   // Picking a report closes the pop-up so the map can be seen centring on it.
   const focusReport = useCallback((feature) => {
@@ -258,7 +265,7 @@ export default function App() {
         connectionError={connectionError}
         sampleData={USE_FIXTURES}
       />
-      <IncidentBanner hazards={hazards} mode={mode} sim={sim} />
+      <IncidentBanner hazards={hazards} mode={mode} sim={sim} cutoff={cutoff} closedCount={closedRoads?.count} />
       <div className="layout">
         <ControlsPanel
           canSimulate={canSimulate}
@@ -296,6 +303,7 @@ export default function App() {
             startPoint={startPoint}
             showPredicted={showPredicted}
             traffic={traffic}
+            closedRoads={closedRoads}
             onMapClick={pickStart}
           />
           <HistoryBar
@@ -306,7 +314,13 @@ export default function App() {
             onLive={() => setViewing(null)}
           />
         </main>
-        <SidePanel shelters={shelters} traffic={traffic} />
+        <SidePanel
+          shelters={shelters}
+          traffic={traffic}
+          closedCount={closedRoads?.count}
+          phoneReroutes={phoneReroutes}
+          peopleAtRisk={evacuees?.features?.length ?? null}
+        />
       </div>
       <Dialog open={popup === 'reports'} title="Reports" onClose={closePopup}>
         <ReportsList reports={reports} onSelect={focusReport} />

@@ -478,10 +478,11 @@ Phone heartbeat every ~2 s while evacuating.
   "lon": -113.610,
   "route_id": "rt_1",
   "route_status": "ok",
-  "shelter_id": "sh_kinsmen"
+  "shelter_id": "sh_kinsmen",
+  "route_coords": [[-113.610, 53.521], [-113.516, 53.519]]
 }
 ```
-Upserts by `id`. Returns `200` or `201`:
+Upserts by `id`. `route_coords` is optional (`[[lon, lat], …]` of the path the phone is driving) so the dashboard can draw live routes. Returns `200` or `201`:
 ```json
 { "id": "ev_judge_3", "received": true }
 ```
@@ -498,19 +499,47 @@ Upserts by `id`. Returns `200` or `201`:
         "route_id": "rt_1",
         "route_status": "ok",
         "shelter_id": "sh_kinsmen",
-        "updated_sim_time": 14
+        "updated_sim_time": 14,
+        "reroutes": 1,
+        "route_coords": [[-113.610, 53.521], [-113.516, 53.519]]
       },
       "geometry": { "type": "Point", "coordinates": [-113.610, 53.521] }
     }
   ]
 }
 ```
-Dashboard polls every 2 s. Servers **may** drop evacuees with no POST for 30+ seconds — if so, document in changelog when implemented.
+`reroutes` counts mid-trip `route_id` changes for that phone. Dashboard polls every 2 s. Servers **may** drop evacuees with no POST for 30+ seconds — if so, document in changelog when implemented.
 
 ---
 
-### GET /roads/closed  · optional / later
-Still as in v1 fixtures. Not required for Saturday demo if time-aware routing uses `arrival_min` internally.
+### GET /roads/closed  · **v2.1**
+OSM edges already past the fire close deadline (`arrival_min − 30`). Dashboard paints these as closed corridors while the fire (or tornado) runs.
+
+```json
+{
+  "type": "FeatureCollection",
+  "sim_time": 30,
+  "count": 84,
+  "features": [
+    {
+      "type": "Feature",
+      "id": "rd_closed_42",
+      "properties": {
+        "kind": "closed_road",
+        "name": "Whyte Avenue",
+        "edge": 42,
+        "closed_at_sim_min": 18,
+        "reason": "fire"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-113.500, 53.518], [-113.495, 53.518]]
+      }
+    }
+  ]
+}
+```
+`count` is the full closed set; `features` may be capped for the map payload. Empty while idle / no oracle.
 
 ---
 
@@ -518,7 +547,7 @@ Still as in v1 fixtures. Not required for Saturday demo if time-aware routing us
 
 **Hackathon default: polling every 2 seconds.**
 - Phone: `/route` (or check), `/hazards`, `POST /evacuees`; with traffic on, also `/route/traffic_hint`
-- Dashboard: `/hazards`, `/reports`, `/forecast`, `/evacuees`, `/sim/state`; with traffic on, also `/traffic` or `/traffic/state`
+- Dashboard: `/hazards`, `/reports`, `/forecast`, `/evacuees`, `/sim/state`, `/roads/closed`; with traffic on, also `/traffic` or `/traffic/state`
 
 **Later:** WebSocket `ws://localhost:8000/ws` with `{ "type", "sim_time", "changed": [...] }` — unchanged idea from v1; not required for Saturday.
 

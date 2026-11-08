@@ -17,7 +17,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from backend.routing.router import (
-    NoRouteError, check_route, find_routes, find_routes_v3, graph_bbox, load_graph, prepare_forecast,
+    NoRouteError, check_route, find_routes, find_routes_v3, fire_closed_road_features,
+    graph_bbox, load_graph, prepare_forecast,
 )
 from backend.routing.traffic import engine as traffic_engine
 from backend.sim.controller import SimController
@@ -266,6 +267,9 @@ class EvacueeIn(BaseModel):
     route_id: Optional[str] = None
     route_status: Optional[str] = None
     shelter_id: Optional[str] = None
+    # Optional LineString coords [[lon, lat], ...] so the dashboard can draw the
+    # phone's live route (and flash when it mid-trip reroutes). Additive.
+    route_coords: Optional[list[list[float]]] = None
 
 
 def circle_polygon(lat: float, lon: float, radius_m: float, n: int = 32) -> list[list[float]]:
@@ -318,6 +322,8 @@ def evacuee_features() -> list[dict]:
                     "route_status": row.get("route_status"),
                     "shelter_id": row.get("shelter_id"),
                     "updated_sim_time": row.get("updated_sim_time"),
+                    "reroutes": int(row.get("reroutes") or 0),
+                    "route_coords": row.get("route_coords"),
                     **priority_properties(eid),
                 },
                 "geometry": {
@@ -502,6 +508,16 @@ def get_forecast() -> dict:
     return controller.forecast()
 
 
+@app.get("/roads/closed")
+def get_closed_roads() -> dict:
+    """OSM edges already past the fire close deadline (arrival_min − 30).
+
+    Dashboard paints these red so judges see corridors shut as the fire grows.
+    `count` is the full closed set; `features` is capped for the map payload.
+    """
+    return fire_closed_road_features(controller.oracle(), controller.sim_time)
+
+
 @app.get("/traffic")
 def get_traffic() -> dict:
     """Congested roads + metrics. Additive — not in contract v2."""
@@ -564,12 +580,28 @@ def post_evacuee(body: EvacueeIn, response: Response) -> dict:
     """Phone location heartbeat. Upserts by id; 201 on first sight, 200 on update."""
     prune_evacuees()
     created = body.id not in evacuees
+    prev = evacuees.get(body.id) or {}
+    coords = body.route_coords
+    if coords is not None and len(coords) >= 2:
+        route_coords = [[float(p[0]), float(p[1])] for p in coords if len(p) >= 2]
+    else:
+        route_coords = prev.get("route_coords")
+    reroutes = int(prev.get("reroutes") or 0)
+    if (
+        not created
+        and body.route_id
+        and prev.get("route_id")
+        and body.route_id != prev.get("route_id")
+    ):
+        reroutes += 1
     evacuees[body.id] = {
         "lat": body.lat,
         "lon": body.lon,
         "route_id": body.route_id,
         "route_status": body.route_status,
         "shelter_id": body.shelter_id,
+        "route_coords": route_coords,
+        "reroutes": reroutes,
         "updated_sim_time": controller.sim_time,
         "last_seen": time.time(),
     }

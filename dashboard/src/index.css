@@ -115,7 +115,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .banner-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hazard); }
 .banner-dot.idle { background: var(--muted-2); }
 .banner-dot.tornado { background: var(--tornado); }
+.banner-dot.warn { background: var(--closed); }
 .banner-tornado { background: color-mix(in srgb, var(--tornado) 12%, var(--surface)); }
+.banner-cutoff { background: color-mix(in srgb, var(--closed) 10%, var(--surface)); }
 .banner strong { font-weight: 600; }
 .banner-sub { color: var(--muted); }
 
