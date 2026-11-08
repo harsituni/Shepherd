@@ -67,8 +67,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* ---------- page ---------- */
 
-.app { min-height: 100vh; display: flex; flex-direction: column; }
-.layout { display: flex; flex-wrap: wrap; flex: 1; }
+/* Desktop: the page is exactly one screen tall and never scrolls. The map takes
+   whatever height is left after the header, banner and history bar; the side
+   panels scroll on their own only if a very short window can't fit them. */
+.app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.layout { display: flex; flex-wrap: wrap; flex: 1; min-height: 0; }
 
 /* ---------- header ---------- */
 
@@ -118,8 +121,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .controls {
   flex: 1 1 260px; max-width: 300px; padding: 24px;
   border-right: 1px solid var(--divider);
-  display: flex; flex-direction: column; gap: 24px;
+  display: flex; flex-direction: column; gap: 20px;
+  min-height: 0; overflow-y: auto;
 }
+/* Reports / Notify: two equal outline buttons; each opens a centred pop-up. */
+.panel-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.panel-actions .btn-outline { min-height: 44px; }
 .section-title { margin: 0; font-size: var(--fs-brand); font-weight: 700; color: var(--text); }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--muted); }
 .field-row { display: flex; justify-content: space-between; }
@@ -195,9 +202,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* ---------- centre ---------- */
 
 .centre {
-  flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; background: var(--map-bg);
+  flex: 999 1 560px; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--map-bg);
 }
-.map-wrap { position: relative; flex: 1; min-height: 620px; }
+.map-wrap { position: relative; flex: 1; min-height: 0; }
 /* More specific than maplibre-gl.css's `.maplibregl-map { position: relative }`,
    which would otherwise collapse the map to 0px tall. */
 .map-wrap > .map { position: absolute; inset: 0; }
@@ -342,7 +349,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-size: var(--fs-sm); color: var(--muted-2);
 }
 .history-tick { position: absolute; top: 0; white-space: nowrap; }
-.history-tick.is-now { color: var(--text); font-weight: 600; }
 .history-viewing { font-size: var(--fs-sm); }
 .history-viewing strong { font-weight: 600; }
 .btn-outline {
@@ -357,6 +363,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   flex: 1 1 340px; max-width: 380px; padding: 24px;
   border-left: 1px solid var(--divider);
   display: flex; flex-direction: column; gap: 20px;
+  min-height: 0; overflow-y: auto;
 }
 
 .join-qr {
@@ -392,8 +399,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .join-qr-idle { background: #fff; color: var(--muted-2); border: 1px solid var(--border); }
 .join-qr-img {
   display: block;
-  width: 220px;
-  height: 220px;
+  width: 160px;
+  height: 160px;
   margin: 0 auto;
   background: #fff;
   border: 1px solid var(--border);
@@ -413,15 +420,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-radius: 4px;
 }
 .join-qr-copy { width: 100%; }
-.join-qr-url {
-  margin: 0;
-  font-size: 11px;
-  color: var(--muted-2);
-  word-break: break-all;
-  line-height: 1.3;
-  max-height: 3.6em;
-  overflow: hidden;
-}
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .tile {
   padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-card);
@@ -467,13 +465,38 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .sent-alert { color: var(--alert-title); font-weight: 600; }
 .sent-evacuation { color: var(--danger-title); font-weight: 600; }
 
+/* ---------- centred pop-up (Reports, Notify) ---------- */
+
+/* A floating card, so it gets the system's one soft shadow (DESIGN.md: One Float Rule).
+   No padding on the <dialog> itself: Dialog.jsx treats a click on it as a backdrop click. */
+.dialog {
+  width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 64px);
+  padding: 0; border: 1px solid var(--border); border-radius: var(--radius-card);
+  background: var(--surface); color: var(--text);
+  box-shadow: 0 8px 24px rgba(11, 37, 69, 0.18);
+}
+.dialog::backdrop { background: rgba(11, 37, 69, 0.4); }
+.dialog-inner { display: flex; flex-direction: column; max-height: calc(100dvh - 66px); }
+.dialog-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 12px 12px 24px; border-bottom: 1px solid var(--divider);
+}
+.dialog-close {
+  width: 44px; height: 44px; flex: 0 0 44px; display: flex; align-items: center; justify-content: center;
+  border: 0; border-radius: var(--radius-control); background: transparent; color: var(--navy);
+}
+.dialog-close:hover { background: var(--map-bg); }
+.dialog-body { padding: 20px 24px 24px; overflow-y: auto; }
+
 /* ---------- narrow screens: panels stack ---------- */
 
 @media (max-width: 1100px) {
-  .controls, .side { max-width: none; }
+  /* Stacked panels can't fit one screen, so the page scrolls again here. */
+  .app { height: auto; min-height: 100vh; overflow: visible; }
+  .controls, .side { max-width: none; overflow-y: visible; }
   .controls { border-right: 0; border-bottom: 1px solid var(--divider); }
   .side { border-left: 0; border-top: 1px solid var(--divider); }
-  .map-wrap { min-height: 480px; }
+  .map-wrap { flex: none; height: 480px; }
 }
 @media (max-width: 600px) {
   .header, .banner { padding-left: 16px; padding-right: 16px; }
