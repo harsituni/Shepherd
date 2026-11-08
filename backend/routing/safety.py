@@ -39,6 +39,11 @@ log = logging.getLogger(__name__)
 BUFFER_MIN = 30
 OK_MIN = 60
 COVERAGE_SLACK_MIN = 90   # a trip must end this long before the forecast window does
+# How far ahead of "now" coverage may push leave-by. Matches the sim's route
+# window (backend.sim.wildfire.ROUTE_WINDOW_MIN). The engine often models further
+# (LOOKAHEAD); using that full horizon made leave-by jump up whenever the run
+# extended, even as the fire grew.
+COVERAGE_HORIZON_MIN = 240
 EPS_MIN = 1e-6            # float noise; an exact-buffer arrival stays allowed
 KEEP_VERSIONS = 2
 
@@ -244,7 +249,8 @@ def judge(path: RoutePath, t_now: float, oracle=None, edge_fire: Optional[EdgeFi
     arrival_sim_min = t_now + path.total_min
 
     complete = path.access_verified and not bool(unknown.any())
-    covers_until = float(oracle.covers_until_sim_min)
+    # Cap at now + COVERAGE_HORIZON_MIN so engine lookahead cannot inflate leave-by.
+    covers_until = min(float(oracle.covers_until_sim_min), float(t_now) + COVERAGE_HORIZON_MIN)
     coverage_spare = covers_until - COVERAGE_SLACK_MIN - arrival_sim_min
     if coverage_spare < -EPS_MIN:
         log.warning("route ends at T+%.0f, too close to the forecast window's end (T+%.0f)",

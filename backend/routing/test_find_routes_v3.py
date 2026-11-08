@@ -282,21 +282,27 @@ class FindRoutesV3Tests(unittest.TestCase):
         self.assertEqual(self.option(later, "rt_sh_a_fastest")["status"], "blocked")
 
     def test_clear_forecast_has_expiry_deadline_but_no_invented_fire(self):
+        from backend.routing.safety import COVERAGE_HORIZON_MIN, COVERAGE_SLACK_MIN
         for fc in (None, self.forecast()):  # no fire, and a fire that reaches none of these roads
             body = self.routes(fc)
             self.assertTrue(body["forecast_complete"])
             if fc is None:
                 self.assertIsNone(body["leave_by_sim_min"])
             else:
-                self.assertEqual(body["leave_by_sim_min"], 99909)
+                # Coverage leave-by is capped at now + COVERAGE_HORIZON_MIN so the
+                # engine's huge LOOKAHEAD horizon cannot inflate the deadline.
+                self.assertEqual(body["leave_by_sim_min"], COVERAGE_HORIZON_MIN - COVERAGE_SLACK_MIN - 1)
             for option in body["options"]:
                 self.assertEqual(option["status"], "ok")
                 if fc is None:
                     self.assertIsNone(option["margin_min"])
                     self.assertIsNone(option["leave_by_sim_min"])
                 else:
-                    # H=100000, reserve=90, trips are 0.6 and 3 minutes.
-                    deadline = {"rt_sh_a_fastest": 99909, "rt_sh_c_fastest": 99907}[option["id"]]
+                    # trips are 0.6 and 3 minutes → floor(total_min) ceilings to 1 and 3 eta.
+                    deadline = {
+                        "rt_sh_a_fastest": COVERAGE_HORIZON_MIN - COVERAGE_SLACK_MIN - 1,
+                        "rt_sh_c_fastest": COVERAGE_HORIZON_MIN - COVERAGE_SLACK_MIN - 3,
+                    }[option["id"]]
                     self.assertEqual(option["leave_by_sim_min"], deadline)
                     self.assertEqual(option["margin_min"], deadline)
                 self.assertIsNone(option["clear_until_sim_min"])
