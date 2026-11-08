@@ -36,6 +36,9 @@ export default function ControlsPanel({
   error,
   showPredicted,
   onShowPredictedChange,
+  reportCount,
+  onOpenReports,
+  onOpenNotify,
 }) {
   const windTimer = useRef(null)
   useEffect(() => () => clearTimeout(windTimer.current), [])
@@ -171,6 +174,15 @@ export default function ControlsPanel({
         <span>Show priority residents</span>
         <input type="checkbox" checked={showPriority} onChange={(e) => setShowPriority(e.target.checked)} />
       </label>
+
+      <div className="panel-actions">
+        <button type="button" className="btn-outline" aria-haspopup="dialog" onClick={onOpenReports}>
+          Reports{reportCount > 0 && <span className="num"> ({reportCount})</span>}
+        </button>
+        <button type="button" className="btn-outline" aria-haspopup="dialog" onClick={onOpenNotify}>
+          Notify
+        </button>
+      </div>
     </aside>
   )
 }

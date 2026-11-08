@@ -8,9 +8,9 @@ export default function HistoryBar({ now, horizon = 0, viewing, onScrub, onLive 
   const value = Math.min(viewing ?? live, max)
   const pct = (t) => (max > 0 ? (t / max) * 100 : 0)
 
-  // No "T+0" tick: early in a run it sat on top of "Now". The slider's left end is T+0.
+  // Only the forecast end is labelled. No "Now" tick (the thumb already shows the
+  // current position) and no "T+0" (the slider's left end is T+0).
   const ticks = []
-  if (live > 0) ticks.push({ t: live, label: 'Now', now: true })
   if (horizon > 0) ticks.push({ t: max, label: `T+${max}` })
   // Centre each label on its spot, but keep it inside the bar near either end.
   const shift = (p) => (p < 8 ? '0' : p > 92 ? '-100%' : '-50%')
@@ -33,10 +33,10 @@ export default function HistoryBar({ now, horizon = 0, viewing, onScrub, onLive 
           aria-valuetext={`T+${value} minutes${value > live ? ', forecast' : ''}`}
         />
         <span className="history-ticks num" aria-hidden="true">
-          {ticks.map(({ t, label, now: isNow }) => (
+          {ticks.map(({ t, label }) => (
             <span
               key={label}
-              className={isNow ? 'history-tick is-now' : 'history-tick'}
+              className="history-tick"
               style={{ left: `${pct(t)}%`, transform: `translateX(${shift(pct(t))})` }}
             >
               {label}

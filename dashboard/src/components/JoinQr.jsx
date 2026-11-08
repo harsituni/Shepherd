@@ -65,14 +65,11 @@ export default function JoinQr() {
 
       {active && qrSrc ? (
         <>
-          <img className="join-qr-img" src={qrSrc} width={220} height={220} alt="QR code to open Shepherd on a phone" />
+          <img className="join-qr-img" src={qrSrc} width={160} height={160} alt="QR code to open Shepherd on a phone" />
           <p className="join-qr-hint">Scan to open the phone app (cellular OK). Fresh for this ./demo.sh run.</p>
           <button type="button" className="btn-outline join-qr-copy" onClick={copy}>
             {copied ? 'Copied' : 'Copy join URL'}
           </button>
-          <p className="join-qr-url num" title={info.joinUrl}>
-            {info.joinUrl}
-          </p>
         </>
       ) : (
         <p className="join-qr-hint">

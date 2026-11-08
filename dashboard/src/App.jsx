@@ -23,6 +23,9 @@ import IncidentBanner from './components/IncidentBanner.jsx'
 import ControlsPanel from './components/ControlsPanel.jsx'
 import HistoryBar from './components/HistoryBar.jsx'
 import SidePanel from './components/SidePanel.jsx'
+import Dialog from './components/Dialog.jsx'
+import ReportsList from './components/ReportsList.jsx'
+import NotifyForm from './components/NotifyForm.jsx'
 
 // Backend errors come back as { error, message } (contract). The raw message can be
 // misleading (a tornado start says "Flood deferred"), so known codes get plain text.
@@ -46,6 +49,7 @@ export default function App() {
   const [forecast, setForecast] = useState(null) // GET /forecast
   const [evacuees, setEvacuees] = useState(null) // GET /evacuees: phones that set a location
   const [viewing, setViewing] = useState(null) // history slider: null = live, else a sim minute
+  const [popup, setPopup] = useState(null) // 'reports' | 'notify' | null: which centred pop-up is open
   const snapshots = useRef(new Map()) // sim_time → hazard features, for the slider
   const inFlight = useRef(false)
 
@@ -172,9 +176,12 @@ export default function App() {
     [shelters, hazards, forecast],
   )
 
+  // Picking a report closes the pop-up so the map can be seen centring on it.
   const focusReport = useCallback((feature) => {
     setFocus({ id: feature.id, lngLat: feature.geometry.coordinates, at: Date.now() })
+    setPopup(null)
   }, [])
+  const closePopup = useCallback(() => setPopup(null), [])
 
   useEffect(() => {
     // Kick off the first poll, then keep polling every POLL_MS.
@@ -210,6 +217,9 @@ export default function App() {
           error={simError}
           showPredicted={showPredicted}
           onShowPredictedChange={setShowPredicted}
+          reportCount={reports?.features?.length ?? 0}
+          onOpenReports={() => setPopup('reports')}
+          onOpenNotify={() => setPopup('notify')}
         />
         <main className="centre">
           <MapView
@@ -232,8 +242,14 @@ export default function App() {
             onLive={() => setViewing(null)}
           />
         </main>
-        <SidePanel shelters={shelters} reports={reports} onReportSelect={focusReport} />
+        <SidePanel shelters={shelters} />
       </div>
+      <Dialog open={popup === 'reports'} title="Reports" onClose={closePopup}>
+        <ReportsList reports={reports} onSelect={focusReport} />
+      </Dialog>
+      <Dialog open={popup === 'notify'} title="Notify residents" onClose={closePopup}>
+        <NotifyForm open={popup === 'notify'} />
+      </Dialog>
     </div>
   )
 }
