@@ -70,14 +70,29 @@ function fakeShape(minutes) {
   const steps = 48
   const toward = ((p.wind_from_deg + 180) * Math.PI) / 180 // compass bearing it blows toward
   if (fake.scenario === 'tornado') {
-    // Tornado: a compact damage circle that travels downwind and widens slowly.
-    const travel = (p.wind_kmh * 1000 * 0.6 * minutes) / 60 // metres moved
-    const centre = offset(origin, travel * Math.sin(toward), travel * Math.cos(toward))
-    const r = 200 + 2 * minutes
+    // Fixture stand-in for TornadoSim: storm-speed track, right-flank offset, slight curve.
+    const kmh = Math.min(85, Math.max(32, p.wind_kmh * 0.65))
+    const travel = (kmh * 1000 * minutes) / 60
+    const right = toward + Math.PI / 2
+    const curve = (travel / 1000) * 55
+    const sine = 380 * Math.sin(travel * ((2 * Math.PI) / 6500))
+    const centre = offset(
+      origin,
+      travel * Math.sin(toward) + 900 * Math.sin(right) - 600 * Math.sin(toward) + (curve + sine) * Math.sin(right),
+      travel * Math.cos(toward) + 900 * Math.cos(right) - 600 * Math.cos(toward) + (curve + sine) * Math.cos(right),
+    )
+    const inten = minutes < 8 ? 0.2 + (minutes / 8) * 0.5 : minutes < 35 ? 0.85 : Math.max(0.1, 1 - (minutes - 35) / 40)
+    const r = 40 + 280 * inten
+    const along = r * 1.25
+    const across = r * 0.85
+    const ca = Math.cos(toward)
+    const sa = Math.sin(toward)
     return ring(
       Array.from({ length: steps }, (_, i) => {
         const a = (i / steps) * 2 * Math.PI
-        return offset(centre, r * Math.cos(a), r * Math.sin(a))
+        const x = along * Math.cos(a)
+        const y = across * Math.sin(a)
+        return offset(centre, x * sa + y * ca, x * ca - y * sa)
       }),
     )
   }
