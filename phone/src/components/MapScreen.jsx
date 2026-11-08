@@ -64,7 +64,8 @@ function routeSummary({ location, route, routeError, trip }) {
   if (trip) return { title: 'Evacuating', line: route?.shelter_name ?? 'Following your route' }
   if (!location) return { title: 'Tap the map where you are', line: 'Shepherd finds the safest open shelter' }
   if (routeError === 'no_route') return { title: 'No safe route found', line: 'Call 911', urgent: true }
-  if (routeError) return { title: "Can't route right now", line: 'Retrying…' }
+  // Keep showing the last good route while a poll is retrying (slow /route).
+  if (routeError && !route) return { title: "Can't route right now", line: 'Retrying…' }
   if (!route) return { title: 'Finding your route…', line: '' }
   return {
     title: route.shelter_name,

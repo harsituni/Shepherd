@@ -349,6 +349,22 @@ def find_route(lat: float, lon: float,
     if len(_graph) == 0 or not _inside_demo(lat, lon):
         raise NoRouteError("No route in the Edmonton demo area")
 
+    # No core polygons → one shortest-path search (skip the clone + second pass).
+    if not hazards:
+        nearest, best_distance, best_coordinates, roads = _choose_route(
+            _graph, lat, lon, [], shelters
+        )
+        return {
+            "shelter_id": nearest["id"],
+            "shelter_name": nearest["properties"]["name"],
+            "distance_km": round(best_distance, 1),
+            "eta_min": ceil(best_distance / ILLUSTRATIVE_SPEED_KMH * 60),
+            "rerouted": False,
+            "reroute_reason": None,
+            "steps": _steps_from_roads(_graph, roads),
+            "geometry": {"type": "LineString", "coordinates": best_coordinates},
+        }
+
     normal_shelter, _, _, normal_roads = _choose_route(_graph, lat, lon, [], shelters)
 
     # Remove blocked roads from a copy of the map.
@@ -396,8 +412,9 @@ def _line_samples(coordinates, minutes, elapsed=0.0):
     for index, length in enumerate(lengths):
         lon, lat = coordinates[index]
         end_lon, end_lat = coordinates[index + 1]
-        # Check bends and points at most 50 metres apart.
-        count = max(1, ceil(length / 50))
+        # Sample bends / long edges about every 120 m (was 50 m — too slow on
+        # the full Edmonton graph when every Dijkstra edge is checked).
+        count = max(1, ceil(length / 120))
         for step in range(count + 1):
             fraction = step / count
             offset = 0.0
@@ -543,6 +560,11 @@ def _select_option(body, option):
         body[field] = option[field]
 
 
+def _shelter_straight_km(lat, lon, shelter) -> float:
+    end_lon, end_lat = shelter["geometry"]["coordinates"]
+    return float(ox.distance.great_circle(lat, lon, end_lat, end_lon)) / 1000.0
+
+
 def find_routes(lat: float, lon: float, arrival_min_fn,
                 shelters: list[dict], sim_time: int = 0) -> dict:
     """Return up to three road options, checked against the supplied forecast.
@@ -552,10 +574,18 @@ def find_routes(lat: float, lon: float, arrival_min_fn,
     """
     options = []
     excluded = []
+    # Only the closest few shelters — we return at most 3 options anyway, and
+    # fire-aware Dijkstra on every shelter was multi-second on the demo graph.
+    eligible = []
     for shelter in shelters:
         properties = shelter["properties"]
         if not properties["open"] or properties["occupancy"] >= properties["capacity"]:
             continue
+        eligible.append(shelter)
+    eligible.sort(key=lambda shelter: _shelter_straight_km(lat, lon, shelter))
+    candidates = eligible[:3]
+
+    for shelter in candidates:
         try:
             option = find_route(lat, lon, [], [shelter])
         except NoRouteError as error:
@@ -563,28 +593,36 @@ def find_routes(lat: float, lon: float, arrival_min_fn,
             continue
         # Shelter-based IDs stay stable when another option disappears.
         option["id"] = "rt_" + shelter["id"]
-        if _graph is None:
-            option.update(_route_timing(option, arrival_min_fn, sim_time))
-        else:
+        # Fast path: time the normal shortest road. Only run the expensive
+        # fire-avoiding search when that path is already forecast-blocked.
+        timing = _route_timing(option, arrival_min_fn, sim_time)
+        if (
+            _graph is not None
+            and timing.get("status") == "blocked"
+        ):
             try:
                 distance, coordinates, timing = _forecast_route(
                     lat, lon, shelter, arrival_min_fn, sim_time
                 )
-                changed = (coordinates != option["geometry"]["coordinates"]
-                           or distance != option["distance_km"])
+                changed = (
+                    coordinates != option["geometry"]["coordinates"]
+                    or round(distance, 1) != option["distance_km"]
+                )
                 option["geometry"]["coordinates"] = coordinates
                 option["distance_km"] = round(distance, 1)
                 option["eta_min"] = ceil(distance / ILLUSTRATIVE_SPEED_KMH * 60)
                 option["rerouted"] = changed
                 if changed:
-                    option["reroute_reason"] = "Route changed because of predicted fire arrival"
-                option.update(timing)
+                    option["reroute_reason"] = (
+                        "Route changed because of predicted fire arrival"
+                    )
             except NoRouteError as error:
-                option.update({
+                timing = {
                     "status": "blocked", "reason": str(error), "margin_min": None,
                     "clear_until_sim_min": None, "clear_until_label": None,
                     "_leave_by": None, "forecast_complete": False,
-                })
+                }
+        option.update(timing)
         option["leave_by_sim_min"] = option.pop("_leave_by")
         option["approximate"] = option.get("approximate", False)
         warning = option.get("warning", "Road geometry with illustrative travel times only.")

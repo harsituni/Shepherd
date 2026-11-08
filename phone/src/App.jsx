@@ -93,45 +93,56 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), ms)
   }, [])
 
-  const refresh = useCallback(async () => {
-    const [h, s, n, st] = await Promise.allSettled([getHazards(), getShelters(), getNotifications(), getSimState()])
-    if (h.status === 'fulfilled') setHazards(h.value)
-    // Sim clock from /sim/state; older backends without it fall back to /hazards' sim_time at 1x.
-    if (st.status === 'fulfilled' && st.value) setClock((c) => nextClock(c, st.value))
-    else if (h.status === 'fulfilled') setClock((c) => nextClock(c, { sim_time: h.value?.sim_time }))
-    if (s.status === 'fulfilled') setShelters(s.value)
-    if (n.status === 'fulfilled') {
-      const fresh = n.value.filter((x) => !seenNotes.current.has(x.id))
-      if (fresh.length) {
-        fresh.forEach((x) => seenNotes.current.add(x.id))
-        setNotifications(n.value)
-        setPopup(mostSevere(fresh)) // pop up the most important new one
-      }
-    }
+  const refreshBusy = useRef(false)
 
-    const loc = locationRef.current
-    if (!loc) return
-    // While evacuating the dot moves every frame, so a response for where it was
-    // 2 s ago is still the one to show. Otherwise a moved pin makes it stale.
-    const stale = () => !evacuatingRef.current && locationRef.current !== loc
+  const refresh = useCallback(async () => {
+    // Skip stacked polls while a slow /route is still in flight (was stacking
+    // every 2s and flashing "Reconnecting…" when the backend took longer).
+    if (refreshBusy.current) return
+    refreshBusy.current = true
     try {
-      const r = await getRoute(loc[1], loc[0])
-      if (stale()) return
-      setRoute(r)
-      setRouteError(null)
-    } catch (err) {
-      if (stale()) return
-      setRoute(null)
-      if (err.code !== 'no_route') {
-        setRouteError('network')
-        return
+      const [h, s, n, st] = await Promise.allSettled([getHazards(), getShelters(), getNotifications(), getSimState()])
+      if (h.status === 'fulfilled') setHazards(h.value)
+      // Sim clock from /sim/state; older backends without it fall back to /hazards' sim_time at 1x.
+      if (st.status === 'fulfilled' && st.value) setClock((c) => nextClock(c, st.value))
+      else if (h.status === 'fulfilled') setClock((c) => nextClock(c, { sim_time: h.value?.sim_time }))
+      if (s.status === 'fulfilled') setShelters(s.value)
+      if (n.status === 'fulfilled') {
+        const fresh = n.value.filter((x) => !seenNotes.current.has(x.id))
+        if (fresh.length) {
+          fresh.forEach((x) => seenNotes.current.add(x.id))
+          setNotifications(n.value)
+          setPopup(mostSevere(fresh)) // pop up the most important new one
+        }
       }
-      // Contract only has error "no_route". Outside the demo box (or idle with
-      // no fire) should not panic people into calling 911.
-      const features = h.status === 'fulfilled' ? (h.value?.features ?? []) : []
-      const fireOn = features.some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
-      const outOfArea = /demo area/i.test(err.message ?? '')
-      setRouteError(fireOn && !outOfArea ? 'no_route' : 'out_of_area')
+
+      const loc = locationRef.current
+      if (!loc) return
+      // While evacuating the dot moves every frame, so a response for where it was
+      // 2 s ago is still the one to show. Otherwise a moved pin makes it stale.
+      const stale = () => !evacuatingRef.current && locationRef.current !== loc
+      try {
+        const r = await getRoute(loc[1], loc[0])
+        if (stale()) return
+        setRoute(r)
+        setRouteError(null)
+      } catch (err) {
+        if (stale()) return
+        if (err.code !== 'no_route') {
+          // Keep the last good route on the map; only show reconnect if we never had one.
+          setRouteError('network')
+          return
+        }
+        setRoute(null)
+        // Contract only has error "no_route". Outside the demo box (or idle with
+        // no fire) should not panic people into calling 911.
+        const features = h.status === 'fulfilled' ? (h.value?.features ?? []) : []
+        const fireOn = features.some((f) => isCurrentCore(f) && f.properties.kind === 'wildfire')
+        const outOfArea = /demo area/i.test(err.message ?? '')
+        setRouteError(fireOn && !outOfArea ? 'no_route' : 'out_of_area')
+      }
+    } finally {
+      refreshBusy.current = false
     }
   }, [])
 
