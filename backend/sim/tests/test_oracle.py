@@ -40,18 +40,6 @@ def test_snapshot_matches_the_fire_and_is_read_only():
         oracle.in_domain[0] = False
 
 
-def test_outlines_are_the_rings_the_map_draws():
-    # Routing draws the evacuation circle from these, so they must be exactly the
-    # /hazards ring now and the /forecast ring at +15 min.
-    sim = WildfireSim(LAT, LON, wind_kmh=30, wind_from_deg=270)
-    sim.step(20)
-    oracle = sim.oracle()
-    assert not oracle.outlines.flags.writeable
-    assert len(oracle.outlines) >= 20 + ROUTE_WINDOW_MIN
-    assert np.allclose(oracle.outlines[20], sim.features()[0]["geometry"]["coordinates"][0])
-    assert np.allclose(oracle.outlines[35], sim.forecast(15)[0]["geometry"]["coordinates"][0])
-
-
 def test_same_snapshot_until_time_moves_or_the_fire_reruns():
     sim = WildfireSim(LAT, LON, wind_kmh=20, wind_from_deg=270)
     first = sim.oracle()

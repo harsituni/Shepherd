@@ -28,10 +28,7 @@ Top level:
 | `route_status` | `viable` (something is recommended), `blocked` (every route is cut by fire), `indeterminate` (nothing can be confirmed either way) |
 | `best_route_id` | id of the recommended option, or `null` when `route_status` isn't `viable` |
 | `no_safe_route` | `false` when viable, `true` when blocked, `null` when indeterminate |
-| `leave_by_sim_min`, `leave_by_label` | departure deadline for the best route (see Leave-by below), or `null` |
-| `at_risk` | `true` when the evacuation zone reaches the pin within 4 h, `false` when it doesn't (no need to leave), `null` with no fire or no zone forecast |
-| `zone_reach_sim_min` | first sim minute the evacuation zone (the yellow circle: the fire's centre, 1 km past its farthest edge) covers the pin, or `null` |
-| `recommendation_note` | `"This shelter is closer to the fire than you are."` when, not at risk, every usable shelter is; else `null` |
+| `leave_by_sim_min`, `leave_by_label` | departure deadline for the best route, or `null` |
 | `options` | 2 to 4 routes, recommended one first, then in rank order |
 | `forecast` | `{run_id, band, covers_until_sim_min, wind_kmh, wind_from_deg}`, or `null` with no fire |
 | `forecast_error` | string if the fire forecast itself is unusable, else `null` |
@@ -53,27 +50,10 @@ Each option:
 | `geometry` | LineString of the road travel (MultiLineString only for incomplete routes) |
 | `access` | where the trip starts and ends, below |
 | `shelter_threat_sim_min` | when fire reaches the centre itself, or `null` |
-| `leave_by_sim_min` | this route's deadline (see Leave-by below), or `null` |
-| `closer_to_fire` | `true` when, not at risk, the fire (now or forecast within 4 h) comes closer to this shelter than to the pin |
 | `clear_until_sim_min`, `clear_until_label`, `steps`, `rerouted`, `reroute_reason`, `forecast_complete`, `warning` | as in v2 |
 
 Only `ok` and `tight` options may be picked or recommended. `blocked` and
 `indeterminate` options are shown greyed, never as navigation.
-
-## Leave-by and "no need to leave"
-
-- **At risk** (`at_risk: true`): leave-by is the earlier of 30 min before the
-  evacuation zone reaches the pin (`zone_reach_sim_min − 30`) and the route's own
-  road deadline (pass every road at least 30 min before the fire). It can be in
-  the past: leave now.
-- **Not at risk** (`at_risk: false`, the zone isn't forecast to reach the pin
-  within 4 h): no leave-by on the answer or any option. A shelter the fire comes
-  closer to than the pin (`closer_to_fire`) is listed but not recommended; if
-  every usable shelter is, the one the fire stays farthest from is recommended
-  with `recommendation_note`.
-- `leave_by_*` are **sim** minutes. The phone turns the gap into a deadline on its
-  own clock when it first sees it and counts that down in real time; it only moves
-  it earlier when `leave_by_sim_min` itself moves earlier.
 
 ## Road-point endpoints
 

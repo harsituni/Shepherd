@@ -196,19 +196,15 @@ def test_upwind_of_the_fire_every_usable_route_is_ok():
 
 # 3
 def test_downwind_pin_must_leave_soon():
-    # 1.5 km downwind every shelter lies further downwind. The fire moves ~45 m/min
+    # 2 km downwind every shelter lies further downwind. The fire moves ~45 m/min
     # against a 500 m/min car, so no east-bound road is cut; the start is what's
-    # tight. The yellow evacuation circle (1 km past the fire) covers the pin within
-    # minutes, so leave-by is 30 min before that: already past, i.e. leave now.
+    # tight, and the answer says how soon to leave.
     c = fire(*FIRE, 35, 270)
     body = route(c, DOWNWIND)
     best = option(body, body["best_route_id"])
     assert best["status"] == "tight"
-    assert body["at_risk"] is True
-    assert body["zone_reach_sim_min"] < 15
-    zone_leave_by = body["zone_reach_sim_min"] - 30
-    assert body["leave_by_sim_min"] == min(zone_leave_by, c.sim_time + best["margin_min"])
-    assert body["leave_by_label"] == "Leave within 0 min (sim)"
+    assert body["leave_by_sim_min"] == c.sim_time + best["margin_min"]
+    assert body["leave_by_label"] == f"Leave within {best['margin_min']} min (sim)"
 
 
 def test_road_through_the_fire_is_shown_blocked_beside_its_detour():

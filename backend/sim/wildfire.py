@@ -105,7 +105,6 @@ class WildfireSim:
         self._version = 0
         self._oracle = None
         self._oracle_arrival = (0, None)   # (version, read-only arrival array)
-        self._oracle_outlines = (0, None)  # (version, read-only per-minute outlines)
         self._in_domain = None
         self._run(ROUTE_WINDOW_MIN + LOOKAHEAD_MIN)
 
@@ -199,10 +198,6 @@ class WildfireSim:
                 arrival[np.isnan(arrival)] = np.inf
                 arrival.flags.writeable = False
                 self._oracle_arrival = (self._version, arrival)
-                # The map's outline at every minute of the run (~0.25 s across the city).
-                outlines = np.array([self._outline(result, m) for m in range(int(result.horizon_min) + 1)])
-                outlines.flags.writeable = False
-                self._oracle_outlines = (self._version, outlines)
             grid = result.grid
             if self._in_domain is None:
                 # The cells the engine can burn: the lon/lat domain box, rasterised.
@@ -217,7 +212,6 @@ class WildfireSim:
                 x0=float(grid.origin_x), y0=float(grid.origin_y), cell_m=float(grid.cell_m),
                 nrows=int(grid.rows), ncols=int(grid.cols),
                 arrival=self._oracle_arrival[1], in_domain=self._in_domain,
-                outlines=self._oracle_outlines[1],
             )
             return self._oracle
 
