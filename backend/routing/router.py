@@ -32,11 +32,9 @@ from backend.sim.oracle import validation_error
 ROUTING_DIR = Path(__file__).resolve().parent
 GRAPH_PATH = ROUTING_DIR / "data" / "edmonton_demo_drive.graphml"
 GRAPH_GZ_PATH = ROUTING_DIR / "data" / "edmonton_demo_drive.graphml.gz"
-# West, south, east, north — Greater Edmonton metro (Anthony Henday + ≥5 km).
-# Must cover north/NE past the Henday (Schonsee, Cy Becker, Albany, Fort Rd)
-# and a buffer around the ring. prepare_graph.py downloads this box into the
-# shipped GraphML; _inside_demo uses the loaded graph's actual extent.
-DEMO_BBOX = (-113.85, 53.32, -113.15, 53.78)
+# West, south, east, north. Includes contract shelters; a bit larger than the
+# downloaded graph so east/south pins still get backup routes instead of 404.
+DEMO_BBOX = (-113.75, 53.40, -113.32, 53.62)
 _graph = None
 _backup_mode = False
 BACKUP_WARNING = (

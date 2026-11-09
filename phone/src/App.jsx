@@ -498,9 +498,8 @@ export default function App() {
     [showToast, setLocationAndRoute],
   )
 
-  // On launch, seed the pin from the phone's real location but keep Simulated drive
-  // selected — they can tap the map (or a preset) to move, or switch to Real GPS.
-  // If location is unavailable or denied, stay quiet: they can tap the map instead.
+  // On launch, start from the phone's real location (Real GPS selected). If location
+  // is unavailable or denied, stay quiet: the user can tap the map instead.
   useEffect(() => {
     let cancelled = false
     setLocating(true)
@@ -508,8 +507,8 @@ export default function App() {
       if (!cancelled) setLocating(false)
       // Skip if the user already tapped the map while we waited.
       if (cancelled || !lngLat || locationRef.current) return
-      evacModeRef.current = 'sim'
-      setEvacMode('sim')
+      evacModeRef.current = 'gps'
+      setEvacMode('gps')
       setAutoLocation(lngLat) // keeps the route panel collapsed for this fix
       setLocationAndRoute(lngLat)
     })
@@ -520,8 +519,8 @@ export default function App() {
 
   // Tapping the map drops a pending pin and asks before moving the person there
   // (a stray tap while panning shouldn't reroute them). Tapping again moves the
-  // pending pin. A confirmed tap stays on Simulated drive; picking Real GPS jumps
-  // back to the phone's live location.
+  // pending pin. A confirmed tap is a pretend location, so it switches to
+  // Simulated drive; picking Real GPS again jumps back to the phone's location.
   const [pendingTap, setPendingTap] = useState(null) // [lon, lat] awaiting confirmation
   const tapMap = useCallback(
     (lngLat) => {

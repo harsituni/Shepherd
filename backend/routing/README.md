@@ -40,8 +40,8 @@ never switch to backup.
 The graph keeps every directed road, including parallel roads and loops, with
 its own geometry, length and fire deadline. Free-flow travel is a fixed
 30 km/h. Turn restrictions are not modelled. Roads tagged `access`, `vehicle`,
-`motor_vehicle` or `motorcar` = `no`/`private` are not used. The demo area is Greater Edmonton metro (Anthony Henday + ≥5 km buffer):
-lon −113.85 to −113.15, lat 53.32 to 53.78.
+`motor_vehicle` or `motorcar` = `no`/`private` are not used. The demo area is
+lon −113.75 to −113.32, lat 53.40 to 53.62.
 
 ## Where trips start and end
 
