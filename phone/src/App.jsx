@@ -624,12 +624,13 @@ export default function App() {
   // Keep the screen on during a trip: a locked screen stops GPS in the browser.
   useWakeLock(evacuating)
 
+  // Active core wildfire (or tornado beta). Leave-by alone is not enough — idle
+  // routes must not unlock "Start evacuating" before a hazard is running.
+  const hazardActive = (hazards?.features ?? []).some(
+    (f) => isCurrentCore(f) && (f.properties.kind === 'wildfire' || f.properties.kind === 'tornado'),
+  )
   // During a wildfire the evacuation card (leave-by countdown) takes the banner's place.
-  const wildfire =
-    route?.leave_by_sim_min != null ||
-    (hazards?.features ?? []).some(
-      (f) => isCurrentCore(f) && (f.properties.kind === 'wildfire' || f.properties.kind === 'tornado'),
-    )
+  const wildfire = route?.leave_by_sim_min != null || hazardActive
 
   const detailProps = {
     location,
@@ -645,7 +646,9 @@ export default function App() {
     trip,
     evacMode,
     onEvacMode: chooseEvacMode,
+    hazardActive,
     onStartEvacuating: () => {
+      if (!hazardActive) return
       const id = shown?.route_id ?? shown?.best_route_id
       if (id) {
         chosenRef.current = id
