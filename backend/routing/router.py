@@ -21,11 +21,9 @@ import osmnx as ox
 from backend.routing.candidates import (
     NoRouteError, Stats, build_candidates, straight_line_candidates,
 )
-from backend.routing.evac_zone import (
-    danger_rings, fire_distance_m, mark_unsafe_shelters, unsafe_shelter_ids, zone_check,
-)
+from backend.routing.evac_zone import danger_rings, mark_unsafe_shelters, unsafe_shelter_ids
 from backend.routing.road_graph import CellTable, FireGrid, RoadGraph, build_cell_table
-from backend.routing.safety import BUFFER_MIN, EdgeFire, t_label, viable
+from backend.routing.safety import EdgeFire, t_label, viable
 from backend.routing.select import rank_key, select
 from backend.routing.traffic import engine as traffic_engine
 from backend.sim.oracle import validation_error
@@ -34,11 +32,9 @@ from backend.sim.oracle import validation_error
 ROUTING_DIR = Path(__file__).resolve().parent
 GRAPH_PATH = ROUTING_DIR / "data" / "edmonton_demo_drive.graphml"
 GRAPH_GZ_PATH = ROUTING_DIR / "data" / "edmonton_demo_drive.graphml.gz"
-# West, south, east, north — Greater Edmonton metro (Anthony Henday + ≥5 km).
-# Must cover north/NE past the Henday (Schonsee, Cy Becker, Albany, Fort Rd)
-# and a buffer around the ring. prepare_graph.py downloads this box into the
-# shipped GraphML; _inside_demo uses the loaded graph's actual extent.
-DEMO_BBOX = (-113.85, 53.32, -113.15, 53.78)
+# West, south, east, north. Includes contract shelters; a bit larger than the
+# downloaded graph so east/south pins still get backup routes instead of 404.
+DEMO_BBOX = (-113.75, 53.40, -113.32, 53.62)
 _graph = None
 _backup_mode = False
 BACKUP_WARNING = (
@@ -206,7 +202,6 @@ def fire_closed_road_features(oracle, sim_time: int = 0, limit: int = 350) -> di
 
 # ---------- routes ----------
 
-CLOSER_TO_FIRE_NOTE = "This shelter is closer to the fire than you are."
 ROUTE_WARNING = ("Road routes with illustrative travel times at 30 km/h. Forecast checks cover every "
                  "fire-grid cell on the route; they are not a safety guarantee.")
 _table_lock = threading.Lock()
@@ -284,35 +279,19 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
                                       keep_id=check_route_id)
         rg = stats.routing_graph
     unsafe_ids = unsafe_shelter_ids(shelters, danger_rings(hazards, forecast_outlines))
-    # Does the evacuation zone reach the person within 4 h? If not, they don't need
-    # to leave, and shelters the fire comes closer to than them aren't recommended.
-    zone = zone_check(None if forecast_error else oracle, lat, lon, t_now)
-    toward, gaps = set(), {}
-    if zone.status == "clear":
-        you = fire_distance_m(oracle, lat, lon, t_now)
-        for s in shelters:
-            s_lon, s_lat = s["geometry"]["coordinates"]
-            gaps[s["id"]] = fire_distance_m(oracle, s_lat, s_lon, t_now)
-        toward = {sid for sid, gap in gaps.items() if you is not None and gap is not None and gap < you}
-    avoid = unsafe_ids | toward
-    # Prefer a centre outside the dashboard yellow zone (and not toward the fire).
+    # Prefer a centre outside the dashboard yellow zone for the recommendation.
     check_id = check_route_id
     if check_id:
         kept = next((c for c in candidates if c.id == check_id), None)
-        if kept is not None and kept.shelter["id"] in avoid:
+        if kept is not None and kept.shelter["id"] in unsafe_ids:
             check_id = None
     safe_pool = [c for c in candidates if c.shelter["id"] not in unsafe_ids] or candidates
-    away_pool = [c for c in safe_pool if c.shelter["id"] not in toward]
-    # Every usable shelter is closer to the fire than you: recommend the least close.
-    least_close = bool(toward) and not any(viable(c.judgement) for c in away_pool)
-    pool = safe_pool if least_close else away_pool
-    chosen = select(rg, pool, check_id, search_complete=stats.search_complete)
+    chosen = select(rg, safe_pool, check_id, search_complete=stats.search_complete)
     options = mark_unsafe_shelters([_option(c, rg) for c in chosen.options], unsafe_ids)
-    # Surface the alternatives select() left out (greyed unsafe centres, centres
-    # toward the fire, and the person's own pick).
+    # Surface greyed unsafe alternatives that select() dropped when safer ones exist.
     shown = {o["id"] for o in options}
-    for c in sorted(candidates, key=lambda c: (c.id != check_route_id, rank_key(c))):
-        if c.id in shown or (c.shelter["id"] not in avoid and c.id != check_route_id):
+    for c in sorted(candidates, key=rank_key):
+        if c.id in shown or c.shelter["id"] not in unsafe_ids:
             continue
         if len(options) >= 4:
             break
@@ -320,18 +299,8 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
         shown.add(c.id)
 
     usable = [o for o in options if o["status"] in ("ok", "tight")]
-    if least_close:
-        # The usable route to the shelter the fire stays farthest from, best ranked first.
-        far = max((c for c in sorted(safe_pool, key=rank_key) if viable(c.judgement)),
-                  key=lambda c: gaps.get(c.shelter["id"]) or 0.0, default=None)
-        if far is not None:
-            opt = next((o for o in options if o["id"] == far.id), None) or _option(far, rg)
-            options = [opt] + [o for o in options if o["id"] != opt["id"]]
-            usable = [opt] if opt["status"] in ("ok", "tight") else usable
-    elif toward:
-        usable = [o for o in usable if o["shelter_id"] not in toward]
     if not usable:
-        for c in sorted(pool, key=rank_key):
+        for c in sorted(safe_pool, key=rank_key):
             if not viable(c.judgement):
                 continue
             opt = _option(c, rg)
@@ -342,19 +311,6 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
             break
 
     best_id = usable[0]["id"] if usable else None
-    for o in options:
-        o["closer_to_fire"] = o["shelter_id"] in toward
-    # Leave-by: 30 min before the zone reaches you, or the route's own road
-    # deadline if that comes first. Out of reach for 4 h: no deadline at all.
-    if zone.status == "reached":
-        zone_leave_by = zone.reach_sim_min - BUFFER_MIN
-        for o in options:
-            if o["status"] in ("ok", "tight"):
-                road = o["leave_by_sim_min"]
-                o["leave_by_sim_min"] = zone_leave_by if road is None else min(road, zone_leave_by)
-    elif zone.status == "clear":
-        for o in options:
-            o["leave_by_sim_min"] = None
     if best_id is not None:
         options = [o for o in options if o["id"] == best_id] + [o for o in options if o["id"] != best_id]
     # Same no_safe_route rule as select(): true only after a complete search with
@@ -374,9 +330,6 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
         "search": {"complete": bool(stats.search_complete), "scope": stats.search_scope,
                    "shelters_evaluated": stats.shelters_evaluated},
         "leave_by_sim_min": None, "leave_by_label": None,
-        "at_risk": {"reached": True, "clear": False}.get(zone.status),
-        "zone_reach_sim_min": zone.reach_sim_min,
-        "recommendation_note": None,
         "forecast": None if oracle is None or forecast_error else {
             "run_id": oracle.run_id, "band": oracle.band,
             "covers_until_sim_min": float(oracle.covers_until_sim_min),
@@ -391,8 +344,6 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
         if leave_by is not None:
             body["leave_by_sim_min"] = leave_by
             body["leave_by_label"] = f"Leave within {max(0, leave_by - int(t_now))} min (sim)"
-        if best["closer_to_fire"]:
-            body["recommendation_note"] = CLOSER_TO_FIRE_NOTE
         for name in _FLAT_FIELDS:
             body[name] = best[name]
     if debug:

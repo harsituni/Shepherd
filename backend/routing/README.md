@@ -40,8 +40,8 @@ never switch to backup.
 The graph keeps every directed road, including parallel roads and loops, with
 its own geometry, length and fire deadline. Free-flow travel is a fixed
 30 km/h. Turn restrictions are not modelled. Roads tagged `access`, `vehicle`,
-`motor_vehicle` or `motorcar` = `no`/`private` are not used. The demo area is Greater Edmonton metro (Anthony Henday + ≥5 km buffer):
-lon −113.85 to −113.15, lat 53.32 to 53.78.
+`motor_vehicle` or `motorcar` = `no`/`private` are not used. The demo area is
+lon −113.75 to −113.32, lat 53.40 to 53.62.
 
 ## Where trips start and end
 
@@ -92,16 +92,6 @@ is `ok` with no deadline.
 The fire domain covers the whole road graph (`graph_bbox()`, set at startup) so
 far roads aren't falsely clear. The domain edge is densified before projecting
 to UTM so curved edges don't drop boundary cells.
-
-**Leave-by.** `zone_check()` (`evac_zone.py`) finds the first minute the
-evacuation circle, drawn around the forecast fire minute by minute
-(`ForecastOracle.outlines`, the same ring the map shows), covers the pin. The
-answer's leave-by is the earlier of 30 minutes before that and the route's own
-deadline above. If the circle doesn't reach the pin within 4 hours the person is
-not at risk (`at_risk: false`): there is no leave-by, and shelters the fire comes
-closer to than the pin (now or forecast, `fire_distance_m()`) are listed but not
-recommended; if every usable one is, the one the fire stays farthest from is,
-with a `recommendation_note`.
 
 **Evacuation zone.** After judging, `find_routes()` draws a 1 km circle around
 the fire now and around each `/forecast` outline (`evac_zone.py`, the same rule

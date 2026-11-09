@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 from numbers import Integral, Real
-from typing import Optional
 
 import numpy as np
 
@@ -33,10 +32,6 @@ class ForecastOracle:
     arrival: np.ndarray           # (nrows * ncols,) sim minutes; +inf = not reached by covers_until
     in_domain: np.ndarray         # (nrows * ncols,) bool: the fire is modelled in this cell
     crs: str = "EPSG:32612"
-    # (minutes, points, 2) lon/lat: the hazard outline drawn on the map at each sim
-    # minute from 0, the same ring /hazards and /forecast send. Routing draws the
-    # evacuation circle from it. None when the sim doesn't provide outlines.
-    outlines: Optional[np.ndarray] = None
 
 
 def validation_error(oracle):

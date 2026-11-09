@@ -1,6 +1,5 @@
 import { isCurrentCore, isPredicted } from '../geo.js'
 import { dangerRings, evacZones, unsafeShelterIds } from '../evacuation.js'
-import { clockTime } from '../leaveBy.js'
 import { ChevronUpIcon, PinIcon, RerouteIcon } from './icons.jsx'
 import EvacuateControls, { MODES } from './EvacuateControls.jsx'
 import RouteOptions, { STATUS, clearLine } from './RouteOptions.jsx'
@@ -210,7 +209,7 @@ export function RouteDetails({
 // Extra detail for the picked route, below the fold of the map-first route panel:
 // you scroll the panel down to read it. Only facts the backend sends (shelter
 // capacity and status, the route's forecast status, leave-by, directions).
-export function RouteMore({ route, shelters, trip, evacMode, deadline }) {
+export function RouteMore({ route, shelters, trip, evacMode }) {
   if (trip || !route?.shelter_id) return null
   const option =
     route.options?.find((o) => o.id === route.route_id) ?? route.options?.find((o) => o.shelter_id === route.shelter_id)
@@ -241,7 +240,6 @@ export function RouteMore({ route, shelters, trip, evacMode, deadline }) {
                 {free.toLocaleString()} of {cap.toLocaleString()} spaces free
               </span>
             )}
-            {option?.closer_to_fire && <span>This shelter is closer to the fire than you are.</span>}
           </dd>
         </div>
         <div>
@@ -266,12 +264,11 @@ export function RouteMore({ route, shelters, trip, evacMode, deadline }) {
             </dd>
           </div>
         )}
-        {deadline && route.at_risk !== false && (
+        {route.leave_by_label && (
           <div>
             <dt>Leave by</dt>
             <dd className="num">
-              <strong>{clockTime(deadline.atMs)}</strong>
-              <span>30 min before the evacuation zone reaches you, or sooner for your route</span>
+              <strong>{route.leave_by_label}</strong>
             </dd>
           </div>
         )}

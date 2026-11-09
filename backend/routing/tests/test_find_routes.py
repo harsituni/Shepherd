@@ -21,10 +21,9 @@ from unittest.mock import patch
 import networkx as nx
 
 from backend.routing import router
-from backend.routing.tests.helpers import BEND, POINTS, Forecast, circle_outlines, fake_graph, grid_around, shelter
+from backend.routing.tests.helpers import BEND, POINTS, Forecast, fake_graph, grid_around, shelter
 
 PIN = (53.54, -113.50)
-EAST_FIRE = (-113.46, 53.54)  # 2.6 km east of PIN; sh_a and sh_b lie toward it, sh_c doesn't
 
 
 class FindRoutesTests(unittest.TestCase):
@@ -80,13 +79,12 @@ class FindRoutesTests(unittest.TestCase):
         self.assertFalse(body["no_safe_route"])
 
     def test_outside_demo_raises_demo_message(self):
-        # Well east of Greater Edmonton (past Sherwood Park / the Henday buffer).
         with self.assertRaises(router.NoRouteError) as raised:
-            router.find_routes(53.55, -113.05, None, self.shelters)
+            router.find_routes(53.55, -113.20, None, self.shelters)
         self.assertIn("demo area", str(raised.exception))
         with patch.object(router, "_graph", None), patch.object(router, "_backup_mode", True):
             with self.assertRaises(router.NoRouteError) as raised:
-                router.find_routes(53.55, -113.05, None, self.shelters)
+                router.find_routes(53.55, -113.20, None, self.shelters)
             self.assertIn("demo area", str(raised.exception))
 
     def test_fire_can_block_some(self):
@@ -368,45 +366,6 @@ class FindRoutesTests(unittest.TestCase):
             best = next(o for o in body["options"] if o["id"] == body["best_route_id"])
             self.assertNotEqual(best["shelter_id"], "sh_a")
             self.assertIn(best["status"], ("ok", "tight"))
-
-
-    def zone_routes(self, radius_m):
-        fc = self.forecast()
-        oracle = fc.oracle(outlines=circle_outlines(EAST_FIRE, radius_m))
-        return router.find_routes(*PIN, oracle, self.shelters)
-
-    def test_out_of_reach_has_no_deadline_and_avoids_shelters_toward_the_fire(self):
-        body = self.zone_routes(200)  # the zone never gets near PIN
-        self.assertIs(body["at_risk"], False)
-        self.assertIsNone(body["zone_reach_sim_min"])
-        self.assertIsNone(body["leave_by_sim_min"])
-        self.assertEqual(body["shelter_id"], "sh_c")
-        self.assertIsNone(body["recommendation_note"])
-        toward = {o["shelter_id"] for o in body["options"] if o["closer_to_fire"]}
-        self.assertTrue(toward and toward <= {"sh_a", "sh_b"})  # still listed, not recommended
-        self.assertTrue(all(o["leave_by_sim_min"] is None for o in body["options"]))
-
-    def test_every_shelter_toward_the_fire_recommends_the_least_close_with_a_note(self):
-        self.shelters = [shelter("sh_a", POINTS[2]), shelter("sh_b", POINTS[3])]
-        body = self.zone_routes(200)
-        self.assertEqual(body["shelter_id"], "sh_a")  # farther from the fire than sh_b
-        self.assertEqual(body["recommendation_note"], router.CLOSER_TO_FIRE_NOTE)
-
-    def test_leave_by_is_thirty_minutes_before_the_zone_reaches_you(self):
-        # Radius 200 + 20 m/min: the 1 km circle covers PIN (2.6 km away) near minute 73.
-        body = self.zone_routes(lambda m: 200 + 20 * m)
-        self.assertIs(body["at_risk"], True)
-        self.assertTrue(70 <= body["zone_reach_sim_min"] <= 76)
-        self.assertEqual(body["leave_by_sim_min"], body["zone_reach_sim_min"] - 30)
-        best = self.option(body, body["best_route_id"])
-        self.assertEqual(best["leave_by_sim_min"], body["leave_by_sim_min"])
-
-    def test_a_road_deadline_earlier_than_the_zone_wins(self):
-        fc = self.forecast()
-        fc.at_point(POINTS[1], 50)  # the start cell burns at 50: leave by 20 at the latest
-        oracle = fc.oracle(outlines=circle_outlines(EAST_FIRE, lambda m: 200 + 20 * m))
-        body = router.find_routes(*PIN, oracle, self.shelters)
-        self.assertLess(body["leave_by_sim_min"], body["zone_reach_sim_min"] - 30)
 
 
 if __name__ == "__main__":

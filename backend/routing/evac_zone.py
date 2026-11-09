@@ -3,25 +3,16 @@
 A shelter is unsafe when it lies inside a 1 km circle around the current fire
 or any forecast outline. Routing uses the same rule so the phone never
 recommends a centre the dashboard already paints red.
-
-The same circle, drawn around the forecast fire minute by minute
-(`ForecastOracle.outlines`), says when the zone reaches a person
-(`zone_check`), and `fire_distance_m` says how close the fire comes to a point.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 from typing import Iterable, Optional
-
-import numpy as np
 
 EVAC_BUFFER_M = 1000
 M_PER_DEG_LAT = 111320.0
 CIRCLE_STEPS = 64
-ZONE_HORIZON_MIN = 240       # not reached this soon = not at risk
-FIRE_DISTANCE_STEP_MIN = 15  # fire_distance_m checks the fire now and every 15 min ahead
 
 
 def _centroid(ring: list) -> tuple[float, float]:
@@ -127,82 +118,3 @@ def mark_unsafe_shelters(options: list, unsafe_ids: set) -> list:
             }
         out.append(option)
     return out
-
-
-# ---------- the zone over time (ForecastOracle.outlines) ----------
-
-@dataclass(frozen=True)
-class ZoneCheck:
-    status: str                   # "reached" | "clear" | "unknown"
-    reach_sim_min: Optional[int]  # first sim minute the zone covers the point ("reached" only)
-
-
-_circle_cache: list = []  # [(outlines array, (cx, cy, radius_m))], newest first
-
-
-def _circles(outlines: np.ndarray):
-    """Centre (lon, lat) and radius in metres of every minute's evacuation circle,
-    by the same rule as evac_circle()."""
-    for arr, circles in _circle_cache:
-        if arr is outlines:
-            return circles
-    pts = outlines[:, :-1, :] if outlines.shape[1] > 1 else outlines
-    cx, cy = pts[:, :, 0].mean(axis=1), pts[:, :, 1].mean(axis=1)
-    m_per_deg_lon = M_PER_DEG_LAT * np.cos(np.radians(cy))
-    reach = np.hypot((outlines[:, :, 0] - cx[:, None]) * m_per_deg_lon[:, None],
-                     (outlines[:, :, 1] - cy[:, None]) * M_PER_DEG_LAT).max(axis=1)
-    circles = (cx, cy, reach + EVAC_BUFFER_M)
-    _circle_cache.insert(0, (outlines, circles))
-    del _circle_cache[2:]
-    return circles
-
-
-def _window(oracle, t_now: float, horizon_min: float):
-    """Outline indices (= sim minutes) from now to now + horizon, and whether the
-    outlines reach that far."""
-    first = max(0, int(math.floor(t_now)))
-    last = int(math.floor(t_now + horizon_min))
-    available = len(oracle.outlines) - 1
-    return first, min(last, available), last <= available
-
-
-def zone_check(oracle, lat: float, lon: float, t_now: float,
-               horizon_min: float = ZONE_HORIZON_MIN) -> ZoneCheck:
-    """When the forecast evacuation circle first covers (lat, lon) within the horizon."""
-    if oracle is None or getattr(oracle, "outlines", None) is None:
-        return ZoneCheck("unknown", None)
-    first, last, complete = _window(oracle, t_now, horizon_min)
-    if first > last:
-        return ZoneCheck("unknown", None)
-    cx, cy, radius = (a[first:last + 1] for a in _circles(oracle.outlines))
-    d = np.hypot((lon - cx) * M_PER_DEG_LAT * np.cos(np.radians(cy)), (lat - cy) * M_PER_DEG_LAT)
-    hits = np.flatnonzero(d <= radius)
-    if hits.size:
-        return ZoneCheck("reached", first + int(hits[0]))
-    return ZoneCheck("clear" if complete else "unknown", None)
-
-
-def fire_distance_m(oracle, lat: float, lon: float, t_now: float,
-                    horizon_min: float = ZONE_HORIZON_MIN) -> Optional[float]:
-    """Closest the fire (now, then every 15 min up to the horizon) comes to (lat, lon),
-    in metres; 0 inside it. None without outlines."""
-    if oracle is None or getattr(oracle, "outlines", None) is None:
-        return None
-    first, last, _ = _window(oracle, t_now, horizon_min)
-    if first > last:
-        return None
-    minutes = sorted({*range(first, last + 1, FIRE_DISTANCE_STEP_MIN), last})
-    rings = oracle.outlines[minutes]                       # (k, points, 2) lon/lat
-    m_per_deg_lon = M_PER_DEG_LAT * math.cos(math.radians(lat))
-    x = (rings[:, :, 0] - lon) * m_per_deg_lon             # the point at the origin
-    y = (rings[:, :, 1] - lat) * M_PER_DEG_LAT
-    ax, ay, bx, by = x[:, :-1], y[:, :-1], x[:, 1:], y[:, 1:]
-    dx, dy = bx - ax, by - ay
-    seg2 = dx * dx + dy * dy
-    with np.errstate(invalid="ignore", divide="ignore"):
-        t = np.clip(np.where(seg2 > 0, -(ax * dx + ay * dy) / seg2, 0.0), 0.0, 1.0)
-    edge = np.hypot(ax + t * dx, ay + t * dy).min(axis=1)
-    # Even-odd ray cast from the origin along +x: inside a ring = 0 m.
-    crosses = ((ay > 0) != (by > 0)) & (0 < ax + (0 - ay) * dx / np.where(dy == 0, np.inf, dy))
-    inside = crosses.sum(axis=1) % 2 == 1
-    return float(np.where(inside, 0.0, edge).min())
