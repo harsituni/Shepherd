@@ -20,6 +20,7 @@ import { isCurrentCore, nearestHazard, pointInRing } from './geo.js'
 import { noSafeRoute, shouldReroute } from './reroute.js'
 import { placeName } from './placeName.js'
 import { nextClock } from './simClock.js'
+import { nextDeadline } from './leaveBy.js'
 import AlertBanner from './components/AlertBanner.jsx'
 import EvacCard from './components/EvacCard.jsx'
 import MapView from './components/MapView.jsx'
@@ -41,28 +42,6 @@ function deviceLocation() {
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
     )
   })
-}
-
-// Keep leave-by from drifting later on the same recommended route (cleared when
-// the pin changes, the best route changes, or nothing is recommended anymore).
-function ratchetLeaveBy(prev, next) {
-  if (!next) return next
-  if (next.route_status && next.route_status !== 'viable') return next
-  if (prev?.best_route_id && next.best_route_id && prev.best_route_id !== next.best_route_id) {
-    return next
-  }
-  const was = prev?.leave_by_sim_min
-  if (was == null) return next
-  const now = next.leave_by_sim_min
-  if (now == null || now > was) {
-    const sim = next.sim_time ?? prev.sim_time ?? was
-    return {
-      ...next,
-      leave_by_sim_min: was,
-      leave_by_label: `Leave within ${Math.max(0, was - sim)} min (sim)`,
-    }
-  }
-  return next
 }
 
 // Priority registration is remembered on this phone (only the ID's last 4
@@ -110,7 +89,9 @@ export default function App() {
   const [locating, setLocating] = useState(false) // waiting on a GPS fix
   const [notifications, setNotifications] = useState([])
   const [popup, setPopup] = useState(null)
-  const [clock, setClock] = useState(null) // sim clock for the leave-by countdown
+  const [clock, setClock] = useState(null) // sim clock for the simulated drive
+  // The leave-by deadline on this phone's clock (src/leaveBy.js); null = no countdown.
+  const [deadline, setDeadline] = useState(null)
   const seenNotes = useRef(new Set())
   const toastTimer = useRef(null)
   const locationRef = useRef(location)
@@ -250,9 +231,17 @@ export default function App() {
             setChosen(null)
           }
         }
-        // Leave-by must never jump upward for the same pin: once we've told someone
-        // "leave by T+X", a later poll can't push that deadline out while the fire grows.
-        setRoute((prev) => ratchetLeaveBy(prev, r))
+        setRoute(r)
+        // The countdown follows the route on screen (the picked card, else the best)
+        // and never moves later for this pin, whichever route that is (src/leaveBy.js).
+        const onScreen = withChoice(r, chosenRef.current).shown
+        setDeadline((d) =>
+          nextDeadline(d, {
+            leaveBySim: onScreen?.leave_by_sim_min,
+            simTime: r?.sim_time,
+            clear: r?.at_risk === false,
+          }),
+        )
         setRouteError(null)
         // Traffic hint (contract v2.1): while driving, auto-take the faster path
         // so judges see Shepherd clearing jams; otherwise show the banner.
@@ -311,6 +300,7 @@ export default function App() {
           return
         }
         setRoute(null)
+        setDeadline(null)
         // Contract only has error "no_route". Outside the demo box (or idle with
         // no fire) should not panic people into calling 911.
         const features = h.status === 'fulfilled' ? (h.value?.features ?? []) : []
@@ -341,6 +331,7 @@ export default function App() {
       setLocation(lngLat)
       setPlaceKey(lngLat.join(','))
       setRoute(null)
+      setDeadline(null) // a new location gets a fresh countdown
       setRouteError(null)
       chosenRef.current = null
       setChosen(null) // a new location starts from the recommended route
@@ -703,7 +694,7 @@ export default function App() {
                 route={driveRoute}
                 routeError={routeError}
                 near={location ? nearestHazard(location, hazards) : null}
-                clock={clock}
+                deadline={deadline}
                 trip={trip}
               />
             ) : (
@@ -712,7 +703,9 @@ export default function App() {
           </>
         }
         details={<RouteDetails {...detailProps} />}
-        more={<RouteMore route={driveRoute} shelters={shelters} trip={trip} evacMode={evacMode} />}
+        more={
+          <RouteMore route={driveRoute} shelters={shelters} trip={trip} evacMode={evacMode} deadline={deadline} />
+        }
         mapKey={<MapKey hazards={hazards} shelters={shelters} route={driveRoute} location={location} reports={reports} />}
         areaName={areaName}
         notifications={notifications}

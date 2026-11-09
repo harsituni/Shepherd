@@ -82,16 +82,25 @@ order, from the person's own cell to the shelter's road point:
 - **tight** / **ok**: every cell known and clear; under / at least 60 minutes
   to spare.
 
-The departure deadline is `min(fire deadlines, horizon − 90 − trip time)`,
-rounded down; equality is allowed. The horizon used here is capped at now + 240
-minutes, so the engine's extra lookahead can't make the leave-by time jump up as
-the fire grows. A structurally broken forecast (`forecast_error`) makes every
+The route's departure deadline is the earliest of its fire deadlines, rounded
+down; equality is allowed. With no fire on the route there is none. The forecast
+window (`horizon − 90 − trip time`, the horizon capped at now + 240 minutes) only
+limits the margin, so it can make a route `tight` or, once passed,
+`indeterminate`, but it never sets leave-by: the window running out isn't a
+reason to leave. A structurally broken forecast (`forecast_error`) makes every
 route indeterminate. With no fire running the oracle is `None` and every route
 is `ok` with no deadline.
 
 The fire domain covers the whole road graph (`graph_bbox()`, set at startup) so
 far roads aren't falsely clear. The domain edge is densified before projecting
 to UTM so curved edges don't drop boundary cells.
+
+**Leave-by.** `zone_check()` (`evac_zone.py`) finds the first minute the
+evacuation circle, drawn around the forecast fire minute by minute
+(`ForecastOracle.outlines`, the same ring the map shows), covers the pin. The
+answer's leave-by is the earlier of 30 minutes before that and the route's own
+deadline above. If the circle doesn't reach the pin within 4 hours the person is
+not at risk (`at_risk: false`) and there is no leave-by.
 
 **Evacuation zone.** After judging, `find_routes()` draws a 1 km circle around
 the fire now and around each `/forecast` outline (`evac_zone.py`, the same rule

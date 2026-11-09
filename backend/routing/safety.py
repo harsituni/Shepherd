@@ -12,7 +12,8 @@ A_i is the fire's arrival in the edge's i-th cell, d_i the distance from the edg
 start to where it leaves that cell. Cells the fire doesn't reach within the
 forecast window H have A = +inf. Unknown/invalid cells make the edge deadline
 -inf. The whole-route judge additionally enforces the existing 90-minute
-forecast reserve and bounds the departure deadline by it.
+forecast reserve: a route it doesn't cover is indeterminate, and it can make an
+ok route tight, but it never sets the departure deadline (only fire does).
 
 `judge()` then checks one whole route exactly, connector and shelter cell included,
 and explains where it fails. Forecasts are not a safety guarantee.
@@ -371,10 +372,12 @@ def judge(path: RoutePath, t_now: float, oracle=None, edge_fire: Optional[EdgeFi
         hazard = intercept(int(np.argmin(np.where(finite, spare, np.inf))))
 
     # Compute from unrounded absolute limits so fractional departure times do
-    # not introduce extra rounding. Expiry caps every active forecast deadline.
+    # not introduce extra rounding. Only fire on the route sets it: the forecast
+    # window running out says the route can't be confirmed later, not that the
+    # person must leave (find_routes adds the evacuation-zone deadline).
     leave_by = None
-    if not blocked and complete:
-        leave_by = int(math.floor(t_now + min(fire_spare, coverage_spare) + EPS_MIN))
+    if not blocked and complete and math.isfinite(fire_spare):
+        leave_by = int(math.floor(t_now + fire_spare + EPS_MIN))
     return Judgement(status, margin, leave_by, clear_until, reason, hazard, shelter_threat,
                      complete, arrival_sim_min)
 

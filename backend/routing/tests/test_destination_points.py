@@ -49,7 +49,8 @@ def test_endpoint_hazard_and_unknown_and_expiry_remain_enforced():
     assert run(graph, fc.oracle())['route_status'] == 'indeterminate'
     fc.arrival[:] = np.inf
     assert run(graph, fc.oracle(covers_until=93))['route_status'] == 'indeterminate'
-    assert run(graph, fc.oracle(covers_until=94))['options'][0]['leave_by_sim_min'] == 0
+    option = run(graph, fc.oracle(covers_until=94))['options'][0]
+    assert option['status'] == 'tight' and option['leave_by_sim_min'] is None
 
 
 def journey(graph, pin, target, fc=None):
