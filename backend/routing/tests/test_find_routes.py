@@ -79,12 +79,13 @@ class FindRoutesTests(unittest.TestCase):
         self.assertFalse(body["no_safe_route"])
 
     def test_outside_demo_raises_demo_message(self):
+        # Well east of Greater Edmonton (past Sherwood Park / the Henday buffer).
         with self.assertRaises(router.NoRouteError) as raised:
-            router.find_routes(53.55, -113.20, None, self.shelters)
+            router.find_routes(53.55, -113.05, None, self.shelters)
         self.assertIn("demo area", str(raised.exception))
         with patch.object(router, "_graph", None), patch.object(router, "_backup_mode", True):
             with self.assertRaises(router.NoRouteError) as raised:
-                router.find_routes(53.55, -113.20, None, self.shelters)
+                router.find_routes(53.55, -113.05, None, self.shelters)
             self.assertIn("demo area", str(raised.exception))
 
     def test_fire_can_block_some(self):

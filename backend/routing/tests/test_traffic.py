@@ -8,6 +8,7 @@ from backend.routing.traffic import (
     BPR_ALPHA,
     BPR_BETA,
     BPR_VC_CAP,
+    MAP_LOCAL_MIN_VOLUME,
     SWITCH_SAVE_MIN,
     TrafficEngine,
     bpr_factor,
@@ -142,15 +143,33 @@ class TrafficWithTinyGraph(unittest.TestCase):
         self.assertLessEqual(out["with_min"], out["without_min"] + 0.1)
 
     def test_edge_features_when_enabled(self):
-        self.eng.configure(enabled=True, anti_gridlock=True, simulated_count=12)
+        self.eng.configure(enabled=True, anti_gridlock=True, simulated_count=80)
         with self.eng._lock:
             self.eng._assign_all_locked(force=True, sim_time=0)
+            # Guarantee a visible arterial jam even if assignment is sparse.
+            for i in self.b_edges:
+                self.eng._volume[i] = max(float(self.eng._volume[i]), float(self.eng._capacity[i]) * 0.95)
         fc = self.eng.edge_features(limit=50)
         self.assertEqual(fc["type"], "FeatureCollection")
         self.assertTrue(fc["features"])
         props = fc["features"][0]["properties"]
         self.assertIn("vc_ratio", props)
         self.assertIn("level", props)
+
+    def test_map_skips_lightly_loaded_local_streets(self):
+        # Arterial jammed; residential only carries a few cars (typical feeder).
+        # The map should paint the corridor, not every tiny avenue touching it.
+        self.eng.configure(enabled=True, anti_gridlock=True, simulated_count=0)
+        with self.eng._lock:
+            self.eng._volume[:] = 0.0
+            for i in self.b_edges:
+                self.eng._volume[i] = float(self.eng._capacity[i]) * 1.2
+            for i in self.a_edges:
+                self.eng._volume[i] = min(4.0, MAP_LOCAL_MIN_VOLUME * 0.25)
+            fc = self.eng.edge_features(limit=50)
+        hwys = {f["properties"].get("highway") for f in fc["features"]}
+        self.assertTrue(hwys & {"secondary", "tertiary"})
+        self.assertNotIn("residential", hwys)
 
 
 if __name__ == "__main__":
