@@ -674,10 +674,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible {
 
 /* Report kind colours, on symbols and their map markers (requested, and an
    exception to the hazard/route/evacuation colour rules in DESIGN.md):
-   fire orange, flooded road blue, blocked road a yellow barrier, other a black
-   caution sign. */
+   fire orange, blocked road a yellow barrier, other a black caution sign. */
 .rk-fire { color: var(--hazard); }
-.rk-flooded_road { color: var(--blue); }
 .rk-blocked_road { color: var(--evac-edge); }
 .rk-other { color: var(--text); }
 .rk-fill { fill: none; }

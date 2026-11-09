@@ -4,7 +4,7 @@ alwaysApply: true
 ---
 Project: Shepherd. Evacuation routing for Edmonton (dashboard + phone web app + FastAPI backend). Hackathon, Defense & Security theme.
 
-Before writing code, read @AGENT_CONTEXT.md and @shared/contract.md.
+Before writing code, read @README.md and @shared/contract.md.
 
 Rules:
 - Only edit files inside the folder the user says they are working in. Never touch other folders.
@@ -16,3 +16,5 @@ Rules:
 - No database, no auth, no Docker. State lives in memory.
 - Keep code small, simple and readable. Prefer the simplest thing that works.
 - Python imports are absolute from repo root, e.g. `from backend.sim.wildfire import WildfireSim`.
+- Wildfire is the supported hazard; tornado simulation is a beta feature and must be labelled as beta wherever users see it.
+- Backend tests go in the package's `tests/` folder (backend/api/tests, backend/routing/tests, backend/sim/tests).

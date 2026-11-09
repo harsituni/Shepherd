@@ -1,7 +1,7 @@
 """FIFO earliest arrivals on a 16-neighbour grid.
 
 Directional rates are sampled in physical time, interpolated linearly, and
-integrated through the ENTIRE crossing. See HANDOFF.md for the FIFO proof.
+integrated through the ENTIRE crossing. See backend/sim/README.md ("The engine").
 """
 
 import bisect

@@ -52,7 +52,7 @@ class SimController:
             "wind_kmh": source.wind_kmh,
             "wind_from_deg": source.wind_from_deg,
         }
-        # Tornado adds EF category + live stats (additive; wildfire state unchanged).
+        # Tornado (beta) adds EF category + live stats; wildfire state is unchanged.
         if self.scenario == "tornado" and isinstance(self.sim, TornadoSim):
             body["tornado"] = self.sim.stats()
         return body
@@ -82,7 +82,7 @@ class SimController:
                 source = {"provider": "dashboard", "fallback_reason": str(exc)}
 
         if scenario == "tornado":
-            # Tornadoes use the dashboard path direction/speed — no FBP weather series.
+            # Beta. Tornadoes use the dashboard path direction/speed — no FBP weather series.
             # Optional ef_rating (0–5) sets peak Enhanced Fujita category.
             ef = body.get("ef_rating", body.get("ef_peak"))
             self.sim = TornadoSim(
@@ -179,19 +179,6 @@ class SimController:
             return body
         body["outlines"] = self.sim.forecast(FORECAST_HORIZON_MIN)
         return body
-
-    def arrival_min(self, lat: float, lon: float) -> Optional[int]:
-        """Minute fire reaches this point, or None if idle / outside horizon."""
-        if self.sim is None or self.state == "idle":
-            return None
-        return self.sim.arrival_min(lat, lon, FORECAST_HORIZON_MIN)
-
-    def arrival_status(self, lat: float, lon: float) -> tuple:
-        """("arrival", minute), ("not_reached", None) or ("outside_domain", None);
-        ("idle", None) with no fire running."""
-        if self.sim is None or self.state == "idle":
-            return "idle", None
-        return self.sim.arrival_status(lat, lon, FORECAST_HORIZON_MIN)
 
     def set_domain(self, bbox: Optional[list]) -> None:
         """Area the next fire must cover (the road graph's box), so routing has a

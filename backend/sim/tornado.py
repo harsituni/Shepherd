@@ -1,7 +1,8 @@
-"""Supercell tornado for demos — EF category, track, life cycle, damage swath.
+"""BETA: supercell tornado for demos — EF category, track, life cycle, damage swath.
 
-Same public surface as WildfireSim (step / features / forecast / arrival_min /
-set_wind / oracle) so SimController and routing can treat it as another hazard.
+Tornado simulation is a beta feature; the wildfire sim is the supported hazard.
+Same public surface as WildfireSim (step / features / forecast / set_wind /
+oracle) so SimController and routing can treat it as another hazard.
 
 Physics (simplified but grounded):
     • Peak intensity is an Enhanced Fujita (EF0–EF5) rating chosen at start.
@@ -415,25 +416,6 @@ class TornadoSim:
                 "geometry": {"type": "Polygon", "coordinates": [ring]},
             })
         return outlines
-
-    def arrival_min(self, lat: float, lon: float, horizon_min: int = HORIZON_MIN) -> Optional[int]:
-        status, minute = self.arrival_status(lat, lon, horizon_min)
-        return minute if status == "arrival" else None
-
-    def arrival_status(self, lat: float, lon: float, horizon_min: int = HORIZON_MIN) -> tuple:
-        oracle = self.oracle()
-        x, y = TO_UTM.transform(float(lon), float(lat))
-        col = int(math.floor((x - oracle.x0) / oracle.cell_m))
-        row = int(math.floor((oracle.y0 - y) / oracle.cell_m))
-        if row < 0 or col < 0 or row >= oracle.nrows or col >= oracle.ncols:
-            return "outside_domain", None
-        flat = row * oracle.ncols + col
-        if not oracle.in_domain[flat]:
-            return "outside_domain", None
-        arrival = float(oracle.arrival[flat])
-        if not math.isfinite(arrival) or arrival > self.minutes + horizon_min:
-            return "not_reached", None
-        return "arrival", int(math.floor(arrival))
 
     def oracle(self) -> ForecastOracle:
         if self._oracle is None:

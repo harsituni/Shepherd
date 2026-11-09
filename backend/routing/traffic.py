@@ -1,6 +1,6 @@
 """Evacuation traffic: BPR travel times, simulated crowd, anti-gridlock assignment.
 
-Not in contract v2 — additive API under /traffic*. When disabled, routing is
+Contract v2.1 API under /traffic*. When disabled, routing is
 unchanged (free-flow 30 km/h). When enabled, edge travel times follow the
 Bureau of Public Roads formula and a crowd of cars (plus real phone pins) is
 loaded onto the network so jams can blow fire margins and anti-gridlock can
@@ -12,8 +12,8 @@ from __future__ import annotations
 import logging
 import math
 import threading
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 
@@ -36,10 +36,9 @@ BPR_VC_CAP = 3.0
 CLEARANCE_CAP_MIN = 480.0  # 8 hours
 MAX_VC_REPORT = 5.0
 
-# Static loading capacity (vehicles that can share an edge before it jams).
-# Tuned for demo N≈hundreds–thousands, not real hourly freeway flow.
-# Per-lane static loading capacity (cars sharing an edge before it jams). Kept
-# intentionally low so evacuating crowds create visible gridlock on the map.
+# Per-lane static loading capacity (cars sharing an edge before it jams). Tuned
+# for demo crowds, not real hourly freeway flow, and kept low on purpose so
+# evacuating crowds create visible gridlock on the map.
 CAP_PER_LANE = {
     "motorway": 40,
     "motorway_link": 24,
@@ -142,7 +141,6 @@ class Agent:
     edge_ids: tuple = ()          # base RoadGraph edge indices
     eta_min: float = 0.0
     free_eta_min: float = 0.0
-    assigned_sim_min: int = 0
     last_switch_sim_min: int = -10_000
     arrived: bool = False
     # How many projected cars this agent represents on the network (phones = 1).
@@ -189,7 +187,6 @@ class TrafficEngine:
         self._metrics = TrafficMetrics()
         self._compare: Optional[dict] = None
         self._rng = np.random.default_rng(42)
-        self._route_fn = None  # optional; phones may still use full /route
         self._shelters_fn = None
         # Spawn cluster centre (hazard origin). Defaults to central Edmonton.
         self.cluster_lat = 53.5461
@@ -234,8 +231,8 @@ class TrafficEngine:
             self._compare = None
             self._last_rebalance_sim = -10_000
 
-    def set_callbacks(self, route_fn, shelters_fn) -> None:
-        self._route_fn = route_fn
+    def set_shelters(self, shelters_fn) -> None:
+        """Callable returning the current shelter Features (crowd destinations)."""
         self._shelters_fn = shelters_fn
 
     def set_cluster(self, lat: float, lon: float) -> None:
@@ -431,7 +428,7 @@ class TrafficEngine:
         agent.load_weight = 1.0
 
     def _load_agent_locked(self, agent: Agent, edge_ids, route_id, shelter_id,
-                           eta_min, free_eta_min, sim_time: int) -> None:
+                           eta_min, free_eta_min) -> None:
         self._unload_agent_locked(agent)
         ids = tuple(int(e) for e in edge_ids)
         weight = 1.0 if agent.kind == "phone" else self._projection_weight_locked()
@@ -440,7 +437,6 @@ class TrafficEngine:
         agent.shelter_id = shelter_id
         agent.eta_min = float(eta_min)
         agent.free_eta_min = float(free_eta_min)
-        agent.assigned_sim_min = int(sim_time)
         agent.load_weight = float(weight)
         for e in ids:
             if 0 <= e < len(self._volume):
@@ -487,7 +483,7 @@ class TrafficEngine:
                         continue
                     self._load_agent_locked(
                         agent, pick["edge_ids"], pick["route_id"], pick["shelter_id"],
-                        pick["eta_min"], pick["free_eta_min"], sim_time,
+                        pick["eta_min"], pick["free_eta_min"],
                     )
                     leader_picks.append(pick)
                 if leader_picks:
@@ -495,7 +491,7 @@ class TrafficEngine:
                         pick = leader_picks[i % len(leader_picks)]
                         self._load_agent_locked(
                             agent, pick["edge_ids"], pick["route_id"], pick["shelter_id"],
-                            pick["eta_min"], pick["free_eta_min"], sim_time,
+                            pick["eta_min"], pick["free_eta_min"],
                         )
             else:
                 order = sorted(agents, key=lambda a: (a.kind != "phone", -a.eta_min))
@@ -513,7 +509,7 @@ class TrafficEngine:
                     continue
                 self._load_agent_locked(
                     agent, pick["edge_ids"], pick["route_id"], pick["shelter_id"],
-                    pick["eta_min"], pick["free_eta_min"], sim_time,
+                    pick["eta_min"], pick["free_eta_min"],
                 )
             for agent in agents:
                 if not agent.edge_ids:
@@ -528,7 +524,7 @@ class TrafficEngine:
             if pick:
                 self._load_agent_locked(
                     agent, pick["edge_ids"], pick["route_id"], pick["shelter_id"],
-                    pick["eta_min"], pick["free_eta_min"], sim_time,
+                    pick["eta_min"], pick["free_eta_min"],
                 )
             return
         old_edges = agent.edge_ids
@@ -540,7 +536,7 @@ class TrafficEngine:
         pick = self._pick_route_fast_locked(agent.lat, agent.lon)
         if pick is None:
             self._load_agent_locked(
-                agent, old_edges, old_route, old_shelter, current_eta, old_free, sim_time,
+                agent, old_edges, old_route, old_shelter, current_eta, old_free,
             )
             return
         saves = current_eta - pick["eta_min"]
@@ -550,11 +546,11 @@ class TrafficEngine:
             agent.last_switch_sim_min = int(sim_time)
             self._load_agent_locked(
                 agent, pick["edge_ids"], pick["route_id"], pick["shelter_id"],
-                pick["eta_min"], pick["free_eta_min"], sim_time,
+                pick["eta_min"], pick["free_eta_min"],
             )
         else:
             self._load_agent_locked(
-                agent, old_edges, old_route, old_shelter, current_eta, old_free, sim_time,
+                agent, old_edges, old_route, old_shelter, current_eta, old_free,
             )
 
     def _travel_min_unlocked(self, edge_ids) -> float:
@@ -614,10 +610,6 @@ class TrafficEngine:
             "free_eta_min": free,
             "delay_min": max(0.0, eta - free),
         }
-
-    def _pick_route_locked(self, lat: float, lon: float) -> Optional[dict]:
-        """Compat alias — crowd assignment always uses the fast graph path."""
-        return self._pick_route_fast_locked(lat, lon)
 
     def _recompute_metrics_locked(self) -> None:
         active = [a for a in self._agents.values() if not a.arrived and a.edge_ids]
@@ -958,7 +950,6 @@ class TrafficEngine:
         if journey_graph is None or not len(edge_indices):
             option["traffic_delay_min"] = 0
             option["traffic_free_min"] = option.get("modeled_duration_min")
-            option["_traffic_edge_ids"] = []
             return option
         parent = [int(journey_graph.parent[int(e)]) for e in edge_indices]
         free = self.free_min_for_edges(parent)
@@ -966,7 +957,6 @@ class TrafficEngine:
         delay = max(0.0, congested - free)
         option["traffic_delay_min"] = int(round(delay))
         option["traffic_free_min"] = round(free, 2)
-        option["_traffic_edge_ids"] = parent
         if self.enabled and delay >= 1:
             # Keep eta_min / modeled_duration reflecting congestion when traffic is on.
             option["modeled_duration_min"] = round(congested, 2)
@@ -979,7 +969,7 @@ class TrafficEngine:
         if not self.enabled or not current_route_id:
             return None
         with self._lock:
-            pick = self._pick_route_locked(lat, lon)
+            pick = self._pick_route_fast_locked(lat, lon)
             if pick is None or pick["route_id"] == current_route_id:
                 return None
             # Prefer the caller's phone pin, then any car already on that route.

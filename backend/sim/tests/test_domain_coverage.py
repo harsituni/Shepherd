@@ -1,4 +1,4 @@
-"""F08 domain projection regressions, independent of routing classifications."""
+"""Domain projection regressions, independent of routing classifications."""
 
 import numpy as np
 import shapely
@@ -18,7 +18,8 @@ def test_geographic_south_edge_is_not_replaced_by_projected_corner_chord():
     # Establish the original defect and compare with a 10x finer independent boundary.
     old = seed_mask(to_utm(box(*BBOX)), grid)
     fine_domain = to_utm(shapely.segmentize(box(*BBOX), .0001))
-    xs, ys = grid.cell_centres()
+    xs, ys = np.meshgrid(grid.origin_x + (np.arange(grid.cols) + 0.5) * grid.cell_m,
+                         grid.origin_y - (np.arange(grid.rows) + 0.5) * grid.cell_m)
     cells = shapely.box(xs - 50, ys - 50, xs + 50, ys + 50)
     reference = shapely.intersects(cells, fine_domain)
     assert not old[row, col]

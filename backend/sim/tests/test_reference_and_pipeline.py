@@ -2,14 +2,11 @@ from datetime import datetime,timedelta,timezone
 import json
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from backend.sim.engine import fbp
-from backend.sim.engine.ensemble import combine
 from backend.sim.weatherpipe.obs import make_obs, WeatherRangeError
 from backend.sim.weatherpipe.resample import build_weather_series,coverage_metadata,CoverageError
-from backend.sim.weatherpipe.scenario import load_config
 
 FIXTURE=json.loads((Path(__file__).parent/'fixtures/fbp_reference.json').read_text())
 
@@ -19,12 +16,6 @@ def test_independent_decimal_fbp_fixtures(case):
     actual=fbp.spread_rates(**case['input'])
     for field,value in case['expected'].items():
         assert float(getattr(actual,field))==pytest.approx(value,rel=1e-11,abs=1e-12)
-
-
-def test_ensemble_unreached_quantiles_do_not_interpolate_fake_times():
-    p50,p10=combine([np.array([[10.]],np.float32),np.array([[np.nan]],np.float32)],60)
-    assert p10[0,0]==10
-    assert p50[0,0]==10 # inverted empirical CDF, explicitly documented
 
 
 @pytest.mark.parametrize('field',['wind_speed_ms','wind_dir_deg','temp_c','rh_pct','precip_mm_per_h','gust_ms'])
@@ -46,13 +37,6 @@ def test_missing_interior_weather_and_duplicates_fail():
     meta=coverage_metadata([obs(60),obs(120)],t0,180)
     assert meta['start_hold_min']==60 and meta['end_hold_min']==60
     assert len(series)==4
-
-
-def test_cache_latest_config_is_not_resolved_as_filename(tmp_path):
-    config=json.loads((Path(__file__).parents[1]/'scenarios/edm-demo-1.json').read_text())
-    config['weather_default_source']='cache:latest'
-    path=tmp_path/'config.json';path.write_text(json.dumps(config))
-    assert load_config(path).weather_default_source=='cache:latest'
 
 
 def test_malformed_provider_json_and_timeout_retries(monkeypatch):

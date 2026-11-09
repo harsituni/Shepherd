@@ -6,7 +6,7 @@ import { CloseIcon, PinIcon } from './icons.jsx'
 // picks the type and a short message for emergency personnel (30 characters, shown
 // to responders on the dashboard, not on the public map). "Move pin" goes back.
 
-export const MESSAGE_MAX = 30
+const MESSAGE_MAX = 30
 // `other` is not in contract v1's report kinds yet (asked Harsit to add it).
 
 function KindIcon({ kind }) {

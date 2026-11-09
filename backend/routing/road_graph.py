@@ -1,4 +1,4 @@
-"""Array form of the road graph for routing v3, plus the road-to-fire-cell table.
+"""Array form of the road graph for routing, plus the road-to-fire-cell table.
 
 `RoadGraph.from_networkx()` runs once inside `load_graph()`. Nothing in it changes
 afterwards, so request threads share it without locks.
@@ -233,24 +233,6 @@ class RoadGraph:
 
     def node_index(self, osmid) -> int:
         return self.osmid_index[osmid]
-
-    def edge_index(self, u, v) -> np.ndarray:
-        """Shortest-length edge for each pair, for explicit distance-only lookups.
-
-        Hazard-aware routes must use SearchTree.pred_edge instead.
-        """
-        keys = np.asarray(u, dtype=np.int64) * self.n_nodes + np.asarray(v, dtype=np.int64)
-        found = np.searchsorted(self.edge_key, keys)
-        if np.any(found >= len(self.edge_key)) or np.any(self.edge_key[np.minimum(found, len(self.edge_key) - 1)] != keys):
-            raise KeyError("no edge for some (u, v) pair")
-        return found
-
-    def path_edges(self, nodes) -> np.ndarray:
-        """Edge indices along a node path."""
-        nodes = np.asarray(nodes, dtype=np.int64)
-        if len(nodes) < 2:
-            return np.zeros(0, dtype=np.int64)
-        return self.edge_index(nodes[:-1], nodes[1:]).astype(np.int64)
 
     def masked_csr(self, weights: np.ndarray, allowed: Optional[np.ndarray] = None) -> csr_matrix:
         return masked_csr(self.n_nodes, self.edge_u, self.edge_v, weights, allowed)

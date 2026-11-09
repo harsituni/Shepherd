@@ -8,7 +8,7 @@ disaster location and clock instead of a fixed slider default.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 

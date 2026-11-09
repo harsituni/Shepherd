@@ -1,11 +1,10 @@
-"""Shepherd API — Step 0 + sim controls (contract v2)."""
+"""Shepherd API: the endpoints in shared/contract.md, with state held in memory."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import math
-import os
 import time
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
@@ -17,17 +16,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from backend.routing.router import (
-    NoRouteError, check_route, find_routes, find_routes_v3, fire_closed_road_features,
-    graph_bbox, load_graph, prepare_forecast,
+    NoRouteError, find_routes, fire_closed_road_features, graph_bbox, load_graph, prepare_forecast,
 )
 from backend.routing.evac_demand import project_evac_demand
 from backend.routing.traffic import engine as traffic_engine
 from backend.sim.controller import SimController
 
 log = logging.getLogger(__name__)
-
-# Routing v3 (2-4 fire-checked road routes) is the default; SHEPHERD_ROUTING=v2 brings back the old router.
-ROUTING_VERSION = os.environ.get("SHEPHERD_ROUTING", "v3").strip().lower()
 
 controller = SimController()
 dropped_hazards: list[dict] = []
@@ -153,20 +148,6 @@ SHELTERS: list[dict] = [
 ]
 
 
-def _traffic_route(lat: float, lon: float) -> dict:
-    """Router callback for the crowd assigner (same path phones use)."""
-    forecast = controller.forecast()
-    return find_routes_v3(
-        lat,
-        lon,
-        controller.oracle(),
-        SHELTERS,
-        sim_time=controller.sim_time,
-        hazards={"type": "FeatureCollection", "features": controller.features()},
-        forecast_outlines=forecast.get("outlines") or [],
-    )
-
-
 async def _sim_loop() -> None:
     while True:
         await asyncio.sleep(2)
@@ -179,10 +160,9 @@ async def _sim_loop() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     load_graph()
-    if ROUTING_VERSION == "v3":
-        # The fire must cover every road routing can use, or far roads would look clear.
-        controller.set_domain(graph_bbox())
-    traffic_engine.set_callbacks(_traffic_route, lambda: SHELTERS)
+    # The fire must cover every road routing can use, or far roads would look clear.
+    controller.set_domain(graph_bbox())
+    traffic_engine.set_shelters(lambda: SHELTERS)
     task = asyncio.create_task(_sim_loop())
     try:
         yield
@@ -247,7 +227,7 @@ class SimWind(BaseModel):
 
 
 class TrafficConfig(BaseModel):
-    """Additive /traffic API (not in contract v2)."""
+    """POST /traffic/config body; every field is optional."""
     enabled: Optional[bool] = None
     anti_gridlock: Optional[bool] = None
     simulated_count: Optional[int] = None
@@ -336,12 +316,12 @@ def evacuee_features() -> list[dict]:
     return features
 
 
-def _unsupported_flood() -> JSONResponse:
+def _unsupported_scenario() -> JSONResponse:
     return JSONResponse(
         status_code=400,
         content={
             "error": "unsupported_scenario",
-            "message": "Flood deferred",
+            "message": "Scenario must be wildfire or tornado (beta)",
         },
     )
 
@@ -400,36 +380,19 @@ def get_route(
     check_route_id: Optional[str] = Query(None),
     debug: bool = Query(False),
 ) -> dict:
-    """Multi-option leave-by routes (v3 by default; contract v2 with SHEPHERD_ROUTING=v2)."""
+    """2-4 fire-checked road routes from the pin to open shelters."""
     try:
-        if ROUTING_VERSION == "v3":
-            forecast = controller.forecast()
-            return find_routes_v3(
-                lat,
-                lon,
-                controller.oracle(),
-                SHELTERS,
-                sim_time=controller.sim_time,
-                check_route_id=check_route_id,
-                debug=debug,
-                hazards={"type": "FeatureCollection", "features": controller.features()},
-                forecast_outlines=forecast.get("outlines") or [],
-            )
-        if check_route_id:
-            return check_route(
-                lat,
-                lon,
-                check_route_id,
-                controller.arrival_min,
-                SHELTERS,
-                sim_time=controller.sim_time,
-            )
+        forecast = controller.forecast()
         return find_routes(
             lat,
             lon,
-            controller.arrival_min,
+            controller.oracle(),
             SHELTERS,
             sim_time=controller.sim_time,
+            check_route_id=check_route_id,
+            debug=debug,
+            hazards={"type": "FeatureCollection", "features": controller.features()},
+            forecast_outlines=forecast.get("outlines") or [],
         )
     except NoRouteError as exc:
         return JSONResponse(
@@ -505,7 +468,7 @@ def get_notifications() -> dict:
 
 @app.get("/forecast")
 def get_forecast() -> dict:
-    """Predicted fire outlines at +15…+120 min (contract v2)."""
+    """Predicted hazard outlines at +15…+120 min."""
     return controller.forecast()
 
 
@@ -535,7 +498,7 @@ def get_traffic_projection(
 
 @app.get("/traffic")
 def get_traffic() -> dict:
-    """Congested roads + metrics. Additive — not in contract v2."""
+    """Congested roads + metrics."""
     traffic_engine.sync_phones(evacuees)
     body = traffic_engine.payload()
     body["sim_time"] = controller.sim_time
@@ -677,12 +640,10 @@ def get_sim_state() -> dict:
 
 @app.post("/sim/start")
 def post_sim_start(body: SimStart) -> dict:
-    if body.scenario == "flood":
-        return _unsupported_flood()
     try:
         state = controller.start(body.model_dump())
     except ValueError:
-        return _unsupported_flood()
+        return _unsupported_scenario()
     # Crowd size from location + current Edmonton day/time (projected cars).
     traffic_engine.set_cluster(body.lat, body.lon)
     demand = project_evac_demand(
@@ -730,17 +691,15 @@ def post_sim_speed(body: SimSpeed) -> dict:
 
 @app.post("/sim/wind")
 def post_sim_wind(body: SimWind) -> dict:
-    """Change wind; kicks off spread/forecast recompute (contract v2)."""
+    """Change wind; kicks off spread/forecast recompute."""
     state = controller.set_wind(body.wind_kmh, body.wind_from_deg)
     _prepare_routing()
     return state
 
 
 def _prepare_routing() -> None:
-    """v3: build the new forecast's road deadlines now, not on the next phone's /route."""
-    if ROUTING_VERSION != "v3":
-        return
+    """Build the new forecast's road deadlines now, not on the next phone's /route."""
     try:
         prepare_forecast(controller.oracle())
     except Exception:  # noqa: BLE001 - routing builds these lazily anyway
-        log.exception("routing v3: could not prepare the forecast ahead of /route")
+        log.exception("routing: could not prepare the forecast ahead of /route")

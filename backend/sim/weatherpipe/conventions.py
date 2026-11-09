@@ -13,7 +13,6 @@ Times are tz-aware UTC and serialised with a trailing Z. Never local time.
 
 from datetime import datetime, timedelta, timezone
 
-SCHEMA = "v1"
 SERIES_STEP_MIN = 60          # Contract A weather is hourly
 MAX_HOLD_GAP_MIN = 180        # hold the nearest observation for at most 3 h past the data
 
@@ -42,18 +41,3 @@ def require_utc(dt: datetime, name: str = "t0") -> datetime:
 def parse_utc(text: str, name: str = "t0") -> datetime:
     # Python < 3.11 fromisoformat rejects a trailing "Z".
     return require_utc(datetime.fromisoformat(text.replace("Z", "+00:00")), name)
-
-
-def floor_hour(dt: datetime) -> datetime:
-    return require_utc(dt).replace(minute=0, second=0, microsecond=0)
-
-
-def default_t0() -> datetime:
-    """Now, rounded down to the hour."""
-    return floor_hour(datetime.now(timezone.utc))
-
-
-def bbox_centroid(bbox) -> tuple[float, float]:
-    """(lat, lon) midpoint of [min_lon, min_lat, max_lon, max_lat]."""
-    min_lon, min_lat, max_lon, max_lat = bbox
-    return (min_lat + max_lat) / 2, (min_lon + max_lon) / 2

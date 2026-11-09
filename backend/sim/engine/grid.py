@@ -35,12 +35,6 @@ class Grid:
     def shape(self):
         return self.rows, self.cols
 
-    def cell_centres(self):
-        """(x, y) arrays of shape (rows, cols) with every cell centre in metres."""
-        cols = self.origin_x + (np.arange(self.cols) + 0.5) * self.cell_m
-        rows = self.origin_y - (np.arange(self.rows) + 0.5) * self.cell_m
-        return np.meshgrid(cols, rows)
-
     def cell_of(self, x, y):
         """(row, col) of the cell containing UTM point (x, y)."""
         return (
@@ -99,7 +93,7 @@ def projected_domain(bbox):
     """Project the geographic box's curved sides, not just its four corners.
 
     Straight chords between projected corners can exclude roads inside the
-    geographic bbox (F08, 66 Street SW). Densification is shared by grid bounds,
+    geographic bbox (66 Street SW). Densification is shared by grid bounds,
     engine rasterization and the oracle; it does not alter propagation rates.
     """
     return to_utm(shapely.segmentize(box(*bbox), DOMAIN_SEGMENT_DEG))

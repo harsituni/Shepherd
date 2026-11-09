@@ -6,7 +6,7 @@ Owner: TechShriyaz (also owns `phone/`). Only edit files in `dashboard/` unless 
 The Shepherd command dashboard for the Government of Alberta. Officials use it to simulate and monitor natural disasters around Edmonton/Alberta, see who's at risk, reroute evacuees and push updates to residents. Part of the natHacks 2026 project (Defense & Security theme). The public side is the phone web app in `phone/`.
 
 ## Features (in priority order)
-1. **Disaster simulation + conditions.** Hazards: wildfire (main priority) and tornado. Flood was removed from the simulation.
+1. **Disaster simulation + conditions.** Hazards: wildfire (main priority) and tornado. Tornado simulation is a **beta** feature: label it "(beta)" in the hazard picker and the incident banner.
    - Pick hazard type, click the map to place the start point.
    - Conditions: wind speed and wind direction (both hazards; for a tornado the direction is its path), relative humidity (wildfire only). No fuel dryness control (the backend default is used) and no temperature control. Direction options read start → finish, e.g. "West → East".
    - Play / pause / reset, speed 1× / 4× / 16×, elapsed time (T+min).
@@ -21,7 +21,7 @@ The Shepherd command dashboard for the Government of Alberta. Officials use it t
 3. **Historical progression slider.** A timeline slider under the map that scrubs from T+0 to now, redrawing the hazard, closed roads and routes as they were at that step, and on past now into the forecast (up to the `/forecast` horizon, +120 min), drawing the fire as predicted for that minute. Dragging it pauses the sim; a "Back to live" button returns to the current step.
 4. **High-priority residents.** Map layer + list of residents who need extra help evacuating (e.g. disabled, no vehicle). Show only what responders need: location pin, needs category, evacuation status (not started / en route / safe / needs pickup). Phones register through the phone app's **Priority** sheet (`POST /priority`: ID type, last 4 characters of the ID only, needs, note); `/evacuees` then carries `priority`, `priority_id_type`, `priority_needs`, `priority_note`, and the map draws them as navy diamonds with a hover pop-up. The "Show only priority residents" toggle hides ordinary phone dots. Never store or show full ID numbers.
 5. **Notify all residents.** A "Send update" panel: title, message, severity (Advisory / Alert / Evacuation order), target area (whole region or inside the hazard zone). Sends to the backend, which pushes it to every phone as a top-of-screen notification. Show a sent-history list.
-6. **Reported hazards.** A list/tab of everything phones have reported (fire, flooded road, blocked road, SOS, I'm safe), newest first, with type, time, location and status (New / Verified / Dismissed). Each report also appears as a pin on the map; clicking a list item centres the map on it.
+6. **Reported hazards.** A list/tab of everything phones have reported (fire, blocked road, other, SOS, I'm safe), newest first, with type, time, location and status (New / Verified / Dismissed). Each report also appears as a pin on the map; clicking a list item centres the map on it.
 
 ## Key numbers (only these 4 tiles)
 People at risk · Roads closed · Active reroutes · Shelter capacity used.
@@ -58,32 +58,29 @@ People at risk · Roads closed · Active reroutes · Shelter capacity used.
 ## Stack
 - Vite + React + `maplibre-gl`, OpenStreetMap basemap, our data drawn as GeoJSON layers.
 - Own `package.json` inside `dashboard/`.
-- `src/config.js` exports `API_URL` (default `http://localhost:8000`) and `USE_FIXTURES` (true until the backend is ready).
+- `src/config.js` exports `API_URL` (default `http://localhost:8000`) and `USE_FIXTURES` (false: call the API; true: an in-memory stand-in built from `shared/fixtures/`).
 - Map starts centred on Edmonton.
 
 ## API this app uses (from `shared/contract.md` v1)
 - Backend `http://localhost:8000` · this app runs on port **5173** · map starts at `[-113.4938, 53.5461]`, zoom `11`.
-- `GET /hazards`: FeatureCollection with `sim_time`; each feature has `kind` (`wildfire`|`flood`), `zone` (`core` = draw solid, roads closed · `buffer` = draw lighter, roads slowed), `source` (`sim`|`live`|`report`).
+- `GET /hazards`: FeatureCollection with `sim_time`; each feature has `kind` (`wildfire`|`tornado`), `zone` (`core` = draw solid, roads closed · `buffer` = draw lighter, roads slowed), `source` (`sim`|`live`|`report`).
 - `POST /hazards` `{ kind, lat, lon, radius_m }` on map click (201 → the new Feature). `DELETE /hazards` for Reset.
 - `GET /shelters`: Points with `name`, `capacity`, `occupancy`, `open` (shelter capacity tile = sum occupancy / sum capacity).
-- `GET /reports`: Points with `kind` (`fire`|`flooded_road`|`blocked_road`|`safe`|`sos`), `note`, `sim_time`. Feeds the Reports tab and map pins.
-- `GET /roads/closed` (Step 2, fixture until then): LineStrings with `name`, `status` (`closed` = solid red, `slowed` = dashed red), `reason`. Feeds "Roads closed" and the Updates feed.
-- Sim control (Step 2): `POST /sim/start` `{ scenario, lat, lon, wind_kmh, wind_from_deg, fuel_dryness }` (`fuel_dryness` 0–1, `wind_from_deg` compass degrees); flood: `{ scenario: "flood", river_rise_m_per_hr }`. `POST /sim/pause|resume|reset`, `POST /sim/speed { multiplier }`, `GET /sim/state` → `{ state: idle|running|paused, scenario, sim_time, speed }`. `POST /sim/wind { wind_kmh, wind_from_deg }` (contract v2, both required) changes wind mid-run; wind speed is the one condition that stays unlocked after start.
+- `GET /reports`: Points with `kind` (`fire`|`blocked_road`|`other`|`safe`|`sos`), `note`, `sim_time`. Feeds the Reports tab and map pins.
+- `GET /roads/closed`: LineStrings for roads already past the fire's close deadline, with `name`, `closed_at_sim_min` and `reason`, plus the full `count`. Feeds "Roads closed" and the map's red layer.
+- Sim control: `POST /sim/start` `{ scenario, lat, lon, wind_kmh, wind_from_deg, humidity_pct }` (`wind_from_deg` compass degrees; fuel dryness is the backend default); tornado (beta): `{ scenario: "tornado", lat, lon, wind_kmh, wind_from_deg, ef_rating }`. `POST /sim/pause|resume|reset`, `POST /sim/speed { multiplier }`, `GET /sim/state` → `{ state: idle|running|paused, scenario, sim_time, speed }`. `POST /sim/wind { wind_kmh, wind_from_deg }` (contract v2, both required) changes wind mid-run; wind speed is the one condition that stays unlocked after start.
 - `GET /forecast` (contract v2): `{ sim_time, horizon_min, wind_kmh, wind_from_deg, outlines }`, each outline a Polygon Feature with `t_min` (15, 30 … 120 minutes from now); `outlines: []` when idle. Polled with `/hazards`; the dashboard draws only the 60 min outline as the predicted path (one ring, so it doesn't read as a double border) (`FORECAST_MIN_SHOWN` in `src/history.js`), and all of them when the history slider is dragged past now.
 - Live updates: poll `/hazards` + `/reports` every 2 s; later WebSocket `ws://localhost:8000/ws` sends `{ type: tick|report|reset, changed: [hazards|roads|shelters|reports] }` → re-fetch only what's listed.
 - Errors come back as `{ error, message }`.
 
 **Not in the contract yet: ask Harsit to add these, build on your own fixture meanwhile:**
 - History snapshots for the slider (hazards/roads at a past `sim_time`). Until then the dashboard records `/hazards` at each poll itself (`src/history.js`), so the slider only covers time the dashboard was open for; closed roads and routes aren't rewound yet.
-- Priority residents list (fake generated data).
-- Send notification (`POST /notifications`) + sent history.
 - Report status (New / Verified / Dismissed) and updating it.
 - Stats: people at risk, active reroutes.
-- Relative humidity as a sim condition (e.g. `humidity_pct` 0–100 on `POST /sim/start`). The UI sends wind and humidity only; fuel dryness is left to the backend default. No temperature control.
-- A `tornado` scenario: `POST /sim/start { scenario: "tornado", lat, lon, wind_kmh, wind_from_deg }`, the storm travelling with the wind, and `kind: "tornado"` hazard features. The dashboard fixture fakes it meanwhile.
+
 ## Rules
 - Build exactly to `shared/contract.md`. Never edit it; ask Harsit (backend/lead) for changes.
-- Features that need endpoints not in the contract yet (history snapshots, priority residents, notifications, report status): ask Harsit to add them, and build against a fixture in `shared/fixtures/` meanwhile.
+- Features that need endpoints not in the contract yet (history snapshots, report status): ask Harsit to add them, and build against a fixture in `shared/fixtures/` meanwhile.
 - When `USE_FIXTURES` is true, load sample JSON from `shared/fixtures/` instead of calling the API.
 - GeoJSON coordinates are always `[lon, lat]`.
 - Updates: poll every 2 s for now; switch to the `/ws` WebSocket later (it signals "something changed", then re-fetch).
@@ -96,6 +93,6 @@ Map of Edmonton, fetch `/hazards` and `/shelters` every 2 s and draw them, click
 ## Team
 - Harsit: FastAPI backend, WebSocket, contract, merging PRs, pitch, live feed
 - Azer: routing (road graph, closures, A*, shelter choice)
-- Dviviz: wildfire model, then flood
+- Dviviz: wildfire model
 - TechShriyaz: dashboard + phone web app
 - Aarya: role TBD

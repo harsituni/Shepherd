@@ -1,4 +1,4 @@
-"""Candidate routes for routing v3, found with SciPy's compiled Dijkstra.
+"""Candidate routes, found with SciPy's compiled Dijkstra.
 
 Per request, from directed edge projections at the pin:
 
@@ -31,6 +31,7 @@ import numpy as np
 from backend.routing.road_graph import SPEED_KM_PER_MIN, TO_GRID, RoadGraph, shortest_paths, edge_path
 from backend.routing.access import ON_ROAD_M, JourneyGraph, road_start, snaps, designated_road_endpoints
 from backend.routing.safety import BUFFER_MIN, EPS_MIN, OK_MIN, EdgeFire, Judgement, RoutePath, judge, viable
+from backend.routing.traffic import engine as traffic_engine
 
 log = logging.getLogger(__name__)
 
@@ -167,22 +168,6 @@ def roomier_search(n: int, edge_u: np.ndarray, edge_v: np.ndarray, edge_time: np
     return shortest_paths(n, edge_u, edge_v, cost, start, usable)
 
 
-def path_nodes(pred: np.ndarray, start: int, target: int) -> Optional[list]:
-    """Node path from start to target out of a predecessor array, or None."""
-    if target == start:
-        return [start]
-    if pred[target] < 0:
-        return None
-    nodes = [target]
-    while nodes[-1] != start:
-        prev = int(pred[nodes[-1]])
-        if prev < 0 or len(nodes) > len(pred):
-            return None
-        nodes.append(prev)
-    nodes.reverse()
-    return nodes
-
-
 def overlap(rg: RoadGraph, a: Candidate, b: Candidate) -> float:
     """Shared road length / the shorter route's road length."""
     if hasattr(rg, "overlap"):
@@ -226,7 +211,6 @@ def build_candidates(rg: RoadGraph, edge_fire: Optional[EdgeFire], oracle, lat: 
             for s in shelters if s not in designated}
     # The nearest start that reaches any shelter (a one-way road may lead away).
     base, searched = rg, 0.
-    from backend.routing.traffic import engine as traffic_engine
     for origin in starts:
         road_ends = designated_road_endpoints(base, (lon, lat), designated, origin) if designated else {}
         rg = JourneyGraph(base, (lon, lat), shelters, origin, {**ends, **road_ends})
@@ -348,7 +332,7 @@ def build_candidates(rg: RoadGraph, edge_fire: Optional[EdgeFire], oracle, lat: 
 
     # Before asserting global blockage, search with unknown evidence relaxed.
     # A blocked shortest route does not rule out an indeterminate detour. Only
-    # known arrival constraints apply here; judge still enforces Phase 1 in full.
+    # known arrival constraints apply here; judge still enforces every forecast-validity rule.
     if not any(viable(c.judgement) for c in candidates):
         tick = time.perf_counter()
         known_deadline = np.full(rg.n_edges, np.inf)

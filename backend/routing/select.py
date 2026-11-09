@@ -1,4 +1,4 @@
-"""Picking and ordering the 2-4 options shown to the user (routing v3).
+"""Picking and ordering the 2-4 options shown to the user.
 
 Order: ok, tight, indeterminate, then blocked. Only complete ok/tight routes
 can be recommended. Among `ok` routes the quicker one wins: `ok`

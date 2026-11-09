@@ -1,18 +1,16 @@
-# GET /route v3: proposal for `contract.md`
+# GET /route v3
 
-Status: **proposal for team sign-off.** `contract.md` is unchanged; once agreed,
-Harsit merges this into its `/route` section. The API serves v3 by default;
-`SHEPHERD_ROUTING=v2` brings back the v2 router. Engine details:
-`backend/routing/ACCESS.md`, `FEASIBILITY.md`, `FORECAST_VALIDITY.md`.
+The `/route` response the API serves (the only router; `contract.md`'s `/route`
+section points here). How routes are built and judged: `backend/routing/README.md`.
 
-Sample answers, generated from the real engine (`python -m backend.routing.route_v3_fixtures`):
+Sample answers, generated from the real engine (`python -m backend.routing.tools.route_fixtures`):
 
 | File | Situation |
 | --- | --- |
-| `fixtures/route_v3_no_fire.json` | No fire running: 3 ok routes |
-| `fixtures/route_v3_mixed.json` | A fire cuts the usual road to one centre: it is shown `blocked` beside its `safest` detour |
-| `fixtures/route_v3_no_safe_route.json` | Standing inside the fire: every route `blocked`, `no_safe_route: true` |
-| `fixtures/route_v3_indeterminate.json` | Forecast does not cover the trips: every route `indeterminate`, nothing recommended |
+| `fixtures/route_no_fire.json` | No fire running: 3 ok routes |
+| `fixtures/route_mixed.json` | A fire cuts the usual road to one centre: it is shown `blocked` beside its `safest` detour |
+| `fixtures/route_no_safe_route.json` | Standing inside the fire: every route `blocked`, `no_safe_route: true` |
+| `fixtures/route_indeterminate.json` | Forecast does not cover the trips: every route `indeterminate`, nothing recommended |
 
 ## Request
 

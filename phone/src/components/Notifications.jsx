@@ -15,13 +15,13 @@ const timeOf = (n) => {
   return Number.isNaN(t) ? 0 : t
 }
 
-export function formatTime(value) {
+function formatTime(value) {
   const t = Date.parse(value)
   if (Number.isNaN(t)) return value ?? ''
   return new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-export const newestFirst = (list) => [...(list ?? [])].sort((a, b) => timeOf(b) - timeOf(a))
+const newestFirst = (list) => [...(list ?? [])].sort((a, b) => timeOf(b) - timeOf(a))
 
 // The one the persistent banner shows: most severe, then newest.
 export function mostSevere(list) {

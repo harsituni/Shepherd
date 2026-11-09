@@ -33,8 +33,7 @@ import Dialog from './components/Dialog.jsx'
 import ReportsList from './components/ReportsList.jsx'
 import NotifyForm from './components/NotifyForm.jsx'
 
-// Backend errors come back as { error, message } (contract). The raw message can be
-// misleading (a tornado start says "Flood deferred"), so known codes get plain text.
+// Backend errors come back as { error, message } (contract); known codes get plain text.
 function simErrorText(err) {
   if (err.code === 'unsupported_scenario') return "The backend can't simulate this hazard yet."
   return `The backend refused this: ${err.message}`
@@ -133,8 +132,8 @@ export default function App() {
         if (!startPoint) return
         const where = { lat: startPoint.lat, lon: startPoint.lng }
         // fuel_dryness is no longer sent; the backend uses its default (0.7 in the contract).
-        // `tornado` is not a contract v1 scenario yet; it reuses wind_kmh / wind_from_deg
-        // as the storm's travel speed and direction.
+        // Tornado (beta) reuses wind_kmh / wind_from_deg as the storm's travel speed
+        // and direction.
         const started = await startSim(
           hazardKind === 'tornado'
             ? {
