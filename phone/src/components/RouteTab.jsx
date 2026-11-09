@@ -78,6 +78,7 @@ export function RouteDetails({
   onEvacMode,
   onStartEvacuating,
   onStopEvacuating,
+  hazardActive = false,
 }) {
   const controls = (
     <EvacuateControls
@@ -87,6 +88,7 @@ export function RouteDetails({
       onMode={onEvacMode}
       onStart={onStartEvacuating}
       onStop={onStopEvacuating}
+      hazardActive={hazardActive}
     />
   )
 

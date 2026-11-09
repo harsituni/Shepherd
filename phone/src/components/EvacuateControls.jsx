@@ -8,7 +8,15 @@ export const MODES = [
   ['gps', 'Real GPS', "Moves your pin to where your phone is and follows it. Your browser will ask for permission."],
 ]
 
-export default function EvacuateControls({ route, trip, mode, onMode, onStart, onStop }) {
+export default function EvacuateControls({
+  route,
+  trip,
+  mode,
+  onMode,
+  onStart,
+  onStop,
+  hazardActive = false,
+}) {
   if (trip?.arrived) {
     return (
       <div className="trip-status" role="status">
@@ -53,7 +61,10 @@ export default function EvacuateControls({ route, trip, mode, onMode, onStart, o
     )
   }
 
-  const hint = MODES.find(([m]) => m === mode)?.[2]
+  const canStart = Boolean(route?.geometry) && hazardActive
+  const hint = !hazardActive
+    ? 'Start a wildfire on the dashboard before evacuating.'
+    : MODES.find(([m]) => m === mode)?.[2]
   return (
     <div className="evacuate-controls">
       <div className="segmented" role="radiogroup" aria-label="How to evacuate">
@@ -64,7 +75,7 @@ export default function EvacuateControls({ route, trip, mode, onMode, onStart, o
         ))}
       </div>
       <p className="muted">{hint}</p>
-      <button type="button" className="btn-primary" disabled={!route?.geometry} onClick={onStart}>
+      <button type="button" className="btn-primary" disabled={!canStart} onClick={onStart}>
         Start evacuating
       </button>
     </div>
