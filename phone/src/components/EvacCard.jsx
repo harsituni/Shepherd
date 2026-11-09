@@ -1,11 +1,14 @@
 import { hazardSentence } from '../geo.js'
-import { formatMinSec, useSimNow } from '../simClock.js'
+import { clockTime, useNow } from '../leaveBy.js'
+import { formatMinSec } from '../simClock.js'
 import { WarningIcon } from './icons.jsx'
 
 // The first thing on screen during a wildfire: "Wildfire evacuation" with the
-// leave-by countdown as the largest text. Leave-by comes from GET /route
-// (`leave_by_sim_min`), counted down on the sim clock, so it follows the
-// dashboard's 1× / 4× / 16× speed and stops when the sim is paused.
+// leave-by countdown as the largest text. The backend sets leave-by 30 min before
+// the evacuation zone reaches you (or earlier, if a road on your route would burn
+// first); `deadline` is that time on this phone's clock (src/leaveBy.js), so the
+// countdown runs in real time whatever the simulation's speed, and never pauses.
+// Not forecast to be reached within 4 h (`at_risk: false`): no need to leave.
 // Already evacuating: "Leave now" no longer applies, so don't repeat it.
 const onTheWay = (near) =>
   near?.inside
@@ -14,10 +17,9 @@ const onTheWay = (near) =>
       : "You're in the fire zone. Keep going."
     : hazardSentence(near)
 
-export default function EvacCard({ location, route, routeError, near, clock, trip }) {
-  const simNow = useSimNow(clock)
+export default function EvacCard({ location, route, routeError, near, deadline, trip }) {
+  const now = useNow(deadline != null)
   const leaveBy = route?.leave_by_sim_min
-  const paused = clock?.state === 'paused'
   const where = route?.shelter_name ? `${route.shelter_name}, ${route.eta_min} min drive` : null
   const ef = near?.feature?.properties?.ef_label
   const kindWord = near?.kind === 'tornado' ? (ef ? `${ef} tornado` : 'Tornado') : 'Wildfire'
@@ -57,6 +59,16 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
     spoken = trip.notice
       ? `Rerouted. Evacuating to ${trip.route.shelter_name}.`
       : `Evacuating to ${trip.route.shelter_name}.`
+  } else if (route?.at_risk === false) {
+    const hazard = near?.kind === 'tornado' ? 'tornado' : 'fire'
+    big = 'No need to leave'
+    lines = [
+      "You're outside the evacuation zone.",
+      `The ${hazard} isn't forecast to reach you in the next 4 hours.`,
+      where && `If you go: ${where}`,
+      route.recommendation_note,
+    ]
+    spoken = `${kindWord}. ${big}. ${lines[0]}`
   } else if (routeError === 'no_route' || route?.no_safe_route === true) {
     big = 'No safe route'
     lines = ['Stay where you are if it is safe and call 911.']
@@ -91,15 +103,18 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
     lines = [where, hazardSentence(near)]
     spoken = `${kindWord}. Evacuate. ${big}.`
   } else {
-    const left = simNow == null ? leaveBy - (route.sim_time ?? leaveBy) : leaveBy - simNow
+    // Real minutes left on this phone's clock (before the first deadline lands, the
+    // backend's own gap).
+    const atMs = deadline?.atMs ?? now + (leaveBy - (route.sim_time ?? leaveBy)) * 60_000
+    const left = (atMs - now) / 60_000
     if (left <= 0) {
       big = 'Leave now'
-      lines = [`Your leave-by time, T+${leaveBy}, has passed.`, where]
+      lines = [`Your leave-by time, ${clockTime(atMs)}, has passed.`, where]
       spoken = `${kindWord}. Your leave-by time has passed. Leave now.`
     } else {
       label = 'Leave within'
       big = formatMinSec(left)
-      lines = [`Leave by T+${leaveBy}${paused ? ' · simulation paused' : ''}`, where, hazardSentence(near)]
+      lines = [`Leave by ${clockTime(atMs)}`, where, hazardSentence(near)]
       const mins = Math.ceil(left)
       spoken = `${kindWord}. Evacuate. Leave within ${mins} ${mins === 1 ? 'minute' : 'minutes'}.`
     }

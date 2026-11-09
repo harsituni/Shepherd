@@ -223,6 +223,7 @@ class TornadoSim:
                 x0=self._oracle.x0, y0=self._oracle.y0, cell_m=self._oracle.cell_m,
                 nrows=self._oracle.nrows, ncols=self._oracle.ncols,
                 arrival=self._oracle.arrival, in_domain=self._oracle.in_domain,
+                outlines=self._oracle.outlines,
             )
 
     def _storm_speed_kmh(self) -> float:
@@ -343,13 +344,16 @@ class TornadoSim:
             samples.append((lon, lat, self._damage_half_width(end)))
         return samples
 
+    def _core_ring(self, t_min: float) -> list[list[float]]:
+        """The funnel on the ground at t_min: an ellipse along the track."""
+        lon, lat = self._centre_at(t_min)
+        core_r = self._core_radius(t_min)
+        return _ellipse_ring(lon, lat, core_r * 1.25, core_r * 0.85, self._heading())
+
     def features(self) -> list[dict]:
         now = float(self.minutes)
         lon, lat = self._centre_at(now)
         core_r = self._core_radius(now)
-        heading = self._heading()
-        along = core_r * 1.25
-        across = core_r * 0.85
         stats = self.stats(now)
         features = []
         if now > 1.0:
@@ -385,7 +389,7 @@ class TornadoSim:
             },
             "geometry": {
                 "type": "Polygon",
-                "coordinates": [_ellipse_ring(lon, lat, along, across, heading)],
+                "coordinates": [self._core_ring(now)],
             },
         })
         return features
@@ -484,11 +488,14 @@ class TornadoSim:
 
         arrival.flags.writeable = False
         in_domain.flags.writeable = False
+        # The core outline at every minute: what the map draws as the funnel.
+        outlines = np.array([self._core_ring(float(m)) for m in range(int(covers) + 1)])
+        outlines.flags.writeable = False
         self._oracle = ForecastOracle(
             version=self._version, run_id=f"tornado-{self._version}", band="p50",
             sim_time=self.minutes, covers_until_sim_min=covers,
             wind_kmh=self.wind_kmh, wind_from_deg=self.wind_from_deg,
             x0=float(x0), y0=float(y0), cell_m=float(CELL_M),
             nrows=int(nrows), ncols=int(ncols),
-            arrival=arrival, in_domain=in_domain,
+            arrival=arrival, in_domain=in_domain, outlines=outlines,
         )
