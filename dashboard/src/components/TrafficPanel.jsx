@@ -9,15 +9,36 @@ function Metric({ label, value }) {
   )
 }
 
+/** Guard against a spilled BPR ETA (e.g. "297244928 → 15 min"). */
+function formatCompareLabel(compare) {
+  const without = Number(compare?.without_min)
+  const withMin = Number(compare?.with_min)
+  if (Number.isFinite(without) && Number.isFinite(withMin) && without < 100_000 && withMin < 100_000) {
+    return compare.label || `Clearance time ${Math.round(without)} → ${Math.round(withMin)} min`
+  }
+  if (Number.isFinite(withMin) && withMin < 100_000) {
+    return `Clearance time ${Math.round(withMin)} min with anti-gridlock`
+  }
+  return compare?.label && !/\d{6,}/.test(compare.label) ? compare.label : null
+}
+
 // Left-panel traffic controls (contract v2.1): on/off, crowd size, anti-gridlock,
 // metrics, and Compare (naive pile-up vs spread-out clearance).
-export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onCompare }) {
+export default function TrafficPanel({
+  traffic,
+  canSimulate,
+  busy,
+  onConfig,
+  onCompare,
+  evacDemand = null,
+}) {
   const enabled = !!traffic?.enabled
   const anti = traffic?.anti_gridlock !== false
-  const count = traffic?.simulated_count ?? 2000
+  const count = traffic?.simulated_count ?? evacDemand?.cars ?? 10000
   const [slider, setSlider] = useState(count)
   const metrics = traffic?.metrics ?? {}
   const compare = traffic?.compare
+  const weight = traffic?.projection_weight
 
   useEffect(() => {
     setSlider(count)
@@ -29,9 +50,14 @@ export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onC
         Traffic
       </h2>
       <p className="hint">
-        Thousands of cars + judge phones jam roads. Anti-gridlock spreads them and
-        phones get mid-trip reroutes.
+        Crowd size is estimated from the hazard pin + Edmonton day/time (zone density).
+        You can still override with the slider (up to 100k, projected onto the network).
       </p>
+      {evacDemand?.label && (
+        <p className="traffic-demand num" role="status">
+          {evacDemand.label}
+        </p>
+      )}
 
       <label className="toggle-row">
         <span>Simulate traffic</span>
@@ -50,14 +76,19 @@ export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onC
         <input
           type="range"
           min="0"
-          max="5000"
-          step="100"
+          max="100000"
+          step="1000"
           value={slider}
           disabled={!canSimulate || busy}
           onChange={(e) => setSlider(+e.target.value)}
           onMouseUp={() => onConfig({ simulated_count: slider, enabled: true })}
           onTouchEnd={() => onConfig({ simulated_count: slider, enabled: true })}
         />
+        {enabled && weight > 1 && (
+          <span className="hint">
+            Projected · each sim agent ≈ {Number(weight).toLocaleString()} cars
+          </span>
+        )}
       </label>
 
       <label className="toggle-row">
@@ -84,13 +115,17 @@ export default function TrafficPanel({ traffic, canSimulate, busy, onConfig, onC
         <Metric label="Cars on roads" value={metrics.agents_active ?? traffic?.active_count} />
         <Metric
           label="Peak load"
-          value={metrics.max_vc != null ? `${Math.round(metrics.max_vc * 100)}%` : null}
+          value={
+            metrics.max_vc != null
+              ? `${Math.min(500, Math.round(metrics.max_vc * 100))}%`
+              : null
+          }
         />
       </div>
 
       {compare?.label && (
         <p className="traffic-compare-label num" role="status">
-          {compare.label}
+          {formatCompareLabel(compare)}
         </p>
       )}
 

@@ -7,6 +7,7 @@ import numpy as np
 from backend.routing.traffic import (
     BPR_ALPHA,
     BPR_BETA,
+    BPR_VC_CAP,
     SWITCH_SAVE_MIN,
     TrafficEngine,
     bpr_factor,
@@ -31,6 +32,13 @@ class BprTests(unittest.TestCase):
         bad = float(bpr_factor(np.array([20.0]), np.array([10.0]))[0])
         self.assertGreater(bad, mild * 2)
 
+    def test_extreme_volume_is_capped(self):
+        # Without a v/c cap, (2000/10)^4 blows up compare labels into 1e8 minutes.
+        huge = float(bpr_factor(np.array([2000.0]), np.array([10.0]))[0])
+        at_cap = 1.0 + BPR_ALPHA * (BPR_VC_CAP ** BPR_BETA)
+        self.assertAlmostEqual(huge, at_cap)
+        self.assertLess(huge, 50.0)
+
 
 class TrafficEngineTests(unittest.TestCase):
     def test_configure_toggle(self):
@@ -41,6 +49,11 @@ class TrafficEngineTests(unittest.TestCase):
         self.assertEqual(st["simulated_count"], 10)
         st = eng.configure(enabled=False)
         self.assertFalse(st["enabled"])
+
+    def test_projected_count_clamps_high(self):
+        eng = TrafficEngine()
+        st = eng.configure(enabled=False, simulated_count=250_000)
+        self.assertEqual(st["simulated_count"], 100_000)
 
     def test_compare_needs_router(self):
         eng = TrafficEngine()

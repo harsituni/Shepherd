@@ -149,6 +149,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .traffic-metric-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
 .traffic-metrics strong { font-weight: 650; color: var(--text); }
 .traffic-compare-btn { min-height: 44px; width: 100%; }
+.traffic-demand {
+  margin: 0 0 10px; padding: 8px 10px; border-radius: 6px;
+  background: color-mix(in srgb, var(--blue) 8%, var(--surface));
+  color: var(--text); font-size: var(--fs-sm); line-height: 1.35;
+}
 .traffic-compare-label, .traffic-side-compare {
   margin: 0; padding: 10px 12px; border-radius: 8px; font-weight: 650;
   background: color-mix(in srgb, #6B8F71 18%, var(--surface));
@@ -309,12 +314,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Orange edge, dark red centre: solid colours, no gradient. */
 .swatch-hazard { width: 12px; height: 12px; border-radius: 3px; background: var(--hazard-high); border: 3px solid var(--hazard); }
 .swatch-predicted { width: 12px; height: 12px; border-radius: 3px; border: 2px dotted var(--predicted); }
-.swatch-traffic-free { width: 14px; height: 3px; background: #6B8F71; }
-.swatch-traffic-busy { width: 14px; height: 3px; background: #E6A817; }
-.swatch-traffic-jammed { width: 14px; height: 3px; background: #D9480F; }
-.swatch-traffic-gridlock { width: 14px; height: 3px; background: #8B1A1A; }
-.swatch-closed { width: 14px; height: 3px; background: var(--closed); }
-.swatch-route { width: 14px; height: 3px; background: var(--blue); }
+.swatch-traffic-busy { width: 14px; height: 3px; border-radius: 2px; background: #E39B2E; }
+.swatch-traffic-jammed { width: 14px; height: 3px; border-radius: 2px; background: #D9480F; }
+.swatch-traffic-gridlock { width: 14px; height: 3px; border-radius: 2px; background: #B83210; }
+.swatch-closed {
+  width: 14px; height: 3px; border-radius: 2px;
+  background: repeating-linear-gradient(90deg, var(--closed) 0 4px, transparent 4px 7px);
+}
+.swatch-route { width: 14px; height: 3px; border-radius: 2px; background: var(--blue); }
 .swatch-shelter { width: 12px; height: 12px; border-radius: 3px; background: var(--navy); }
 .swatch-evacuee { width: 12px; height: 12px; border-radius: 50%; background: var(--blue); border: 2px solid #fff; outline: 1px solid var(--border); }
 .swatch-shelter-unsafe { width: 12px; height: 12px; border-radius: 3px; background: var(--closed); }

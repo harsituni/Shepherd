@@ -20,6 +20,7 @@ from backend.routing.router import (
     NoRouteError, check_route, find_routes, find_routes_v3, fire_closed_road_features,
     graph_bbox, load_graph, prepare_forecast,
 )
+from backend.routing.evac_demand import project_evac_demand
 from backend.routing.traffic import engine as traffic_engine
 from backend.sim.controller import SimController
 
@@ -518,6 +519,20 @@ def get_closed_roads() -> dict:
     return fire_closed_road_features(controller.oracle(), controller.sim_time)
 
 
+@app.get("/traffic/projection")
+def get_traffic_projection(
+    lat: float = Query(...),
+    lon: float = Query(...),
+    scenario: str = Query("wildfire"),
+    wind_kmh: float = Query(20.0),
+    when: Optional[str] = Query(None),
+) -> dict:
+    """Estimate evacuating people/cars from pin location + local day/time."""
+    return project_evac_demand(
+        lat, lon, scenario=scenario, wind_kmh=wind_kmh, when=when,
+    )
+
+
 @app.get("/traffic")
 def get_traffic() -> dict:
     """Congested roads + metrics. Additive — not in contract v2."""
@@ -668,13 +683,23 @@ def post_sim_start(body: SimStart) -> dict:
         state = controller.start(body.model_dump())
     except ValueError:
         return _unsupported_flood()
-    # Crowd the simulated cars around the ignition / touchdown point (async assign).
+    # Crowd size from location + current Edmonton day/time (projected cars).
     traffic_engine.set_cluster(body.lat, body.lon)
-    if traffic_engine.enabled:
-        traffic_engine.configure(enabled=True)
+    demand = project_evac_demand(
+        body.lat,
+        body.lon,
+        scenario=body.scenario,
+        wind_kmh=float(body.wind_kmh or 20.0),
+    )
+    traffic_engine.configure(
+        enabled=True,
+        anti_gridlock=True,
+        simulated_count=int(demand["cars"]),
+    )
     _prepare_routing()
     state = controller.status()
     state["traffic"] = traffic_engine.status()
+    state["evac_demand"] = demand
     return state
 
 

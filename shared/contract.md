@@ -313,7 +313,7 @@ Returns `/sim/state` shape (below), after forecast rebuild has been kicked off (
   "traffic": {
     "enabled": false,
     "anti_gridlock": true,
-    "simulated_count": 2000,
+    "simulated_count": 10000,
     "real_count": 0,
     "active_count": 0,
     "metrics": {
@@ -365,6 +365,7 @@ new route saves **≥ 3 minutes** (with a cooldown so routes do not flip-flop).
 |---|---|---|
 | `GET /traffic` | none | state + `edges` FeatureCollection (map colouring) |
 | `GET /traffic/state` | none | compact state (no geometries) |
+| `GET /traffic/projection?lat=&lon=&scenario=&wind_kmh=&when=` | none | people/cars estimate for the pin |
 | `POST /traffic/config` | config body below | state |
 | `POST /traffic/compare` | none | compare payload + state |
 | `POST /traffic/rebalance` | none | state (force reassignment) |
@@ -372,25 +373,41 @@ new route saves **≥ 3 minutes** (with a cooldown so routes do not flip-flop).
 
 #### POST /traffic/config
 ```json
-{ "enabled": true, "anti_gridlock": true, "simulated_count": 2000 }
+{ "enabled": true, "anti_gridlock": true, "simulated_count": 10000 }
 ```
-All fields optional; omitted keys stay unchanged. `simulated_count` is clamped to `0…5000`.
+All fields optional; omitted keys stay unchanged. `simulated_count` is clamped to `0…100000`. Large counts are a **projection**: the engine keeps a few thousand route agents and scales each one's road load so the map/metrics read as N cars without freezing the API.
+
+#### GET /traffic/projection
+Estimates evacuating **people** and **cars** from the hazard pin using Edmonton zone densities × footprint × local day/time occupancy (`America/Edmonton`). `when` is optional ISO-8601 (defaults to now). `POST /sim/start` uses this to set `simulated_count` automatically.
+```json
+{
+  "ok": true,
+  "people": 28400,
+  "cars": 12070,
+  "area_label": "Jasper Place / west end",
+  "daypart": "weekday midday",
+  "radius_km": 2.7,
+  "density_per_km2": 2800,
+  "label": "~28,400 people / 12,070 cars · Jasper Place / west end · weekday midday",
+  "method": "edmonton_zone_density_v1"
+}
+```
 
 #### GET /traffic (and `/traffic/state`)
 ```json
 {
   "enabled": true,
   "anti_gridlock": true,
-  "simulated_count": 2000,
+  "simulated_count": 10000,
   "real_count": 3,
-  "active_count": 2003,
+  "active_count": 10003,
   "sim_time": 30,
   "metrics": {
     "clearance_min": 41.0,
     "avg_eta_min": 18.2,
     "max_vc": 1.6,
     "jammed_edges": 24,
-    "agents_active": 2003,
+    "agents_active": 10003,
     "agents_arrived": 0,
     "reroutes": 12
   },

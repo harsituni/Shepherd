@@ -341,12 +341,35 @@ export async function setSimSpeed(multiplier) {
 
 // ---------- traffic (contract v2.1) ----------
 
+// People/cars to evacuate from a pin + local day/time (edmonton zone model).
+export async function getEvacProjection({ lat, lon, scenario = 'wildfire', windKmh = 20, when }) {
+  if (USE_FIXTURES) {
+    return {
+      ok: true,
+      people: 12000,
+      cars: 8000,
+      area_label: 'Edmonton suburbs',
+      daypart: 'weekday midday',
+      label: '~12,000 people / 8,000 cars · Edmonton suburbs · weekday midday',
+      method: 'fixture',
+    }
+  }
+  const q = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lon),
+    scenario,
+    wind_kmh: String(windKmh),
+  })
+  if (when) q.set('when', when)
+  return request(`/traffic/projection?${q}`)
+}
+
 export async function getTraffic() {
   if (!USE_FIXTURES) return request('/traffic')
   return {
     enabled: false,
     anti_gridlock: true,
-    simulated_count: 2000,
+    simulated_count: 10000,
     real_count: 0,
     active_count: 0,
     metrics: {},

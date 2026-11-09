@@ -1,0 +1,66 @@
+\documentclass[9pt]{extarticle}
+\usepackage[margin=0.38in]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{xcolor}
+\setlist{nosep,leftmargin=1.1em,topsep=1pt,partopsep=0pt}
+\pagestyle{empty}
+\setlength{\parskip}{3pt}
+\begin{document}
+
+{\LARGE\bfseries Shepherd --- 1-Page Judge Card\par}
+\vspace{2pt}
+
+{\bfseries Pitch:} Shepherd is a live evacuation system for Edmonton that routes people to safe shelters on real roads as a wildfire or tornado spreads with the wind --- and keeps re-routing them when roads jam or become unsafe.
+
+{\bfseries Vision:} Static ``leave west'' fails when fire, wind, and traffic change. Commanders get a live map; residents get a phone route that updates mid-trip --- hazard grows with wind, roads close early, demand is estimated, phones reroute away from fire and gridlock.
+
+\noindent
+\begin{minipage}[t]{0.48\textwidth}
+{\bfseries\large Tools \& why}\\[2pt]
+\begin{tabular}{@{}ll@{}}
+\textbf{FastAPI} & JSON API; in-memory (no DB/auth) \\
+\textbf{React + Vite} & Dashboard :5173 + phone :5174 \\
+\textbf{MapLibre + OSM} & Free maps; GeoJSON [lon, lat] \\
+\textbf{OSMnx / NetworkX} & Real Edmonton drive graph \\
+\textbf{SciPy / NumPy / Shapely} & Dijkstra, BPR, fire geometry \\
+\textbf{OpenWeather + wind sim} & Spread + forecast outlines \\
+\textbf{Cloudflare (\texttt{./demo.sh})} & QR join for judges \\
+\end{tabular}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.50\textwidth}
+{\bfseries\large How it works}\\[2pt]
+\begin{enumerate}
+\item \textbf{Hazard:} wildfire/tornado + wind; sim \texttt{T+N}; forecast (T+60).
+\item \textbf{Road rule:} close at \textbf{\texttt{arrival\_min $-$ 30}}. Routes: \textbf{ok} (60+~min) / \textbf{tight} / \textbf{blocked}.
+\item \textbf{Phone:} snap to OSM $\to$ open shelter $\to$ poll $\sim$2s $\to$ \texttt{shouldReroute} mid-trip.
+\item \textbf{Traffic:} BPR delay; anti-gridlock. Up to \textbf{100k cars} via projection ($\sim$2.5k agents $\times$ weight). Demand = pin + zone density + day/time.
+\item \textbf{Commander:} closed roads, traffic ribbons, live blue phone routes, cut-off banner.
+\end{enumerate}
+\end{minipage}
+
+\vspace{3pt}
+{\bfseries Demo:} 1$\times$ wildfire $\to$ pin near phone $\to$ Play $\to$ fire/closes/reroute toast $\to$ cut-off banner. Reset clears traffic. Edmonton $\approx$ $-$113.5, 53.5.
+
+\vspace{2pt}
+{\bfseries\large Curveballs}\\[2pt]
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\textwidth}{@{}>{\bfseries\raggedright\arraybackslash}p{0.27\textwidth}X@{}}
+Production / life-safety? & Prototype, not certified. Clear margin + real OSM; needs agency validation, auth, persistence. \\
+Where do 100k cars come from? & Zone density $\times$ footprint $\times$ daypart $\to$ people $\to$ cars; projected onto fewer agents for realtime. \\
+Why not Google/Waze? & Hazard-timed closures, shelter safety, commander + public state in one loop. \\
+Why partial colouring? & Only actionable layers: fire, closed, jam, active routes. \\
+Flood / other? & Flood deferred; same architecture extends. \\
+Fire model accuracy? & Wind-driven demo/forecast, not firefighting product; routing uses \texttt{arrival\_min}. \\
+Privacy? & No auth; temporary pins; priority = type + last 4. \\
+What's novel? & Wind hazard $\to$ timed closures $\to$ live phone reroute $\to$ commander cut-offs on real Edmonton OSM. \\
+Next? & Census demand, websockets, agency roles, live shelter intake. \\
+\end{tabularx}
+
+\vspace{4pt}
+\textit{If you freeze:} restate pitch $\to$ point fire / closed roads / blue route $\to$ one reroute $\to$ ``happy to go deeper on routing, traffic, or demand.''
+
+\end{document}
