@@ -159,7 +159,6 @@ function fakeRoute(lat, lon) {
     best_route_id: best?.id ?? null,
     no_safe_route: !best,
     leave_by_sim_min: leaveBy,
-    leave_by_label: leaveBy == null ? null : `Leave within ${best.margin_min} min (sim)`,
     options,
     excluded: [],
   }
