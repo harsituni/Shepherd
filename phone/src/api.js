@@ -210,9 +210,16 @@ export function withChoice(route, routeId) {
 // ---------- public API ----------
 
 // checkRouteId: the id of the route the person picked, so it stays in the answer.
-export async function getRoute(lat, lon, checkRouteId = null) {
-  const check = checkRouteId ? `&check_route_id=${encodeURIComponent(checkRouteId)}` : ''
-  if (!USE_FIXTURES) return normalizeRoute(await request(`/route?lat=${lat}&lon=${lon}${check}`))
+// refLngLat ([lon, lat]): trip start for "don't drive toward the fire" — mid-trip
+// polls path from the current pin but keep judging shelters against the original start.
+export async function getRoute(lat, lon, checkRouteId = null, refLngLat = null) {
+  const q = new URLSearchParams({ lat: String(lat), lon: String(lon) })
+  if (checkRouteId) q.set('check_route_id', checkRouteId)
+  if (refLngLat && refLngLat.length >= 2) {
+    q.set('ref_lon', String(refLngLat[0]))
+    q.set('ref_lat', String(refLngLat[1]))
+  }
+  if (!USE_FIXTURES) return normalizeRoute(await request(`/route?${q}`))
   return normalizeRoute(fakeRoute(lat, lon))
 }
 

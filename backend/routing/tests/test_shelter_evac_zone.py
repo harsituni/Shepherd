@@ -2,7 +2,12 @@
 
 import unittest
 
-from backend.routing.evac_zone import danger_rings, mark_unsafe_shelters, unsafe_shelter_ids
+from backend.routing.evac_zone import (
+    danger_rings,
+    mark_unsafe_shelters,
+    shelters_closer_to_fire_than_start,
+    unsafe_shelter_ids,
+)
 from backend.routing.safety import SHELTER_EVAC_M, RoutePath, judge
 from backend.routing.tests.helpers import Forecast, grid_around, ll
 from backend.routing.road_graph import TO_GRID
@@ -77,6 +82,66 @@ class ShelterEvacZoneTests(unittest.TestCase):
         self.assertEqual(marked["status"], "blocked")
         self.assertIsNone(marked["leave_by_sim_min"])
         self.assertIn("evacuation zone", marked["reason"])
+
+    def test_shelter_closer_to_fire_than_start_is_rejected(self):
+        # Fire west of Kinsmen; pin is farther west. Driving to Kinsmen is toward the fire.
+        kinsmen = {
+            "type": "Feature", "id": "sh_kinsmen",
+            "properties": {"name": "Kinsmen Sports Centre"},
+            "geometry": {"type": "Point", "coordinates": [-113.516, 53.519]},
+        }
+        far = {
+            "type": "Feature", "id": "sh_terwillegar",
+            "properties": {"name": "Terwillegar Rec Centre"},
+            "geometry": {"type": "Point", "coordinates": [-113.595, 53.440]},
+        }
+        fire = {
+            "type": "Feature", "id": "hz_1",
+            "properties": {"kind": "wildfire", "zone": "core", "source": "sim"},
+            "geometry": {"type": "Polygon", "coordinates": [[
+                [-113.55, 53.515], [-113.54, 53.515], [-113.54, 53.525],
+                [-113.55, 53.525], [-113.55, 53.515],
+            ]]},
+        }
+        hazards = {"type": "FeatureCollection", "features": [fire]}
+        # Start west of the fire (~-113.58). Kinsmen (~-113.52) is closer to the fire.
+        closer = shelters_closer_to_fire_than_start(53.52, -113.58, [kinsmen, far], hazards)
+        self.assertIn("sh_kinsmen", closer)
+        self.assertNotIn("sh_terwillegar", closer)
+
+    def test_mid_trip_pin_nearer_fire_still_uses_original_start(self):
+        # Same layout as above. Mid-trip the pin is almost on top of the fire, so
+        # Kinsmen is no longer "closer than here" — but against the original start
+        # it still must stay rejected (the phone passes ref_lat/ref_lon for this).
+        kinsmen = {
+            "type": "Feature", "id": "sh_kinsmen",
+            "properties": {"name": "Kinsmen Sports Centre"},
+            "geometry": {"type": "Point", "coordinates": [-113.516, 53.519]},
+        }
+        far = {
+            "type": "Feature", "id": "sh_terwillegar",
+            "properties": {"name": "Terwillegar Rec Centre"},
+            "geometry": {"type": "Point", "coordinates": [-113.595, 53.440]},
+        }
+        fire = {
+            "type": "Feature", "id": "hz_1",
+            "properties": {"kind": "wildfire", "zone": "core", "source": "sim"},
+            "geometry": {"type": "Polygon", "coordinates": [[
+                [-113.55, 53.515], [-113.54, 53.515], [-113.54, 53.525],
+                [-113.55, 53.525], [-113.55, 53.515],
+            ]]},
+        }
+        hazards = {"type": "FeatureCollection", "features": [fire]}
+        start_lat, start_lon = 53.52, -113.58
+        mid_lat, mid_lon = 53.52, -113.546  # near the fire centroid
+        from_here = shelters_closer_to_fire_than_start(
+            mid_lat, mid_lon, [kinsmen, far], hazards,
+        )
+        from_start = shelters_closer_to_fire_than_start(
+            start_lat, start_lon, [kinsmen, far], hazards,
+        )
+        self.assertNotIn("sh_kinsmen", from_here)
+        self.assertIn("sh_kinsmen", from_start)
 
 
 if __name__ == "__main__":

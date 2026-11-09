@@ -379,6 +379,8 @@ def get_route(
     lon: float = Query(...),
     check_route_id: Optional[str] = Query(None),
     debug: bool = Query(False),
+    ref_lat: Optional[float] = Query(None),
+    ref_lon: Optional[float] = Query(None),
 ) -> dict:
     """2-4 fire-checked road routes from the pin to open shelters."""
     try:
@@ -393,6 +395,8 @@ def get_route(
             debug=debug,
             hazards={"type": "FeatureCollection", "features": controller.features()},
             forecast_outlines=forecast.get("outlines") or [],
+            ref_lat=ref_lat,
+            ref_lon=ref_lon,
         )
     except NoRouteError as exc:
         return JSONResponse(

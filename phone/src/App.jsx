@@ -218,7 +218,11 @@ export default function App() {
         // even after it turns unsafe (needed to decide a mid-trip reroute).
         const drivingId =
           tripRef.current?.route?.route_id ?? tripRef.current?.route?.id ?? chosenRef.current
-        let r = await getRoute(loc[1], loc[0], drivingId)
+        // While evacuating, keep judging "closer to the fire" against the trip
+        // start — not the moving pin — so mid-trip reroutes can't send you toward it.
+        const fireRef =
+          evacuatingRef.current && tripRef.current?.start ? tripRef.current.start : null
+        let r = await getRoute(loc[1], loc[0], drivingId, fireRef)
         if (stale()) return
         // Same yellow-zone rule as the map markers: never leave a painted-unsafe
         // centre as Clear / Recommended if /route is briefly still optimistic.
@@ -266,6 +270,7 @@ export default function App() {
             const onHint =
               (chosenRef.current ?? tripRef.current?.route?.route_id) === hint.route_id
             if (driving && !onHint) {
+              const currentShelter = tripRef.current?.route?.shelter_id
               const pick =
                 r?.options?.find((o) => o.id === hint.route_id) ||
                 r?.options?.find(
@@ -273,7 +278,12 @@ export default function App() {
                     o.shelter_id === hint.shelter_id &&
                     (o.status === 'ok' || o.status === 'tight'),
                 )
-              if (pick?.geometry) {
+              // Traffic may only swap paths to the same shelter. Switching
+              // destinations mid-trip is handled by shouldReroute when the
+              // current one is actually unsafe.
+              const sameShelter =
+                !currentShelter || !pick?.shelter_id || pick.shelter_id === currentShelter
+              if (pick?.geometry && sameShelter) {
                 const reason =
                   hint.message ||
                   `Traffic: faster route saves ${Math.round(hint.saves_min)} min`
@@ -498,8 +508,9 @@ export default function App() {
     [showToast, setLocationAndRoute],
   )
 
-  // On launch, start from the phone's real location (Real GPS selected). If location
-  // is unavailable or denied, stay quiet: the user can tap the map instead.
+  // On launch, seed the pin from the phone's real location but keep Simulated drive
+  // selected — they can tap the map (or a preset) to move, or switch to Real GPS.
+  // If location is unavailable or denied, stay quiet: they can tap the map instead.
   useEffect(() => {
     let cancelled = false
     setLocating(true)
@@ -507,8 +518,8 @@ export default function App() {
       if (!cancelled) setLocating(false)
       // Skip if the user already tapped the map while we waited.
       if (cancelled || !lngLat || locationRef.current) return
-      evacModeRef.current = 'gps'
-      setEvacMode('gps')
+      evacModeRef.current = 'sim'
+      setEvacMode('sim')
       setAutoLocation(lngLat) // keeps the route panel collapsed for this fix
       setLocationAndRoute(lngLat)
     })
@@ -519,8 +530,8 @@ export default function App() {
 
   // Tapping the map drops a pending pin and asks before moving the person there
   // (a stray tap while panning shouldn't reroute them). Tapping again moves the
-  // pending pin. A confirmed tap is a pretend location, so it switches to
-  // Simulated drive; picking Real GPS again jumps back to the phone's location.
+  // pending pin. A confirmed tap stays on Simulated drive; picking Real GPS jumps
+  // back to the phone's live location.
   const [pendingTap, setPendingTap] = useState(null) // [lon, lat] awaiting confirmation
   const tapMap = useCallback(
     (lngLat) => {
@@ -661,7 +672,7 @@ export default function App() {
         setChosen(id)
       }
       setFocusKey(Date.now()) // frame the route the dot will follow
-      startTrip(evacMode, shown)
+      startTrip(evacMode, shown, location)
     },
     onStopEvacuating: stopTrip,
   }

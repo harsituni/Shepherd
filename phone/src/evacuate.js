@@ -234,15 +234,24 @@ export function useEvacuation({ clock, onMove, onError }) {
     setTrip(null)
   }, [])
 
-  const beginDrive = useCallback((mode, route, notice = null) => {
+  const beginDrive = useCallback((mode, route, notice = null, startLngLat = null) => {
     const coords = routeCoords(route?.geometry)
     const turns = turnsAlong(route?.geometry)
     const totalKm = routeLengthKm(coords)
     announcedRef.current = new Set()
     pauseUntilRef.current = 0
     drivenMinRef.current = 0
+    // Keep the original trip start across mid-trip reroutes so /route can keep
+    // rejecting shelters that are closer to the fire than where we began.
+    const start =
+      startLngLat && startLngLat.length >= 2
+        ? [Number(startLngLat[0]), Number(startLngLat[1])]
+        : coords[0]
+          ? [coords[0][0], coords[0][1]]
+          : null
     return {
       mode,
+      start,
       route: {
         ...route,
         route_id: route.route_id ?? route.id,
@@ -262,13 +271,13 @@ export function useEvacuation({ clock, onMove, onError }) {
   }, [])
 
   const start = useCallback(
-    (mode, route) => {
+    (mode, route, startLngLat = null) => {
       if (mode === 'gps' && (!window.isSecureContext || !navigator.geolocation)) {
         errorRef.current?.(gpsError())
         return
       }
       if (!route?.geometry) return
-      setTrip(beginDrive(mode, route))
+      setTrip(beginDrive(mode, route, null, startLngLat))
     },
     [beginDrive],
   )
@@ -279,7 +288,7 @@ export function useEvacuation({ clock, onMove, onError }) {
       if (!route?.geometry) return
       setTrip((prev) => {
         if (!prev || prev.arrived) return prev
-        return beginDrive(prev.mode, route, reason)
+        return beginDrive(prev.mode, route, reason, prev.start)
       })
     },
     [beginDrive],
