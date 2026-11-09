@@ -129,7 +129,8 @@ class Forecast:
             minute = fn(lat, lon)
             self.arrival[flat] = np.inf if minute is None else float(minute)
 
-    def oracle(self, sim_time: int = 0, covers_until: float = 100_000.0, in_domain=None) -> ForecastOracle:
+    def oracle(self, sim_time: int = 0, covers_until: float = 100_000.0, in_domain=None,
+               outlines=None) -> ForecastOracle:
         arrival = self.arrival.copy()
         arrival.flags.writeable = False
         if in_domain is None:
@@ -139,4 +140,19 @@ class Forecast:
             covers_until_sim_min=covers_until, wind_kmh=20.0, wind_from_deg=270.0,
             x0=self.grid.x0, y0=self.grid.y0, cell_m=self.grid.cell_m,
             nrows=self.grid.nrows, ncols=self.grid.ncols, arrival=arrival, in_domain=in_domain,
+            outlines=outlines,
         )
+
+
+def circle_outlines(centre_ll, radius_m, minutes: int = 300, points: int = 32) -> np.ndarray:
+    """ForecastOracle.outlines for a round fire at centre_ll: radius_m(minute) metres."""
+    lon0, lat0 = centre_ll
+    m_lon = 111320.0 * math.cos(math.radians(lat0))
+    angles = 2 * np.pi * np.arange(points + 1) / points
+    rings = []
+    for m in range(minutes + 1):
+        r = radius_m(m) if callable(radius_m) else radius_m
+        rings.append(np.column_stack([lon0 + r * np.sin(angles) / m_lon, lat0 + r * np.cos(angles) / 111320.0]))
+    out = np.array(rings)
+    out.flags.writeable = False
+    return out

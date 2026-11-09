@@ -102,7 +102,6 @@ export function demoteUnsafeRoute(route, unsafeIds) {
   const usable = (o) => o.status === 'ok' || o.status === 'tight'
   const best = options.find((o) => usable(o) && o.id === route.best_route_id) ?? options.find(usable)
   const leaveBy = best?.leave_by_sim_min ?? null
-  const sim = route.sim_time ?? 0
   return {
     ...route,
     options,
@@ -110,7 +109,6 @@ export function demoteUnsafeRoute(route, unsafeIds) {
     route_status: best ? 'viable' : options.some((o) => o.status === 'indeterminate') ? 'indeterminate' : 'blocked',
     no_safe_route: best ? false : options.some((o) => o.status === 'indeterminate') ? null : true,
     leave_by_sim_min: leaveBy,
-    leave_by_label: leaveBy == null ? null : `Leave within ${Math.max(0, leaveBy - sim)} min (sim)`,
     ...(best
       ? {
           shelter_id: best.shelter_id,

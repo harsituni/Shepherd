@@ -21,9 +21,10 @@ from unittest.mock import patch
 import networkx as nx
 
 from backend.routing import router
-from backend.routing.tests.helpers import BEND, POINTS, Forecast, fake_graph, grid_around, shelter
+from backend.routing.tests.helpers import BEND, POINTS, Forecast, circle_outlines, fake_graph, grid_around, shelter
 
 PIN = (53.54, -113.50)
+EAST_FIRE = (-113.46, 53.54)  # 2.6 km east of PIN
 
 
 class FindRoutesTests(unittest.TestCase):
@@ -280,30 +281,27 @@ class FindRoutesTests(unittest.TestCase):
         self.assertTrue(later["rerouted"])
         self.assertEqual(self.option(later, "rt_sh_a_fastest")["status"], "blocked")
 
-    def test_clear_forecast_has_expiry_deadline_but_no_invented_fire(self):
+    def test_clear_forecast_has_no_deadline_and_no_invented_fire(self):
         from backend.routing.safety import COVERAGE_HORIZON_MIN, COVERAGE_SLACK_MIN
         for fc in (None, self.forecast()):  # no fire, and a fire that reaches none of these roads
             body = self.routes(fc)
             self.assertTrue(body["forecast_complete"])
-            if fc is None:
-                self.assertIsNone(body["leave_by_sim_min"])
-            else:
-                # Coverage leave-by is capped at now + COVERAGE_HORIZON_MIN so the
-                # engine's huge LOOKAHEAD horizon cannot inflate the deadline.
-                self.assertEqual(body["leave_by_sim_min"], COVERAGE_HORIZON_MIN - COVERAGE_SLACK_MIN - 1)
+            # The forecast window ending is not a reason to leave.
+            self.assertIsNone(body["leave_by_sim_min"])
             for option in body["options"]:
                 self.assertEqual(option["status"], "ok")
                 if fc is None:
                     self.assertIsNone(option["margin_min"])
                     self.assertIsNone(option["leave_by_sim_min"])
                 else:
-                    # trips are 0.6 and 3 minutes → floor(total_min) ceilings to 1 and 3 eta.
-                    deadline = {
+                    # The forecast window still bounds the margin (trips are 0.6 and
+                    # 3 minutes), but sets no leave-by.
+                    margin = {
                         "rt_sh_a_fastest": COVERAGE_HORIZON_MIN - COVERAGE_SLACK_MIN - 1,
                         "rt_sh_c_fastest": COVERAGE_HORIZON_MIN - COVERAGE_SLACK_MIN - 3,
                     }[option["id"]]
-                    self.assertEqual(option["leave_by_sim_min"], deadline)
-                    self.assertEqual(option["margin_min"], deadline)
+                    self.assertIsNone(option["leave_by_sim_min"])
+                    self.assertEqual(option["margin_min"], margin)
                 self.assertIsNone(option["clear_until_sim_min"])
                 self.assertIsNone(option["hazard_intercept"])
 
@@ -366,6 +364,46 @@ class FindRoutesTests(unittest.TestCase):
             best = next(o for o in body["options"] if o["id"] == body["best_route_id"])
             self.assertNotEqual(best["shelter_id"], "sh_a")
             self.assertIn(best["status"], ("ok", "tight"))
+
+
+    def zone_routes(self, radius_m):
+        fc = self.forecast()
+        oracle = fc.oracle(outlines=circle_outlines(EAST_FIRE, radius_m))
+        return router.find_routes(*PIN, oracle, self.shelters)
+
+    def test_out_of_reach_has_no_deadline(self):
+        body = self.zone_routes(200)  # the zone never gets near PIN
+        self.assertIs(body["at_risk"], False)
+        self.assertIsNone(body["zone_reach_sim_min"])
+        self.assertIsNone(body["leave_by_sim_min"])
+        self.assertIsNotNone(body["best_route_id"])
+        self.assertTrue(all(o["leave_by_sim_min"] is None for o in body["options"]))
+
+    def test_forecast_window_alone_sets_no_deadline(self):
+        # No fire on any route and no outlines: the forecast window running out
+        # (covers_until) must not turn into a leave-by.
+        body = router.find_routes(*PIN, self.forecast().oracle(covers_until=200), self.shelters)
+        self.assertIsNone(body["at_risk"])
+        best = self.option(body, body["best_route_id"])
+        self.assertIn(best["status"], ("ok", "tight"))
+        self.assertIsNone(best["leave_by_sim_min"])
+        self.assertIsNone(body["leave_by_sim_min"])
+
+    def test_leave_by_is_thirty_minutes_before_the_zone_reaches_you(self):
+        # Radius 200 + 20 m/min: the 1 km circle covers PIN (2.6 km away) near minute 73.
+        body = self.zone_routes(lambda m: 200 + 20 * m)
+        self.assertIs(body["at_risk"], True)
+        self.assertTrue(70 <= body["zone_reach_sim_min"] <= 76)
+        self.assertEqual(body["leave_by_sim_min"], body["zone_reach_sim_min"] - 30)
+        best = self.option(body, body["best_route_id"])
+        self.assertEqual(best["leave_by_sim_min"], body["leave_by_sim_min"])
+
+    def test_a_road_deadline_earlier_than_the_zone_wins(self):
+        fc = self.forecast()
+        fc.at_point(POINTS[1], 50)  # the start cell burns at 50: leave by 20 at the latest
+        oracle = fc.oracle(outlines=circle_outlines(EAST_FIRE, lambda m: 200 + 20 * m))
+        body = router.find_routes(*PIN, oracle, self.shelters)
+        self.assertLess(body["leave_by_sim_min"], body["zone_reach_sim_min"] - 30)
 
 
 if __name__ == "__main__":

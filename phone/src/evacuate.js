@@ -6,7 +6,7 @@ import { cueForProgress, routeCoords, turnsAlong } from './turns.js'
 // route (in-room demo) or follows the phone's real GPS (hallway / outdoor video).
 
 // The backend advances `speed` sim minutes every 2 real seconds, so the simulated
-// drive covers the route's ETA on the same clock as the leave-by countdown.
+// drive covers the route's ETA on the same clock as the fire.
 const TICK_MS = 2000
 const FRAME_MS = 250
 // Pause the simulated drive so a turn popup can be read (Google Maps-style cue).

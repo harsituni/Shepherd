@@ -119,7 +119,8 @@ def test_complete_approach_preserves_buffer_and_forecast_reserve():
         assert route(graph, fc, (1000, 0), (3000, 0))['route_status'] == 'indeterminate'
     with patch.object(fc, 'oracle', side_effect=lambda: Forecast.oracle(fc, covers_until=94)):
         o = route(graph, fc, (1000, 0), (3000, 0))['options'][0]
-        assert o['status'] == 'tight' and o['leave_by_sim_min'] == 0
+        # The reserve makes it tight; with no fire on it there is no deadline.
+        assert o['status'] == 'tight' and o['leave_by_sim_min'] is None
 
 
 def test_disconnected_crossing_cannot_be_used_as_a_junction():

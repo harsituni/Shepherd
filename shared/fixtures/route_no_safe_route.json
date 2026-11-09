@@ -13,6 +13,8 @@
   },
   "leave_by_sim_min": null,
   "leave_by_label": null,
+  "at_risk": true,
+  "zone_reach_sim_min": 60,
   "forecast": {
     "run_id": "live-1",
     "band": "p50",

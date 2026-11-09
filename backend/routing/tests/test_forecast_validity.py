@@ -116,14 +116,16 @@ def test_known_blockage_survives_unknown_and_expired_coverage(road):
     assert option["forecast_complete"] is False
 
 
-def test_expiry_limits_departure_even_with_finite_fire_constraint(road):
+def test_expiry_limits_margin_but_not_the_fire_deadline(road):
     fc, route = road
     fc.at_point(ll(0, 0), 100)
     body = route(fc.oracle(covers_until=100))
     option = body["options"][0]
     assert option["status"] == "tight"
-    # Four-minute journey + retained 90-minute reserve: last departure is T+6.
-    assert option["leave_by_sim_min"] == 6
+    # Four-minute journey + retained 90-minute reserve: confirmable until T+6, so
+    # the margin is 6. Leave-by is the fire's: the start cell burns at 100, less
+    # the 30-minute buffer and the drive out of that cell.
+    assert option["leave_by_sim_min"] == 69
     assert option["margin_min"] == 6
     assert route(fc.oracle(sim_time=6, covers_until=100))["options"][0]["status"] == "tight"
     assert_indeterminate(route(fc.oracle(sim_time=7, covers_until=100)))
@@ -134,7 +136,7 @@ def test_unreached_cells_are_clear_only_within_forecast(road):
     body = route(fc.oracle(covers_until=100))
     assert body["route_status"] == "viable"
     assert body["no_safe_route"] is False
-    assert body["leave_by_sim_min"] == 6
+    assert body["leave_by_sim_min"] is None  # no fire on the route
     assert body["options"][0]["hazard_intercept"] is None
 
 
@@ -196,20 +198,21 @@ def test_replaced_invalid_array_cannot_reuse_valid_cached_constraints(road):
     assert_indeterminate(route(replace(original, arrival=replacement)))
 
 
-def test_every_departure_up_to_deadline_meets_independent_limits(road):
+def test_every_departure_up_to_deadline_meets_the_fire_limit(road):
     fc, route = road
     # Uniform fire: the limiting cell is at the destination four minutes away.
-    for horizon, arrival in [(100, np.inf), (100, 97), (200, 110), (94, 34)]:
-        fc.arrival[:] = arrival if arrival <= horizon else np.inf
+    assert route(fc.oracle(covers_until=100))["leave_by_sim_min"] is None  # no fire, no deadline
+    for horizon, arrival in [(100, 97), (200, 110), (94, 34)]:
+        fc.arrival[:] = arrival
         body = route(fc.oracle(covers_until=horizon))
         deadline = body["leave_by_sim_min"]
-        expected = int(np.floor(min(arrival - 30 - 4, horizon - 90 - 4)))
-        assert deadline == expected
+        assert deadline == int(np.floor(arrival - 30 - 4))
         for departure in (0, deadline / 2, deadline):
+            # The fire never cuts the route before the deadline (the forecast
+            # window may stop confirming it sooner: indeterminate, not blocked).
             answer = route(fc.oracle(sim_time=departure, covers_until=horizon))
-            assert answer["options"][0]["status"] in ("ok", "tight")
+            assert answer["options"][0]["status"] in ("ok", "tight", "indeterminate")
             assert departure + 4 + 30 <= arrival
-            assert departure + 4 + 90 <= horizon
         later = route(fc.oracle(sim_time=deadline + .01, covers_until=horizon))
         assert later["best_route_id"] is None
-        assert later["options"][0]["status"] in ("blocked", "indeterminate")
+        assert later["options"][0]["status"] == "blocked"

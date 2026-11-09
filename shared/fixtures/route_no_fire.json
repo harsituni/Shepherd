@@ -13,6 +13,8 @@
   },
   "leave_by_sim_min": null,
   "leave_by_label": null,
+  "at_risk": null,
+  "zone_reach_sim_min": null,
   "forecast": null,
   "options": [
     {

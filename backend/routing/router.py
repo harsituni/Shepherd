@@ -21,9 +21,11 @@ import osmnx as ox
 from backend.routing.candidates import (
     NoRouteError, Stats, build_candidates, straight_line_candidates,
 )
-from backend.routing.evac_zone import danger_rings, mark_unsafe_shelters, unsafe_shelter_ids
+from backend.routing.evac_zone import (
+    danger_rings, mark_unsafe_shelters, unsafe_shelter_ids, zone_check,
+)
 from backend.routing.road_graph import CellTable, FireGrid, RoadGraph, build_cell_table
-from backend.routing.safety import EdgeFire, t_label, viable
+from backend.routing.safety import BUFFER_MIN, EdgeFire, t_label, viable
 from backend.routing.select import rank_key, select
 from backend.routing.traffic import engine as traffic_engine
 from backend.sim.oracle import validation_error
@@ -311,6 +313,18 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
             break
 
     best_id = usable[0]["id"] if usable else None
+    # Leave-by: 30 min before the evacuation zone reaches you, or the route's own
+    # road deadline if that comes first. Not reached within 4 h: no deadline at all.
+    zone = zone_check(None if forecast_error else oracle, lat, lon, t_now)
+    if zone.status == "reached":
+        zone_leave_by = zone.reach_sim_min - BUFFER_MIN
+        for o in options:
+            if o["status"] in ("ok", "tight"):
+                road = o["leave_by_sim_min"]
+                o["leave_by_sim_min"] = zone_leave_by if road is None else min(road, zone_leave_by)
+    elif zone.status == "clear":
+        for o in options:
+            o["leave_by_sim_min"] = None
     if best_id is not None:
         options = [o for o in options if o["id"] == best_id] + [o for o in options if o["id"] != best_id]
     # Same no_safe_route rule as select(): true only after a complete search with
@@ -330,6 +344,8 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
         "search": {"complete": bool(stats.search_complete), "scope": stats.search_scope,
                    "shelters_evaluated": stats.shelters_evaluated},
         "leave_by_sim_min": None, "leave_by_label": None,
+        "at_risk": {"reached": True, "clear": False}.get(zone.status),
+        "zone_reach_sim_min": zone.reach_sim_min,
         "forecast": None if oracle is None or forecast_error else {
             "run_id": oracle.run_id, "band": oracle.band,
             "covers_until_sim_min": float(oracle.covers_until_sim_min),
