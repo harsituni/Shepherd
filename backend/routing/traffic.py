@@ -37,8 +37,9 @@ CLEARANCE_CAP_MIN = 480.0  # 8 hours
 MAX_VC_REPORT = 5.0
 
 # Per-lane static loading capacity (cars sharing an edge before it jams). Tuned
-# for demo crowds, not real hourly freeway flow, and kept low on purpose so
-# evacuating crowds create visible gridlock on the map.
+# for demo crowds, not real hourly freeway flow. Arterials stay tight so main
+# corridors gridlock first. Local streets used to be ~5–7 cars — with projected
+# load weights (one agent = many cars) that painted every feeder avenue red.
 CAP_PER_LANE = {
     "motorway": 40,
     "motorway_link": 24,
@@ -50,13 +51,13 @@ CAP_PER_LANE = {
     "secondary_link": 12,
     "tertiary": 12,
     "tertiary_link": 9,
-    "residential": 7,
-    "living_street": 5,
-    "unclassified": 9,
-    "service": 5,
-    "road": 8,
+    "residential": 28,
+    "living_street": 20,
+    "unclassified": 24,
+    "service": 18,
+    "road": 22,
 }
-DEFAULT_CAP_PER_LANE = 8
+DEFAULT_CAP_PER_LANE = 16
 DEFAULT_LANES = {
     "motorway": 3,
     "motorway_link": 1,
@@ -73,6 +74,15 @@ DEFAULT_LANES = {
     "service": 1,
     "road": 1,
 }
+# Side streets / alleys — still carry cars in the model, but the map only paints
+# them when they are actually loaded (not just touching a jammed arterial).
+LOCAL_HIGHWAYS = frozenset({
+    "residential",
+    "living_street",
+    "service",
+    "unclassified",
+    "road",
+})
 
 REBALANCE_EVERY_MIN = 2
 # Demo-facing: switch / hint as soon as another path is meaningfully faster so
@@ -89,14 +99,23 @@ MAX_SIM_AGENTS = 2_500
 MAP_SEED_LIMIT = 900
 MAP_EDGE_LIMIT = 2800
 MAP_MIN_VC = 0.4
-# Any cars at all is enough to keep a connector when it touches a corridor.
+# Corridor connectors on arterials: a little volume is enough to keep the ribbon
+# continuous at intersections.
 MAP_FILL_MIN_VOLUME = 0.05
+# Local streets need real absolute load before they show as jammed (projection
+# can otherwise mark a quiet avenue "gridlock" with one heavy agent).
+MAP_LOCAL_MIN_VC = 1.0
+MAP_LOCAL_MIN_VOLUME = 18.0
 
 
 def _highway_key(value) -> str:
     if isinstance(value, list):
         value = value[0] if value else None
     return str(value or "road").lower()
+
+
+def _is_local_highway(hwy: str) -> bool:
+    return _highway_key(hwy) in LOCAL_HIGHWAYS
 
 
 def _parse_lanes(value, highway: str) -> int:
@@ -694,8 +713,27 @@ class TrafficEngine:
         self._node_edges_n = rg.n_edges
         return buckets
 
+    def _map_edge_qualifies_locked(self, e: int, vc: np.ndarray, *, as_seed: bool) -> bool:
+        """Whether edge e should appear on the traffic map (seed or corridor fill)."""
+        vol = float(self._volume[e])
+        if vol <= 0:
+            return False
+        ratio = float(vc[e])
+        hwy = self._highway[e] if e < len(self._highway) else "road"
+        if _is_local_highway(hwy):
+            # Quiet side streets that merely feed a jam stay off the paint.
+            return ratio >= MAP_LOCAL_MIN_VC and vol >= MAP_LOCAL_MIN_VOLUME
+        if as_seed:
+            return ratio >= MAP_MIN_VC
+        # Arterial connectors: a little volume keeps ribbons continuous.
+        return vol >= MAP_FILL_MIN_VOLUME or ratio >= MAP_MIN_VC * 0.5
+
     def _expand_corridor_edges_locked(self, seeds: list[int], vc: np.ndarray) -> list[int]:
-        """Grow from congested seeds; keep connectors + reverse lanes so ribbons don't break."""
+        """Grow from congested seeds; keep arterial connectors + reverse lanes continuous.
+
+        Local/residential edges are only pulled in when they independently look
+        loaded — otherwise every tiny avenue touching a jammed arterial turns red.
+        """
         if not seeds:
             return []
         node_edges = self._node_edge_index_locked()
@@ -720,20 +758,24 @@ class TrafficEngine:
             e = queue.pop()
             for node in (int(rg.edge_u[e]), int(rg.edge_v[e])):
                 incident = node_edges[node]
-                # If this node already has corridor traffic, keep every incident
-                # edge that carries any cars — closes intersection gaps.
+                # Hot arterial nodes may keep lightly loaded arterial connectors.
                 node_hot = any(
-                    (x in chosen) or self._volume[x] >= MAP_FILL_MIN_VOLUME or float(vc[x]) >= MAP_MIN_VC * 0.5
+                    (x in chosen)
+                    or self._volume[x] >= MAP_FILL_MIN_VOLUME
+                    or float(vc[x]) >= MAP_MIN_VC * 0.5
                     for x in incident
                 )
                 for nxt in incident:
                     if nxt in chosen:
                         continue
-                    keep = (
-                        self._volume[nxt] >= MAP_FILL_MIN_VOLUME
-                        or float(vc[nxt]) >= MAP_MIN_VC * 0.5
-                        or (node_hot and self._volume[nxt] > 0)
-                    )
+                    hwy = self._highway[nxt] if nxt < len(self._highway) else "road"
+                    if _is_local_highway(hwy):
+                        keep = self._map_edge_qualifies_locked(nxt, vc, as_seed=True)
+                    else:
+                        keep = (
+                            self._map_edge_qualifies_locked(nxt, vc, as_seed=False)
+                            or (node_hot and self._volume[nxt] > 0)
+                        )
                     if not keep:
                         continue
                     chosen.add(nxt)
@@ -924,13 +966,16 @@ class TrafficEngine:
                     hwy_bonus[i] = 0.35
                 elif hwy in ("secondary", "tertiary"):
                     hwy_bonus[i] = 0.15
+                elif _is_local_highway(hwy):
+                    # Prefer painting real corridors when we hit MAP_EDGE_LIMIT.
+                    hwy_bonus[i] = -0.45
             score = vc + (self._volume > 0).astype(np.float64) + hwy_bonus
             order = np.argsort(-score)
             seeds: list[int] = []
             for idx in order:
                 if len(seeds) >= MAP_SEED_LIMIT:
                     break
-                if float(vc[idx]) < MAP_MIN_VC or self._volume[idx] <= 0:
+                if not self._map_edge_qualifies_locked(int(idx), vc, as_seed=True):
                     continue
                 seeds.append(int(idx))
             edge_ids = self._expand_corridor_edges_locked(seeds, vc)
