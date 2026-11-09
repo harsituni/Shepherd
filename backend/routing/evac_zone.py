@@ -99,13 +99,66 @@ def unsafe_shelter_ids(shelters: list, rings: list) -> set:
     return unsafe
 
 
-def mark_unsafe_shelters(options: list, unsafe_ids: set) -> list:
-    """Force options whose destination is in the evacuation zone to `blocked`."""
+def _metres(a: tuple[float, float], b: tuple[float, float]) -> float:
+    """Rough ground distance in metres between [lon, lat] points."""
+    lon1, lat1 = a
+    lon2, lat2 = b
+    mid_lat = (lat1 + lat2) * 0.5 * math.pi / 180.0
+    m_per_deg_lon = M_PER_DEG_LAT * math.cos(mid_lat)
+    return math.hypot((lon2 - lon1) * m_per_deg_lon, (lat2 - lat1) * M_PER_DEG_LAT)
+
+
+def fire_centroids(hazards: Optional[dict]) -> list[tuple[float, float]]:
+    """Lon/lat centres of active wildfire / tornado cores."""
+    out = []
+    for feature in (hazards or {}).get("features") or []:
+        if not _is_fire_now(feature):
+            continue
+        coords = (feature.get("geometry") or {}).get("coordinates") or []
+        if coords:
+            out.append(_centroid(coords[0]))
+    return out
+
+
+# Shelter must be at least this much farther from the fire than the start pin,
+# otherwise driving there is heading toward the hazard.
+CLOSER_TO_FIRE_MARGIN_M = 100.0
+
+
+def shelters_closer_to_fire_than_start(
+    lat: float, lon: float, shelters: list, hazards: Optional[dict],
+) -> set:
+    """Shelters nearer an active fire than the pin — do not evacuate toward the blaze."""
+    centers = fire_centroids(hazards)
+    if not centers:
+        return set()
+    start = (float(lon), float(lat))
+    start_d = [(_metres(start, c), c) for c in centers]
+    closer = set()
+    for shelter in shelters or []:
+        coords = (shelter.get("geometry") or {}).get("coordinates")
+        if not coords or len(coords) < 2:
+            continue
+        sid = shelter.get("id")
+        if not sid:
+            continue
+        shelter_pt = (float(coords[0]), float(coords[1]))
+        for d_start, centre in start_d:
+            if _metres(shelter_pt, centre) + CLOSER_TO_FIRE_MARGIN_M < d_start:
+                closer.add(sid)
+                break
+    return closer
+
+
+def mark_unsafe_shelters(options: list, unsafe_ids: set, reasons: Optional[dict] = None) -> list:
+    """Force options whose destination is unsafe to `blocked`."""
     if not unsafe_ids:
         return options
+    reasons = reasons or {}
     out = []
     for option in options:
-        if option.get("shelter_id") in unsafe_ids and option.get("status") in ("ok", "tight"):
+        sid = option.get("shelter_id")
+        if sid in unsafe_ids and option.get("status") in ("ok", "tight"):
             name = option.get("shelter_name") or "this shelter"
             option = {
                 **option,
@@ -114,7 +167,7 @@ def mark_unsafe_shelters(options: list, unsafe_ids: set) -> list:
                 "leave_by_sim_min": None,
                 "clear_until_sim_min": None,
                 "clear_until_label": None,
-                "reason": f"Fire is already near {name} (inside the evacuation zone).",
+                "reason": reasons.get(sid) or f"Fire is already near {name} (inside the evacuation zone).",
             }
         out.append(option)
     return out

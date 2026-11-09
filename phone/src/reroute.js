@@ -69,6 +69,17 @@ export function shouldReroute(trip, routeBody) {
   const best = optionOf(routeBody, routeBody.best_route_id)
   if (!best || !usable(best)) return null
   if (best.id === currentId) return null
+  // Stay on the current shelter while it's still usable — don't hop to another
+  // destination just because a mid-trip poll ranked it "best" (that used to
+  // send people toward a closer-to-fire shelter as the pin moved).
+  if (
+    usable(current) &&
+    trip.route.shelter_id &&
+    best.shelter_id &&
+    best.shelter_id !== trip.route.shelter_id
+  ) {
+    return null
+  }
 
   const next = flattenOption(routeBody, best)
   if (!next?.geometry) return null

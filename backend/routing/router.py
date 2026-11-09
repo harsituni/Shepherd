@@ -21,7 +21,12 @@ import osmnx as ox
 from backend.routing.candidates import (
     NoRouteError, Stats, build_candidates, straight_line_candidates,
 )
-from backend.routing.evac_zone import danger_rings, mark_unsafe_shelters, unsafe_shelter_ids
+from backend.routing.evac_zone import (
+    danger_rings,
+    mark_unsafe_shelters,
+    shelters_closer_to_fire_than_start,
+    unsafe_shelter_ids,
+)
 from backend.routing.road_graph import CellTable, FireGrid, RoadGraph, build_cell_table
 from backend.routing.safety import EdgeFire, t_label, viable
 from backend.routing.select import rank_key, select
@@ -245,7 +250,8 @@ def prepare_forecast(oracle) -> None:
 
 def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: int = 0,
                 check_route_id=None, debug: bool = False,
-                hazards=None, forecast_outlines=None) -> dict:
+                hazards=None, forecast_outlines=None,
+                ref_lat=None, ref_lon=None) -> dict:
     """2-4 road routes from the pin, each checked cell by cell against one forecast snapshot.
 
     `oracle` is the sim's frozen ForecastOracle, or None with no fire running.
@@ -254,6 +260,11 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
     without a viable recommendation, `no_safe_route` is null. Raises NoRouteError only
     outside the demo area, with no road within 300 m, or with no open shelter
     reachable by road.
+
+    `ref_lat` / `ref_lon` (optional) are the trip's original start for the
+    "don't drive toward the fire" shelter filter. Mid-trip polls pass the current
+    pin as lat/lon for pathing but keep the original start as the fire-distance
+    reference so a closer-to-fire shelter cannot become recommended again.
     """
     started = time.perf_counter()
     forecast_error = validation_error(oracle) if oracle is not None else None
@@ -278,8 +289,26 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
         candidates = build_candidates(rg, edge_fire, oracle, lat, lon, shelters, t_now, stats,
                                       keep_id=check_route_id)
         rg = stats.routing_graph
-    unsafe_ids = unsafe_shelter_ids(shelters, danger_rings(hazards, forecast_outlines))
-    # Prefer a centre outside the dashboard yellow zone for the recommendation.
+    zone_ids = unsafe_shelter_ids(shelters, danger_rings(hazards, forecast_outlines))
+    fire_ref_lat = float(ref_lat) if ref_lat is not None else lat
+    fire_ref_lon = float(ref_lon) if ref_lon is not None else lon
+    toward_fire = shelters_closer_to_fire_than_start(
+        fire_ref_lat, fire_ref_lon, shelters, hazards,
+    )
+    unsafe_ids = zone_ids | toward_fire
+    shelter_name = {
+        s.get("id"): (s.get("properties") or {}).get("name") or "This shelter"
+        for s in (shelters or [])
+        if s.get("id")
+    }
+    unsafe_reasons = {
+        sid: (
+            f"{shelter_name.get(sid, 'This shelter')} is closer to the fire than you are "
+            "— heading there means driving toward the hazard."
+        )
+        for sid in toward_fire
+    }
+    # Prefer a centre outside the yellow zone / not toward the fire.
     check_id = check_route_id
     if check_id:
         kept = next((c for c in candidates if c.id == check_id), None)
@@ -287,7 +316,7 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
             check_id = None
     safe_pool = [c for c in candidates if c.shelter["id"] not in unsafe_ids] or candidates
     chosen = select(rg, safe_pool, check_id, search_complete=stats.search_complete)
-    options = mark_unsafe_shelters([_option(c, rg) for c in chosen.options], unsafe_ids)
+    options = mark_unsafe_shelters([_option(c, rg) for c in chosen.options], unsafe_ids, unsafe_reasons)
     # Surface greyed unsafe alternatives that select() dropped when safer ones exist.
     shown = {o["id"] for o in options}
     for c in sorted(candidates, key=rank_key):
@@ -295,7 +324,7 @@ def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: 
             continue
         if len(options) >= 4:
             break
-        options.append(mark_unsafe_shelters([_option(c, rg)], unsafe_ids)[0])
+        options.append(mark_unsafe_shelters([_option(c, rg)], unsafe_ids, unsafe_reasons)[0])
         shown.add(c.id)
 
     usable = [o for o in options if o["status"] in ("ok", "tight")]
