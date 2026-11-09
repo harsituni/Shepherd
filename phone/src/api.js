@@ -171,7 +171,7 @@ function fakeRoute(lat, lon) {
 // then nothing is flattened and there is no route line, only greyed options.
 const roundKm = (km) => (km == null || Number.isNaN(Number(km)) ? km : Math.round(Number(km) * 10) / 10)
 
-export function normalizeRoute(body) {
+function normalizeRoute(body) {
   if (!Array.isArray(body?.options)) {
     if (body?.distance_km == null) return body
     return { ...body, distance_km: roundKm(body.distance_km) }
@@ -324,7 +324,7 @@ export async function deletePriority(id) {
   return { id, priority: false }
 }
 
-// kind: fire | flooded_road | blocked_road | safe | sos | other (other: not in contract v1 yet)
+// kind: fire | blocked_road | other (Report sheet), safe | sos (responders only)
 export async function postReport({ kind, lat, lon, note }) {
   const body = { kind, lat, lon, ...(note ? { note } : {}) }
   if (!USE_FIXTURES) return request('/reports', { method: 'POST', body: JSON.stringify(body) })
@@ -335,7 +335,7 @@ export async function postReport({ kind, lat, lon, note }) {
 
 // Hazard reports every phone can see on its map. "I'm safe" and "Need help" stay off
 // the public map: they mark where a person is, which is for responders only.
-export const PUBLIC_REPORT_KINDS = ['fire', 'flooded_road', 'blocked_road', 'other']
+const PUBLIC_REPORT_KINDS = ['fire', 'blocked_road', 'other']
 const fakeReports = structuredClone(reportsFixture.features)
 
 export async function getReports() {

@@ -43,8 +43,8 @@ The single source of truth for how every piece talks to every other piece.
   - `"tight"` — margin 0–59
   - `"blocked"` — margin &lt; 0 (or no path that stays clear)
 
-### Flood
-**Out of scope for now.** If a client sends `"scenario": "flood"`, the API returns `400` with `"error": "unsupported_scenario"`.
+### Scenarios
+`"wildfire"` is the supported hazard. `"tornado"` is a **beta** feature: it runs end to end, but its model and outputs may change. Any other scenario gets `400` `{ "error": "unsupported_scenario" }`.
 
 ---
 
@@ -89,7 +89,7 @@ Current burned / active hazard polygons (now), plus `sim_time`.
 ```
 | Field | Values |
 |---|---|
-| `kind` | `"wildfire"` (flood deferred) |
+| `kind` | `"wildfire"` · `"tornado"` (beta) |
 | `zone` | `"core"` = treat as impassable / urgent · `"buffer"` = slowed / caution |
 | `source` | `"sim"` · `"live"` · `"report"` |
 
@@ -134,7 +134,12 @@ Clears **dropped** hazards (not necessarily the whole sim — see `/sim/reset`).
 
 ---
 
-### GET /route?lat=&lon=  · **v2 expanded** (Step 0 single-route still noted below)
+### GET /route?lat=&lon=  · **v2 expanded**
+
+The API serves the route shape in **`shared/route_v3.md`**: it extends the v2
+response below with `route_status`, `no_safe_route`, an `indeterminate` status,
+stable role-based option ids, road-point `access` notes and real example answers
+(`shared/fixtures/route_*.json`). Read both; where they differ, `route_v3.md` wins.
 
 **v2 response** — 2–3 options, leave-by, statuses:
 
@@ -220,7 +225,7 @@ When **traffic is enabled** (`POST /traffic/config`), `eta_min` / `modeled_durat
 
 **Compatibility (Step 0):** until frontends migrate, the API **may also** include the old flat fields copying `options[0]` when present (`shelter_id`, `geometry`, `eta_min`, …) plus `rerouted` / `steps`. New phone/dashboard **must** read `options` + `leave_by_*`.
 
-- No usable route → `404` `{ "error": "no_route", "message": "..." }`.
+- `404` `{ "error": "no_route", "message": "..." }` only outside the demo area, with no road within 300 m, or with no open shelter reachable by road. "Everything is blocked" is a `200` with `no_safe_route: true`.
 
 **Optional v2 query:** `GET /route?lat=&lon=&check_route_id=rt_1` — re-check a chosen route after wind change (same response shape; `best_route_id` may change).
 
@@ -232,7 +237,7 @@ When **traffic is enabled** (`POST /traffic/config`), `eta_min` / `modeled_durat
 ```json
 { "kind": "blocked_road", "lat": 53.530, "lon": -113.600, "note": "Tree down" }
 ```
-| `kind` | `"fire"` · `"flooded_road"` · `"blocked_road"` · `"safe"` · `"sos"` |
+| `kind` | `"fire"` · `"blocked_road"` · `"other"` · `"safe"` · `"sos"` |
 
 Returns `201`: `{ "id": "rp_1", "received": true }`.
 
@@ -347,8 +352,8 @@ Returns `/sim/state` shape (below), after forecast rebuild has been kicked off (
   "humidity_pct": 22
 }
 ```
-`humidity_pct` optional. `"scenario": "flood"` → `400` `{ "error": "unsupported_scenario", "message": "Flood deferred" }`.  
-`"scenario": "tornado"` accepted (dashboard path direction uses `wind_kmh` / `wind_from_deg`; optional `ef_rating` 0–5). Starting a sim recentres the traffic crowd on `(lat, lon)`.
+`humidity_pct` optional. An unknown scenario → `400` `{ "error": "unsupported_scenario", "message": "..." }`.  
+`"scenario": "tornado"` (**beta**) accepted (dashboard path direction uses `wind_kmh` / `wind_from_deg`; optional `ef_rating` 0–5). Starting a sim recentres the traffic crowd on `(lat, lon)`.
 
 ---
 
@@ -574,49 +579,30 @@ OSM edges already past the fire close deadline (`arrival_min − 30`). Dashboard
 
 Do not change a signature without telling the team and updating this file.
 
-### `backend/sim/wildfire.py` (Dviviz) — still required
+### `backend/sim/wildfire.py` (Dviviz)
+`TornadoSim` (`backend/sim/tornado.py`, **beta**) has the same surface.
 ```python
 class WildfireSim:
     def __init__(self, lat: float, lon: float, wind_kmh: float = 20,
-                 wind_from_deg: float = 315, fuel_dryness: float = 0.7): ...
+                 wind_from_deg: float = 315, fuel_dryness: float = 0.7, ...): ...
     def step(self, minutes: int) -> None: ...
     def features(self) -> list[dict]: ...   # GeoJSON Features, kind="wildfire" (NOW)
+    def forecast(self, horizon_min: int = 120) -> list[dict]: ...  # outlines at 15-min steps
+    def set_wind(self, wind_kmh: float, wind_from_deg: float) -> None: ...
+    def oracle(self) -> ForecastOracle: ...  # frozen arrival-grid snapshot for routing
 ```
 
-### Forecast helpers (Dviviz) — **v2**
-Exact module path can be `wildfire.py` or `forecast.py`, but **names below are frozen**:
-
-```python
-def forecast(horizon_min: int = 120) -> list[dict]:
-    """Return outline features (or dicts with t_min + geometry) at 15-min steps."""
-
-def arrival_min(lat: float, lon: float) -> int | None:
-    """Sim minute fire reaches this point, or None if outside horizon."""
-
-def set_wind(wind_kmh: float, wind_from_deg: float) -> None:
-    """Update wind and recompute forecast (few seconds)."""
-```
-
-### FloodSim
-**Deferred.** Do not implement for the final vision track.
-
-### `backend/routing/router.py` (Azer) — **v2**
+### `backend/routing/router.py` (Azer)
 ```python
 class NoRouteError(Exception): ...
 
 def load_graph() -> None: ...
 
-def find_routes(lat: float, lon: float,
-                arrival_min_fn,                 # callable (lat,lon)->int|None
-                shelters: list[dict]) -> dict:
-    """Returns the GET /route v2 body (options, leave_by_*, etc.)."""
-
-def check_route(lat: float, lon: float, route_id: str,
-                arrival_min_fn, shelters: list[dict]) -> dict:
-    """Re-validate a chosen route; same response shape as find_routes."""
+def find_routes(lat: float, lon: float, oracle, shelters: list[dict], sim_time: int = 0,
+                check_route_id=None, debug: bool = False,
+                hazards=None, forecast_outlines=None) -> dict:
+    """Returns the GET /route body (shared/route_v3.md); oracle is None with no fire."""
 ```
-
-Step 0 `find_route(...)` (single straight line) may remain as a fallback inside `load_graph` failure paths, but **HTTP `/route` should call `find_routes`** once Azer lands v2.
 
 **Blocking rule again:** segment blocked if driver would arrive after `arrival_min − 30`.
 
@@ -624,13 +610,11 @@ Step 0 `find_route(...)` (single straight line) may remain as a fallback inside 
 
 ## 4. Fixtures
 
-Keep existing Step 0 fixtures. Add when frontends need them (can be a follow-up PR):
-
 ```
-shared/fixtures/route_v2.json      # GET /route v2 example
+shared/fixtures/hazards.json, shelters.json, reports.json, notifications.json
 shared/fixtures/forecast.json      # GET /forecast example
 shared/fixtures/evacuees.json      # GET /evacuees example
-shared/fixtures/sim_state.json     # GET /sim/state example
+shared/fixtures/route_*.json       # real GET /route answers (python -m backend.routing.tools.route_fixtures)
 ```
 
 `USE_FIXTURES = true` → local JSON; `false` → `API_URL`.
@@ -660,3 +644,4 @@ shared/fixtures/sim_state.json     # GET /sim/state example
 | Fri (hackathon start) | Harsit | v1 agreed by team |
 | Sat (final vision) | Harsit | **v2:** multi-option `/route`, `/forecast`, `/sim/wind`, `/evacuees`, wind units (`wind_kmh` + `wind_from_deg` FROM), road block = arrive after `arrival_min − 30`, flood deferred, sim control required for dashboard, Python `find_routes` / `arrival_min` / `set_wind` |
 | Sun | Harsit | **v2.1:** evacuation traffic — BPR capacities, simulated crowd + phones, anti-gridlock rebalance, `/traffic*` + `/route/traffic_hint`, route `traffic_delay_min` / `traffic_free_min`, `/sim/state.traffic` |
+| Cleanup | Dv | Flood removed (scenario and `flooded_road` report kind); tornado marked **beta**; old v2 router removed, `/route` points at `route_v3.md`; `other` report kind listed; Python interfaces and fixtures list match the code |

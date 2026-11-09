@@ -1,12 +1,12 @@
 fastapi
 uvicorn[standard]
-# Edmonton road routing (Azer) — needed by backend.routing.router
+# Edmonton road graph (osmnx; scikit-learn backs its nearest-node lookup when building the map)
 osmnx>=2,<3
 networkx>=3,<4
 scikit-learn>=1.5,<2
-# Routing v3's compiled Dijkstra (already installed with scikit-learn; 1.13 is the last for 3.9)
+# Compiled Dijkstra for routing (1.13 is the last release for Python 3.9)
 scipy>=1.9,<2
-# Wildfire spread engine + OpenWeather forecast (Dviviz) — needed by backend.sim.wildfire
+# Wildfire spread engine + OpenWeather forecast
 numpy>=1.22
 pyproj>=3.1
 # 2.1+ needs Python 3.10+; Mac system Python is often 3.9 (shapely 2.0.x is fine).
@@ -14,3 +14,6 @@ shapely>=2.0,<3
 rasterio>=1.3
 pydantic>=2
 requests>=2
+# Tests
+pytest>=7
+responses>=0.25

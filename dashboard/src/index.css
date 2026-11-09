@@ -519,10 +519,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .report-item > .report-note, .report-item > .report-loc { padding-left: 28px; }
 
 /* Report kind colours, the same as the phone (phone/src/index.css): fire orange,
-   flooded road blue, blocked road a yellow barrier, other a black caution sign;
-   SOS Closure Red, I'm safe muted. */
+   blocked road a yellow barrier, other a black caution sign; SOS Closure Red,
+   I'm safe muted. */
 .rk-fire { color: var(--hazard); }
-.rk-flooded_road { color: var(--blue); }
 .rk-blocked_road { color: var(--evac-edge); }
 .rk-other { color: var(--text); }
 .rk-sos { color: var(--closed); }

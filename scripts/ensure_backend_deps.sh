@@ -17,6 +17,6 @@ ensure_backend_deps() {
   local graph_gz="backend/routing/data/edmonton_demo_drive.graphml.gz"
   if [[ ! -f "$graph" && ! -f "$graph_gz" ]]; then
     echo "Note: missing road graph — routes use straight-line backup until you add:"
-    echo "  $graph_gz  (shipped) or run: python -B -m backend.routing.prepare_graph --download"
+    echo "  $graph_gz  (shipped) or run: python -B -m backend.routing.tools.prepare_graph --download"
   fi
 }

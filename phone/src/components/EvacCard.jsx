@@ -3,8 +3,8 @@ import { formatMinSec, useSimNow } from '../simClock.js'
 import { WarningIcon } from './icons.jsx'
 
 // The first thing on screen during a wildfire: "Wildfire evacuation" with the
-// leave-by countdown as the largest text. Leave-by comes from GET /route (contract
-// v2 `leave_by_sim_min`), counted down on the sim clock, so it follows the
+// leave-by countdown as the largest text. Leave-by comes from GET /route
+// (`leave_by_sim_min`), counted down on the sim clock, so it follows the
 // dashboard's 1× / 4× / 16× speed and stops when the sim is paused.
 // Already evacuating: "Leave now" no longer applies, so don't repeat it.
 const onTheWay = (near) =>
@@ -22,7 +22,7 @@ export default function EvacCard({ location, route, routeError, near, clock, tri
   const ef = near?.feature?.properties?.ef_label
   const kindWord = near?.kind === 'tornado' ? (ef ? `${ef} tornado` : 'Tornado') : 'Wildfire'
   const title =
-    near?.kind === 'tornado' ? `${ef ? `${ef} ` : ''}Tornado evacuation` : 'Wildfire evacuation'
+    near?.kind === 'tornado' ? `${ef ? `${ef} ` : ''}Tornado evacuation (beta)` : 'Wildfire evacuation'
 
   let label = null // small line above the big text
   let big // the largest text on screen

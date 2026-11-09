@@ -9,7 +9,7 @@
 //   outline (GET /forecast, up to +120 min), i.e. the fire is there or will come
 //   close enough to put the shelter inside an evacuation zone.
 
-export const EVAC_BUFFER_M = 1000
+const EVAC_BUFFER_M = 1000
 export const UNSAFE_SHELTER_TEXT = 'Unsafe: Find another shelter'
 
 const M_PER_DEG_LAT = 111320
@@ -22,7 +22,7 @@ function centroid(ring) {
 
 // A circle (closed ring, metres-true) centred on the ring's centre, with radius =
 // its farthest vertex + `margin` metres.
-export function evacCircle(ring, margin = EVAC_BUFFER_M) {
+function evacCircle(ring, margin = EVAC_BUFFER_M) {
   const [cx, cy] = centroid(ring)
   const mPerDegLon = M_PER_DEG_LAT * Math.cos((cy * Math.PI) / 180)
   const reach = Math.max(0, ...ring.map(([x, y]) => Math.hypot((x - cx) * mPerDegLon, (y - cy) * M_PER_DEG_LAT)))

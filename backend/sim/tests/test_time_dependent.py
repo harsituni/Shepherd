@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from backend.sim.engine.contracts import FbpParams, WeatherEntry
-from backend.sim.engine.spread import DirectionalTravel, compute_arrival, neighbour_rates, NEIGHBOURS_16
+from backend.sim.engine.spread import DirectionalTravel, compute_arrival, neighbour_rates
 from backend.sim.engine.weather import build_weather_table, WeatherTable
 
 

@@ -5,7 +5,7 @@ import { CloseIcon } from './icons.jsx'
 // ID so responders see them as a priority resident on the dashboard map. Only the
 // ID type and the last 4 characters of the number are sent, never the full number.
 
-export const ID_TYPES = [
+const ID_TYPES = [
   ['dats', 'DATS (Edmonton)'],
   ['parking_placard', 'Parking placard'],
   ['aish', 'AISH card'],
@@ -15,7 +15,7 @@ export const ID_TYPES = [
   ['other', 'Other ID'],
 ]
 
-export const NEEDS = [
+const NEEDS = [
   ['mobility', 'Wheelchair or mobility aid'],
   ['no_vehicle', 'No vehicle'],
   ['vision', 'Blind or low vision'],

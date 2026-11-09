@@ -50,13 +50,6 @@ export const RerouteIcon = (p) => (
   </Svg>
 )
 
-export const TurnIcon = (p) => (
-  <Svg size={22} {...p}>
-    <path d="M9 18V8h9" />
-    <path d="m14 4 4 4-4 4" />
-  </Svg>
-)
-
 export const TurnLeftIcon = (p) => (
   <Svg size={28} strokeWidth={2.4} {...p}>
     <path d="M15 20V10H7" />
@@ -125,12 +118,6 @@ export const BellIcon = (p) => (
   <Svg size={20} {...p}>
     <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z" />
     <path d="M10 20.5a2 2 0 0 0 4 0" />
-  </Svg>
-)
-
-export const CheckIcon = (p) => (
-  <Svg size={20} {...p}>
-    <path d="m5 12.5 4.5 4.5L19 7.5" />
   </Svg>
 )
 

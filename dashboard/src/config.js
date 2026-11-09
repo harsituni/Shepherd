@@ -8,4 +8,3 @@ export const MAP_CENTER = [-113.4938, 53.5461] // [lon, lat], downtown Edmonton
 export const MAP_ZOOM = 11
 
 export const POLL_MS = 2000
-export const DEFAULT_RADIUS_M = 800

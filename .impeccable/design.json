@@ -420,7 +420,7 @@
       "kind": "chip",
       "refersTo": "choice",
       "description": "Hazard-type picker; selected is a navy fill with white text.",
-      "html": "<div class=\"ds-choices\"><button class=\"ds-choice\" aria-pressed=\"true\">Wildfire</button><button class=\"ds-choice\" aria-pressed=\"false\">Flood</button></div>",
+      "html": "<div class=\"ds-choices\"><button class=\"ds-choice\" aria-pressed=\"true\">Wildfire</button><button class=\"ds-choice\" aria-pressed=\"false\">Tornado (beta)</button></div>",
       "css": ":host{--navy:#0b3d6e;--blue:#0070c4;--blue-hover:#005a9e;--tint:#eaf3fb;--border:#d3e3f2;--divider:#e3ecf5;--text:#0b2545;--muted:#3b5a7a;--muted-2:#5b7590;--map-bg:#f3f7fb;--danger-bg:#fff3ec;--danger-border:#f6d2be;--danger-title:#8a2f06;--danger-text:#6b3a1f;--danger-icon:#b4400b;--hazard:#d9480f;--closed:#c62828;--focus:#feba35;font-family:'Public Sans',system-ui,sans-serif;color:var(--text)} .ds-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:260px} .ds-choice{min-height:44px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text);font:500 14px 'Public Sans',system-ui,sans-serif;cursor:pointer} .ds-choice:hover{background:var(--map-bg)} .ds-choice[aria-pressed='true']{border-color:var(--navy);background:var(--navy);color:#fff;font-weight:600} .ds-choice:focus-visible{outline:3px solid var(--focus);outline-offset:2px;}"
     },
     {

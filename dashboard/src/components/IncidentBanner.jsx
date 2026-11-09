@@ -1,5 +1,5 @@
-// `flood` stays labelled for live feeds; the simulation itself offers wildfire and tornado.
-const KIND_LABEL = { wildfire: 'Wildfire', tornado: 'Tornado', flood: 'Flood' }
+// Tornado simulation is a beta feature, so its banner says so.
+const KIND_LABEL = { wildfire: 'Wildfire', tornado: 'Tornado (beta)' }
 
 function tornadoLine(sim, core) {
   const t = sim?.tornado ?? (core?.properties?.ef_label ? core.properties : null)
@@ -46,6 +46,7 @@ export default function IncidentBanner({ hazards, mode, sim, cutoff = null, clos
       <span className={`banner-dot${core ? ' tornado' : ''}${warn ? ' warn' : ''}`} aria-hidden="true" />
       <strong>
         {core?.properties?.ef_label ? `${core.properties.ef_label} tornado` : title} {modeLabel}
+        {core?.properties?.ef_label ? ' (beta)' : ''}
       </strong>
       <span className="banner-sub num">
         {warn

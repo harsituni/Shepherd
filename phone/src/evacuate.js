@@ -27,7 +27,7 @@ function legs(coords) {
 }
 
 // [lon, lat] at `fraction` (0–1) of the way along a LineString's coordinates.
-export function pointAlong(coords, fraction) {
+function pointAlong(coords, fraction) {
   if (!coords?.length) return null
   const { legs: ls, total } = legs(coords)
   if (total === 0 || fraction <= 0) return coords[0]

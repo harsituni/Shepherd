@@ -2,7 +2,9 @@ import { hazardSentence as hazardLine, isCurrentCore, nearestHazard } from '../g
 import { InfoIcon, WarningIcon } from './icons.jsx'
 import { mostSevere, SEVERITY } from './Notifications.jsx'
 
-const KIND_LABEL = { wildfire: 'Wildfire', tornado: 'Tornado', flood: 'Flood' }
+const KIND_LABEL = { wildfire: 'Wildfire', tornado: 'Tornado' }
+// Tornado simulation is a beta feature; its alerts say so.
+const BETA = ' (beta)'
 
 function kindTitle(near, features) {
   if (near?.kind === 'tornado') {
@@ -62,7 +64,7 @@ export default function AlertBanner({ hazards, location, notifications }) {
       <Banner
         tone="advisory"
         Icon={InfoIcon}
-        title={`Active ${title.toLowerCase()} in the Edmonton area`}
+        title={`Active ${title.toLowerCase()} in the Edmonton area${core ? BETA : ''}`}
         line={tornadoStats || 'Tap the map to set your location and get a safe route.'}
       />
     )
@@ -73,12 +75,12 @@ export default function AlertBanner({ hazards, location, notifications }) {
       <Banner
         tone="danger"
         Icon={WarningIcon}
-        title={`You are inside the ${title.toLowerCase()} path`}
+        title={`You are inside the ${title.toLowerCase()} path${core ? BETA : ''}`}
         line="Leave now. Follow the route below."
         assertive
       />
     )
   }
 
-  return <Banner tone="alert" Icon={WarningIcon} title={`${title} nearby`} line={hazardLine(near)} />
+  return <Banner tone="alert" Icon={WarningIcon} title={`${title} nearby${core ? BETA : ''}`} line={hazardLine(near)} />
 }

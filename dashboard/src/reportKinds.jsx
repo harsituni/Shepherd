@@ -3,14 +3,10 @@
 // SOS and "I'm safe" are responder-only kinds, so only the dashboard draws them.
 // Colours come from the `rk-<kind>` classes in index.css.
 
-export const REPORT_KINDS = {
+const REPORT_KINDS = {
   fire: {
     label: 'Fire',
     paths: ['M12 3c.6 3.2 4.5 5.2 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2.3 1.2-3.8 2.2-4.8.3 1.6 1.1 2.5 2.1 2.8-.5-2.8-.6-5.2.2-7.5z'],
-  },
-  flooded_road: {
-    label: 'Flooded road',
-    paths: ['M3 9.5c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 3-1.2 4.5 0 3 1.2 4.5 0', 'M3 15c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 3-1.2 4.5 0 3 1.2 4.5 0'],
   },
   blocked_road: {
     label: 'Blocked road',

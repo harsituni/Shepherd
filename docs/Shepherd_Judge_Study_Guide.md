@@ -1,6 +1,6 @@
 # Shepherd -- 1-Page Judge Card
 
-**Pitch:** Shepherd is a live evacuation system for Edmonton that routes people to safe shelters on real roads as a wildfire or tornado spreads with the wind -- and keeps re-routing them when roads jam or become unsafe.
+**Pitch:** Shepherd is a live evacuation system for Edmonton that routes people to safe shelters on real roads as a wildfire (or, in beta, a tornado) spreads with the wind -- and keeps re-routing them when roads jam or become unsafe.
 
 **Vision:** Static "leave west" fails when fire, wind, and traffic change. Commanders get a live map; residents get a phone route that updates mid-trip -- hazard grows with wind, roads close early, demand is estimated, phones reroute away from fire and gridlock.
 
@@ -16,7 +16,7 @@
 | Cloudflare (`./demo.sh`) | QR join for judges |
 
 ## How it works
-1. **Hazard:** wildfire/tornado + wind; sim `T+N`; forecast (T+60).
+1. **Hazard:** wildfire (tornado in beta) + wind; sim `T+N`; forecast (T+60).
 2. **Road rule:** close at **`arrival_min - 30`**. Routes: **ok** (60+ min) / **tight** / **blocked**.
 3. **Phone:** snap to OSM -> open shelter -> poll ~2s -> `shouldReroute` mid-trip.
 4. **Traffic:** BPR delay; anti-gridlock. Up to **100k cars** via projection (~2.5k agents x weight). Demand = pin + zone density + day/time.
@@ -31,7 +31,7 @@
 | Where do 100k cars come from? | Zone density x footprint x daypart -> people -> cars; projected onto fewer agents for realtime. |
 | Why not Google/Waze? | Hazard-timed closures, shelter safety, commander + public state in one loop. |
 | Why partial colouring? | Only actionable layers: fire, closed, jam, active routes. |
-| Flood / other? | Flood deferred; same architecture extends. |
+| Other hazards? | Wildfire is the supported hazard; tornado is in beta. Any hazard that yields an arrival-time grid plugs into the same routing. |
 | Fire model accuracy? | Wind-driven demo/forecast, not firefighting product; routing uses `arrival_min`. |
 | Privacy? | No auth; temporary pins; priority = type + last 4. |
 | What's novel? | Wind hazard -> timed closures -> live phone reroute -> commander cut-offs on real Edmonton OSM. |

@@ -17,7 +17,7 @@ const WIND_DIRECTIONS = [
 
 const HAZARDS = [
   ['wildfire', 'Wildfire'],
-  ['tornado', 'Tornado'],
+  ['tornado', 'Tornado (beta)'], // tornado simulation is a beta feature
 ]
 
 // Enhanced Fujita peak rating for tornado starts (backend scales width + wind estimate).

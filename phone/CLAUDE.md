@@ -12,7 +12,7 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
    - Show a reroute notice with the reason ("Rerouted: Stony Plain Rd closed and fire heading toward 149 St").
    - Below the map: a map key, then the shelter name and one line "**ETA** · distance · % full", next turn, "Start navigation".
 2. **Government notifications.** Updates sent from the dashboard pop up as a banner at the top of the screen (slide down, tap to expand, dismissable). Colour by severity: Advisory (blue), Alert (deep yellow `#9A6B00`), Evacuation order (deep red `#8A2F06`). The persistent alert banner shows the most severe active one. Past updates live in the **Alerts** tab.
-3. **Report hazards/events.** The rail's Report button asks "Where is the hazard?": a teardrop pin drops in the middle of the map; drag it (or tap the map) to the incident and press "Drop pin here". A sheet then takes the type (fire, flooded road, blocked road, other; `other` requires a message and is not in contract v1 yet, so ask Harsit to add it) and a message for emergency personnel of up to 30 characters (sent as `note`; never shown on the public map), with "Move pin" to go back; submit → `POST /reports` at the pin. Every phone polls `GET /reports` and draws the hazard kinds (not safe/sos, which stay responder-only) as white circles with an orange symbol per kind (`src/reportKinds.js`); tap one for its details. Also "I'm safe" and "Need help" buttons, which send the same endpoint and show up on the dashboard. Confirm with a short toast.
+3. **Report hazards/events.** The rail's Report button asks "Where is the hazard?": a teardrop pin drops in the middle of the map; drag it (or tap the map) to the incident and press "Drop pin here". A sheet then takes the type (fire, blocked road, other; `other` requires a message) and a message for emergency personnel of up to 30 characters (sent as `note`; never shown on the public map), with "Move pin" to go back; submit → `POST /reports` at the pin. Every phone polls `GET /reports` and draws the hazard kinds (not safe/sos, which stay responder-only) as white circles with an orange symbol per kind (`src/reportKinds.js`); tap one for its details. Also "I'm safe" and "Need help" buttons, which send the same endpoint and show up on the dashboard. Confirm with a short toast.
 4. **Predicted path of the disaster.** On the map: the hazard now (solid orange) and its predicted spread as a single red dotted ring (no fill) labelled T+60, from `GET /forecast`, plus "Fire is X km west of you, moving east" in the alert. Each wildfire also gets an **evacuation zone** (a perfect circle centred on the current fire, reaching 1 km past its farthest edge; never the predicted path; yellow diagonal stripes, solid darker-yellow border), and a shelter the fire is in or forecast to come within that 1 km of turns **red**; tapping it shows its pop-up in red: capacity, then "Unsafe: Find another shelter". Same rule as the dashboard (`src/evacuation.js`).
 
 ## Layout: map-first (like a scooter app)
@@ -47,7 +47,7 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
 ## Stack
 - Vite + React + `maplibre-gl`, OpenStreetMap basemap, GeoJSON layers.
 - Own `package.json` inside `phone/`.
-- `src/config.js` exports `API_URL` (default `http://localhost:8000`; use the laptop's LAN IP for real phones) and `USE_FIXTURES` (true until the backend is ready).
+- `src/config.js` exports `API_URL` (default `http://localhost:8000`; use the laptop's LAN IP for real phones) and `USE_FIXTURES` (false: call the API; true: an in-memory stand-in built from `shared/fixtures/`).
 
 ## API this app uses (from `shared/contract.md` v1)
 - Backend `http://localhost:8000` (laptop LAN IP for real phones; backend runs with `--host 0.0.0.0`) · this app runs on port **5174** · map starts at `[-113.4938, 53.5461]`, zoom `11`.
@@ -57,17 +57,17 @@ The public-facing Shepherd "app". It is NOT a native app: it's a web page laid o
 - `GET /shelters`: `occupancy / capacity` for "% full".
 - `GET /forecast` (contract v2): `outlines` at `t_min` 15, 30 … 120 minutes from now; only the 60 min one is drawn as the predicted path (merged into the hazards as `predicted_min` features in `src/api.js`). Empty when idle.
 - `POST /evacuees` (contract v2) `{ id, lat, lon, route_id, route_status, shelter_id }`: a heartbeat every ~2 s from the moment a location is set (map tap, preset or Need help) and while evacuating, so the dashboard marks the phone. Route fields are null until a route is shown; the id is one per phone (`src/evacuate.js`). While it is sharing, a quiet line under the map says "Your location is shared with responders." (14px Slate Faint, no icon).
-- `POST /reports` `{ kind, lat, lon, note? }`, `kind` = `fire`|`flooded_road`|`blocked_road` (Report hazard sheet), `safe` (I'm safe), `sos` (Need help). 201 → `{ id, received }` → toast.
+- `POST /reports` `{ kind, lat, lon, note? }`, `kind` = `fire`|`blocked_road`|`other` (Report hazard sheet), `safe` (I'm safe), `sos` (Need help). 201 → `{ id, received }` → toast.
 - Live updates: poll `/route` every 2 s; later WebSocket `ws://localhost:8000/ws` → re-fetch on `changed`.
 - Errors come back as `{ error, message }`.
 
-**Not in the contract yet: ask Harsit to add these, build on your own fixture meanwhile:**
-- Government notifications feed (`GET /notifications`: id, title, message, severity `advisory`|`alert`|`evacuation`, time) for pop-ups and the Alerts tab. Built against `shared/fixtures/notifications.json`; a 404 is treated as "no notifications".
-- Distance/direction to the hazard for the alert banner (or compute it client-side from `/hazards`).
+- `GET /notifications`: id, title, message, severity `advisory`|`alert`|`evacuation`, time; pop-ups and the Alerts tab. A 404 is treated as "no notifications".
+- Distance/direction to the hazard for the alert banner is computed client-side from `/hazards` and `/forecast` (`src/geo.js`).
+- Tornado simulation is a **beta** feature: its alert banner and evacuation card say "(beta)".
 
 ## Rules
 - Build exactly to `shared/contract.md`. Never edit it; ask Harsit (backend/lead) for changes.
-- Features that need endpoints not in the contract yet (government notifications, predicted path): ask Harsit to add them, and build against a fixture in `shared/fixtures/` meanwhile.
+- Features that need endpoints not in the contract yet: ask Harsit to add them, and build against a fixture in `shared/fixtures/` meanwhile.
 - When `USE_FIXTURES` is true, load sample JSON from `shared/fixtures/` instead of calling the API.
 - GeoJSON coordinates are always `[lon, lat]`.
 - Updates: poll every 2 s for now; switch to the `/ws` WebSocket later, then re-fetch the route and notifications on change.
@@ -80,6 +80,6 @@ Map of Edmonton, tap to set location, fetch `GET /route?lat=&lon=`, draw the ret
 ## Team
 - Harsit: FastAPI backend, WebSocket, contract, merging PRs, pitch, live feed
 - Azer: routing (road graph, closures, A*, shelter choice)
-- Dviviz: wildfire model, then flood
+- Dviviz: wildfire model
 - TechShriyaz: dashboard + phone web app
 - Aarya: role TBD

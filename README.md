@@ -1,10 +1,27 @@
 # Shepherd
 
-Live evacuation routing for Edmonton. Simulates wildfires and floods, closes roads in real time, and guides people to shelters on routes the hazard won't reach. Built at natHacks 2026.
+Live evacuation routing for Edmonton. Simulates wildfires (tornado simulation is in **beta**), closes roads in real time, and guides people to shelters on routes the hazard won't reach. Built at natHacks 2026.
 
 - **Dashboard** (emergency managers): hazards, shelters, phone reports on a live map
 - **Phone app** (public): safest route to a shelter, rerouted as hazards change
-- **Backend** (FastAPI): state, hazard simulation, routing
+- **Backend** (FastAPI): state, hazard simulation, routing, evacuation traffic
+
+## Layout
+```
+backend/
+  api/       FastAPI app (main.py) + tests/
+  routing/   road routing, traffic, map tools/ + tests/        → backend/routing/README.md
+  sim/       wildfire sim (engine/, weatherpipe/), tornado (beta) + tests/  → backend/sim/README.md
+  requirements.txt
+dashboard/   Vite + React + MapLibre (port 5173)                → dashboard/CLAUDE.md
+phone/       Vite + React + MapLibre (port 5174)                → phone/CLAUDE.md
+shared/      contract.md + route_v3.md (the API), fixtures/ (example answers), gitVersion.mjs
+docs/        judge study guide (.md, .tex source, .pdf)
+scripts/     ensure_backend_deps.sh, demo_join.sh, demo_phone.sh
+dev.sh       run everything locally
+demo.sh      run everything + Cloudflare tunnels + a QR join page (see demo.md)
+```
+Visual rules for both apps: `DESIGN.md`. Product intent: `PRODUCT.md`.
 
 ## Team
 | Person | Owns |
@@ -42,6 +59,14 @@ Dashboard: `cd dashboard && npm install && npm run dev` → http://localhost:517
 
 Phone: `cd phone && npm install && npm run dev` → http://localhost:5174
 
+## Tests
+```bash
+python -m pytest backend                        # all backend tests, from the repo root
+cd phone && npx oxlint src && npx vite build
+cd dashboard && npx oxlint src && npx vite build
+```
+Backend tests live in a `tests/` folder in each package (`backend/api/tests`, `backend/routing/tests`, `backend/sim/tests`).
+
 ## Demo / QR (judges + teammates on phones)
 
 See **[demo.md](demo.md)**. One command (stack + Cloudflare tunnels + QR):
@@ -54,6 +79,6 @@ brew install cloudflared   # once
 Laptop-only (no tunnels): `./dev.sh`
 
 ## How we work
-- Read `AGENT_CONTEXT.md` and `shared/contract.md` first.
+- Read this README and `shared/contract.md` first.
 - Only edit your own folder. One branch per task (`phone/report-button`), small PR, squash merge into `main`.
 - `main` must always run.

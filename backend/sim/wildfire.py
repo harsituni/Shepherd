@@ -1,7 +1,7 @@
 """Live wildfire for the API, driven by the FBP spread engine (backend.sim.engine).
 
-Keeps the WildfireSim interface in shared/contract.md: step / features / forecast /
-arrival_min / set_wind, wind in km/h and meteorological FROM degrees, and every
+Interface for the API: step / features / forecast / set_wind / oracle, wind in
+km/h and meteorological FROM degrees, and every
 outline as one closed Polygon of OUTLINE_POINTS + 1 points (the dashboard blends
 outlines point by point, so the count must never change).
 
@@ -25,16 +25,11 @@ How it runs:
     ahead or the wind changes. A run takes tens of milliseconds on the 10 km square
     and 0.1-0.2 s across the whole city. Reads use whichever result is current;
     they never wait for a run. oracle() hands routing a frozen snapshot of it.
-
-Usage:
-    python -m backend.sim.wildfire                   # ASCII animation, default wind
-    python -m backend.sim.wildfire 35 270 0.9        # wind_kmh wind_from_deg fuel_dryness
 """
 
 from __future__ import annotations
 
 import itertools
-import math
 import threading
 from datetime import datetime, timezone
 from typing import Optional
@@ -53,7 +48,7 @@ MAX_RADIUS_M = 5000           # half-width of the square fire domain around the 
 CELL_M = 100
 OUTLINE_POINTS = 32
 FORECAST_STEP_MIN = 15
-HORIZON_MIN = 120             # contract default forecast horizon (/forecast, arrival_min)
+HORIZON_MIN = 120             # /forecast outlines reach this far ahead
 ROUTE_WINDOW_MIN = 240        # routing judges whole trips: longest drive (~110 min) + 30 buffer + 60
 LOOKAHEAD_MIN = 240           # each run reaches this far past what is needed, so runs are rare
 INTEGRATION_STEP_MIN = 1.0    # weather only changes hourly or on whole minutes
@@ -178,6 +173,7 @@ class WildfireSim:
             "initial_perimeter": self._perimeter,
             "weather": [w.model_dump() for w in self._weather],
             "weather_end_policy": "hold",
+            "cell_m": CELL_M,
             "integration_step_min": INTEGRATION_STEP_MIN,
             "fbp": {**FUEL, "ffmc": self.ffmc},
             "weather_source": self.weather_source,
@@ -198,7 +194,7 @@ class WildfireSim:
             if snap is not None and snap.version == self._version and snap.sim_time == self.minutes:
                 return snap
             if self._oracle_arrival[0] != self._version:
-                arrival = np.array(result.arrival_grid("p50"), dtype=np.float64).reshape(-1)
+                arrival = np.array(result.arrival_grid(), dtype=np.float64).reshape(-1)
                 arrival[np.isnan(arrival)] = np.inf
                 arrival.flags.writeable = False
                 self._oracle_arrival = (self._version, arrival)
@@ -250,27 +246,6 @@ class WildfireSim:
             })
         return outlines
 
-    def arrival_min(self, lat: float, lon: float, horizon_min: int = HORIZON_MIN) -> Optional[int]:
-        """Sim minute fire reaches (lat, lon), rounded down, or None if not within
-        horizon_min minutes from now (or outside the fire domain)."""
-        now = self.minutes
-        query = self._covering(now + horizon_min).arrival_at(lat, lon)
-        if query.status != "arrival" or query.arrival_min > now + horizon_min:
-            return None
-        return int(math.floor(query.arrival_min))
-
-    def arrival_status(self, lat: float, lon: float, horizon_min: int = HORIZON_MIN) -> tuple:
-        """Like arrival_min, but says why there is no minute:
-        ("arrival", minute), ("not_reached", None) = clear for the window, or
-        ("outside_domain", None) = no forecast here at all."""
-        now = self.minutes
-        query = self._covering(now + horizon_min).arrival_at(lat, lon)
-        if query.status == "arrival" and query.arrival_min <= now + horizon_min:
-            return "arrival", int(math.floor(query.arrival_min))
-        if query.status in ("arrival", "not_reached"):
-            return "not_reached", None
-        return "outside_domain", None
-
     def _outline(self, result, minute) -> list[list[float]]:
         """Ring around the cells burned by `minute`: from the burned area's centre, the
         farthest burned cell's outer edge in each of OUTLINE_POINTS directions."""
@@ -312,33 +287,3 @@ def _entry(t_min, wind_kmh, wind_from_deg, like=None) -> WeatherEntry:
             else {"temp_c": 20.0, "rh_pct": 30.0, "precip_mm": 0.0})
     return WeatherEntry(t_min=t_min, wind_speed_ms=min(wind_kmh / KMH_PER_MS, 60.0),
                         wind_dir_deg=wind_from_deg, **rest)
-
-
-def _render(sim, half_cells):
-    result = sim._covering(sim.minutes)
-    row0, col0 = result.grid.cell_of(*to_utm(Point(sim.lon, sim.lat)).coords[0])
-    arrival = result.arrival_grid()
-    lines = []
-    for r in range(row0 - half_cells, row0 + half_cells + 1):
-        lines.append("".join(
-            "@" if (r, c) == (row0, col0) else "#" if arrival[r, c] <= sim.minutes else "."
-            for c in range(col0 - half_cells, col0 + half_cells + 1)))
-    return "\n".join(lines)
-
-
-if __name__ == "__main__":
-    import sys
-    import time
-
-    args = [float(a) for a in sys.argv[1:4]]
-    sim = WildfireSim(53.535, -113.663, *args)
-    for frame in range(31):
-        if frame:
-            sim.step(10)
-        print("\033[2J\033[H", end="")
-        print(f"sim_time {sim.minutes} min   wind {sim.wind_kmh} km/h from {sim.wind_from_deg:.0f} deg   "
-              f"FFMC {sim.ffmc}   (each cell {CELL_M} m)")
-        print(_render(sim, 20))
-        time.sleep(0.15)
-    ring = sim.features()[0]["geometry"]["coordinates"][0]
-    print(f"\nPolygon: {len(ring)} coords, closed={ring[0] == ring[-1]}, first={ring[0]}")

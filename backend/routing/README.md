@@ -1,413 +1,180 @@
-# Road routing and straight-line backup
+# Routing
 
-This prototype chooses the shortest reachable road route to an open shelter
-with spare capacity. Roads crossing core hazards are removed before routing.
-If the saved graph cannot load, it returns a straight-line estimate to the
-nearest eligible shelter whose line does not touch a core hazard. Neither
-mode establishes that a route is safe or currently drivable.
+`GET /route` answers with 2 to 4 road routes from the person's pin to open
+shelters, each checked against the hazard forecast for the whole trip. The
+response fields are in [`shared/route_v3.md`](../../shared/route_v3.md); this
+file explains how the answer is made and what it does and doesn't claim. None of
+it is a safety guarantee.
 
-`load_graph()` never downloads roads. It uses `data/edmonton_demo_drive.graphml`
-by default, or `SHEPHERD_GRAPH_PATH` if set. Missing, unreadable, malformed, or
-empty road graphs activate backup mode and log a warning instead of stopping
-backend startup. A loaded graph with blocked or disconnected roads still
-raises `NoRouteError`; it never switches to a straight line.
+## Files
 
-Backup responses retain the existing single-route fields and add
-`approximate: true` and `warning`. Distance is straight-line distance; ETA is
-only illustrative at 30 km/h. `steps` is empty and these are not navigation
-instructions. Lines touching core hazards, including either endpoint, are
-rejected. Closed/full shelters and locations outside the demo area are excluded.
+| File | What it does |
+|---|---|
+| `router.py` | Entry point: `load_graph()`, `find_routes()`, `prepare_forecast()`, `graph_bbox()`, `fire_closed_road_features()`, `NoRouteError` |
+| `road_graph.py` | The road map as arrays (`RoadGraph`), compiled Dijkstra, nearest-node lookup, and the road-to-fire-cell table |
+| `access.py` | Where a trip starts and ends on the roads (`JourneyGraph`), including part-way along a road |
+| `safety.py` | Per-forecast road deadlines (`EdgeFire`) and `judge()`: ok / tight / blocked / indeterminate |
+| `candidates.py` | Builds the routes: usual road, exact safe search, roomier `safest` detour, `alternative`s, and the straight-line backup |
+| `select.py` | Ranking, the 80% overlap rule, and picking the 2 to 4 shown |
+| `evac_zone.py` | The 1 km evacuation circles (same rule as the apps' `evacuation.js`) and which shelters they make unsafe |
+| `traffic.py` | Evacuation traffic: BPR road delays, a simulated crowd plus real phones, anti-gridlock reassignment (`/traffic*`) |
+| `evac_demand.py` | Estimates how many people and cars evacuate, from the pin, the local zone density and the Edmonton time of day |
+| `tools/` | Map building (`import_osm`, `prepare_graph`), the speed benchmark (`bench_routes`), and the example-answer generator (`route_fixtures`) |
+| `tests/` | Unit tests on tiny made-up roads (`helpers.py`), plus scenarios on the real Edmonton map and sim |
 
-The API passes these extra fields through, but the phone does not yet display
-the warning or distinguish backup estimates from driving routes. Inspect the
-JSON/backend log; do not present the phone's backup line as a driving route.
+The sim side is `backend/sim/oracle.py`: `controller.oracle()` returns a frozen,
+read-only `ForecastOracle` covering the whole road graph and at least the next
+240 minutes. A request takes one snapshot and uses it throughout. The tornado
+(beta) hands routing the same kind of oracle, so everything below applies to it.
 
-## Merged v2 interface
+## The road map
 
-`find_route(lat, lon, hazards, shelters)` still handles core polygons and road
-detours exactly as before. The updated API calls `find_routes()` and
-`check_route()` instead. Both accept the simulation's `arrival_min` callback
-and optional `sim_time`, and return v2 options plus the old flat fields.
+`load_graph()` runs once at API startup and never downloads. It reads
+`SHEPHERD_GRAPH_PATH` if set, else `data/edmonton_demo_drive.graphml`, else the
+shipped `data/edmonton_demo_drive.graphml.gz`, and binds the traffic engine to
+it. If none loads (missing, unreadable, empty), the API still starts in
+**backup mode**: options are straight lines marked `approximate`, nothing is
+recommended, and the answer is `indeterminate`. Blocked or disconnected roads
+never switch to backup.
 
-Each eligible shelter gets the shortest road path that meets the known fire
-deadlines. The search visits the earliest reachable nodes first and skips roads
-where the driver would arrive after `fire arrival - 30 minutes`. If the usual
-path is blocked, it searches other roads, including parallel roads, without
-changing the saved graph. One-way directions are respected.
+The graph keeps every directed road, including parallel roads and loops, with
+its own geometry, length and fire deadline. Free-flow travel is a fixed
+30 km/h. Turn restrictions are not modelled. Roads tagged `access`, `vehicle`,
+`motor_vehicle` or `motorcar` = `no`/`private` are not used. The demo area is
+lon −113.75 to −113.32, lat 53.40 to 53.62.
 
-Driver arrival is `sim_time + cumulative road length / speed`, using the same
-illustrative 30 km/h speed as before. Each road uses its saved length; its travel
-time is spread along its geometry. Only the displayed ETA is rounded up.
-Equality with the 30-minute deadline is allowed. Earlier arrival at a node is
-always at least as useful as later arrival under these fixed fire deadlines,
-so the search only needs to remember the earliest arrival at each node.
+## Where trips start and end
 
-Up to three options are returned. Forecast checks sample road bends and points
-at most 50 metres apart. The callback supplies all fire arrival times; routing
-subtracts the contract's buffer and cumulative travel time for leave-by/margin.
-Blocked options are excluded from selection. With no usable options,
-`NoRouteError` is raised; blocked roads never activate straight-line backup.
+Both ends are points on mapped roads; the gaps to the real person and building
+are reported as `unmodeled_m`, never driven, timed or drawn.
 
-Route IDs use the shelter ID (`rt_sh_kinsmen`, for example), so closing another
-shelter does not change the meaning of a selected ID. `check_route()` recalculates
-the path to that shelter and updates both the flat fields and selected timing.
-It does not remember an old road path.
+- **Start.** A pin on a road keeps that road (both directions if two-way). A
+  pin on a crossing with no junction is ambiguous and indeterminate. Otherwise
+  the trip starts at the nearest road point within 300 m whose roads lead onto
+  the main network (the largest strongly connected part of the map, 98% of
+  Edmonton's nodes); if no shelter is reachable from it, the next nearest is
+  tried. No road within 300 m is a 404.
+- **End.** Shelters with `routing_endpoint: "reachable_road_point"` (all eight)
+  end at the nearest permitted road point reachable from the start, searching
+  past 300 m if needed, chosen without looking at the fire. Every directed road
+  through that point can be the last stretch, so a two-way street can be
+  approached from either side. Shelters without it must have a mapped road
+  within 300 m, or their routes stay indeterminate.
 
-Missing fire arrival values do not establish safety. `forecast_complete: false`
-and a warning identify missing predictions, including partly known routes.
-These routes remain eligible for this simulation, but are not verified safe.
-Any numeric margin or deadline covers only the samples with known predictions.
-`forecast_complete: true` only means every sampled point returned a time, not
-that the route is safe. If every sampled value is
-`None`, margin and leave-by are `null`, rather than main's artificial `999` minute
-margin. The option retains `status: "ok"` to mean no sampled forecast conflict,
-with an explicit unknown-timing label and warning. This is a contract limitation:
-v2 has no unknown status and its numeric margin rules do not cover this case.
-The team must agree how to display unknown timing. The phone still assumes a
-null leave-by means no fire for two hours; routing cannot establish that claim.
+Partial roads are cut with Shapely linear referencing; each piece keeps its
+original road's identity, so splitting doesn't make two routes look different.
+Disconnected crossings, map gaps and wrong-way travel are never used as
+shortcuts.
 
-Remaining integration limits:
+## Judging a route
 
-- The API supplies no core hazard polygons to the v2 calls. Dashboard-dropped
-  hazards are therefore not checked by `/route`. Exact polygon avoidance is
-  preserved in `find_route()`, but needs API wiring for v2.
-- Forecast sampling can miss small hazards between samples. Snapped road
-  endpoints do not model travel from the user's position or into a building.
-- Travel speed is fixed; traffic and turn restrictions are not modeled. The
-  search has only been tested on tiny offline graphs here, not benchmarked on
-  the full Edmonton graph. A forecast callback must stay consistent during a
-  request and return absolute simulation minutes, not minutes from now.
-- Backup v2 options are marked `approximate: true` at both option and response
-  level. Their timing is also only an estimate, not navigation instructions.
+The fire grid is 100 m cells. For each forecast, every road gets a deadline:
+the earliest the fire reaches any cell it passes through, minus 30 minutes,
+minus the travel time to leave that cell. `judge()` walks the trip in travel
+order, from the person's own cell to the shelter's road point:
 
-The simulation is a prototype. None of these outputs guarantees safety.
+- **blocked**: a valid forecast shows the driver reaching a cell after its
+  deadline (the first one is `hazard_intercept`). One proven conflict is enough,
+  even if other cells are unknown.
+- **indeterminate**: nothing proven, but some cell is unknown (outside the fire
+  domain, NaN, past the forecast horizon) or the forecast doesn't reach 90
+  minutes past arrival. No deadline or margin is given.
+- **tight** / **ok**: every cell known and clear; under / at least 60 minutes
+  to spare.
 
-Call `load_graph()` once at startup. The selected mode lasts until restart.
-Calling `find_route()` before startup still raises an error. The routing
-Python dependencies must be installed even when using backup mode.
+The departure deadline is `min(fire deadlines, horizon − 90 − trip time)`,
+rounded down; equality is allowed. The horizon used here is capped at now + 240
+minutes, so the engine's extra lookahead can't make the leave-by time jump up as
+the fire grows. A structurally broken forecast (`forecast_error`) makes every
+route indeterminate. With no fire running the oracle is `None` and every route
+is `ok` with no deadline.
 
-## Routing v3 (the default)
+The fire domain covers the whole road graph (`graph_bbox()`, set at startup) so
+far roads aren't falsely clear. The domain edge is densified before projecting
+to UTM so curved edges don't drop boundary cells.
 
-`GET /route` serves `find_routes_v3()`; start the API with `SHEPHERD_ROUTING=v2`
-to get the old router back. v3 returns 2-4 road routes from the pin, each checked against the
-fire forecast for the whole trip. Unsafe routes are kept, marked `blocked` with
-a reason and `hazard_intercept`, and never dropped for being unsafe. When every
-modeled path in the declared search scope is demonstrably blocked the answer is still 200, with
-`no_safe_route: true` and `best_route_id: null`. If no route is established as
-viable and any generated candidate is indeterminate, `no_safe_route` is `null`
-and `route_status` is `"indeterminate"`; no route is recommended. See
-[forecast validity and coverage](FORECAST_VALIDITY.md) for the engine/API
-semantics and [feasibility search](FEASIBILITY.md) for search scope, exactness,
-parallel-road identity, and API implications. 404 is only for outside the demo area, no road within
-300 m, or no open shelter reachable by road.
+**Evacuation zone.** After judging, `find_routes()` draws a 1 km circle around
+the fire now and around each `/forecast` outline (`evac_zone.py`, the same rule
+the dashboard and phone paint yellow). A shelter inside any circle has its
+`ok`/`tight` routes turned `blocked` ("Fire is already near ..."); they stay
+listed but are not recommended while a shelter outside the zone has a usable
+route.
 
-- `road_graph.py`: the graph as arrays (`RoadGraph`), a SciPy CSR matrix, a
-  `cKDTree` snap, and the exact road-to-fire-cell table (grid traversal).
-- `safety.py`: per-forecast road deadlines (`EdgeFire`), and `judge()`, which
-  gives ok / tight / blocked / indeterminate with the 30-minute buffer, cell by cell, from the
-  person's own cell through both road endpoints.
-- `candidates.py`: the usual road to every eligible reachable shelter, the
-  compiled safe search with an exact heap fallback plus a roomier pass (`safest`), and penalty-search
-  `alternative`s. The route named in `check_route_id` is always rebuilt.
-- `select.py`: ranking, 80% overlap dedup, and the 2-4 options shown.
-- The sim side is `backend/sim/oracle.py`: `controller.oracle()` returns a frozen,
-  read-only `ForecastOracle` that covers the whole road graph and at least the
-  next 240 minutes.
+## Searching
 
-`GET /route?debug=1` adds `timings`. `python -m backend.routing.bench_routes`
-checks the speed budgets in-process; add `--url http://localhost:8000` to
-replay the scenarios at 1, 5 and 15 polling clients against a running v3 API.
+1. Every eligible shelter (open, with space) gets its usual shortest road.
+2. An exact safe search finds the earliest-arriving route that respects every
+   road deadline: compiled Dijkstra, pruning roads whose start can't be reached
+   in time, repeated until nothing changes. After 20 rounds it switches to an
+   exact heap search over the original roads, so the answer is never cut short.
+3. A roomier pass prefers roads with more spare time (`safest`); if its path
+   judges blocked, the exact one is used. Penalty searches add `alternative`s.
+4. Before saying "blocked", a search that relaxes only the unknown cells looks
+   for a possible way through; if one exists the answer is indeterminate, not
+   blocked.
 
-## Try backup mode without touching the real graph
+Selection ranks ok routes by travel time (a shelter the fire reaches within two
+hours of arrival ranks lower), then tight by spare minutes, then indeterminate,
+then blocked. It drops a route that shares 80% of its road with a better one
+(never the last usable one) and shows 2 to 4, from the three best shelters. The
+route named in `check_route_id` is always rebuilt and kept. `search.complete`
+means every eligible shelter was searched on the loaded graph; it says nothing
+about the real world.
 
-From the repository root, point a fresh demo process at a nonexistent file:
+## Closed roads
 
-```powershell
-$env:SHEPHERD_GRAPH_PATH = "backend/routing/data/missing_backup_test.graphml"
-backend/routing/.venv/Scripts/python.exe -B backend/routing/demo.py
-Remove-Item Env:SHEPHERD_GRAPH_PATH
-```
+`GET /roads/closed` (`fire_closed_road_features()`) lists the roads whose fire
+deadline has already passed at the current sim minute, using the same `EdgeFire`
+deadlines as `/route`. `count` is the full closed set; `features` keeps the 350
+most overdue, preferring long and named roads so the dashboard's red layer reads
+cleanly.
 
-No file is created or deleted. Look for `"approximate": true` and the warning
-in the output. Clearing the environment variable restores the default saved
-graph for the next process. If you normally use a custom path, set it back
-instead. Importing/downloading roads remains a separate manual step below.
+## Traffic
 
-## Setup
+Off until `/sim/start`, which turns it on with a crowd sized by `evac_demand.py`
+from the pin and the local time; `/sim/reset` turns it off. While it is on:
 
-Use the **shared** backend venv (same as the API). From the repository root:
+- Each road's travel time follows the BPR volume-delay formula
+  (`1 + 0.15·(v/c)^4`, v/c capped at 3) from its lanes and road class. Every
+  `/route` search uses those congested times, so jams can push a route from
+  `ok` to `blocked`; options carry `traffic_delay_min` and `traffic_free_min`.
+- Up to 2,500 simulated cars (each standing for a share of the projected crowd,
+  up to 100,000) plus every phone heartbeat are loaded onto the roads. The
+  crowd uses a plain Dijkstra to the shelters, not the full fire check.
+- With anti-gridlock on, cars are reassigned every 2 sim minutes when another
+  route saves at least a minute. `POST /traffic/compare` reports clearance time
+  with and without it; `GET /route/traffic_hint` tells a phone when a faster
+  route exists.
+
+## Tools
+
+From the repo root, with `backend/.venv` active:
 
 ```bash
-python3 -m venv backend/.venv
-source backend/.venv/bin/activate          # Windows: backend\.venv\Scripts\activate
-pip install -r backend/requirements.txt
+python -m backend.routing.tools.bench_routes                              # in-process speed budgets
+python -m backend.routing.tools.bench_routes --url http://localhost:8000  # replay against a running API
+python -m backend.routing.tools.route_fixtures                            # regenerate shared/fixtures/route_*.json
+python -m backend.routing.tools.prepare_graph                             # check the saved map offline
+python -m backend.routing.tools.prepare_graph --download                  # download it if missing (Overpass)
+python -m backend.routing.tools.import_osm --source <extract.osm.gz> --path <out.graphml>
 ```
 
-`backend/requirements.txt` already includes `osmnx`, `networkx`, and `scikit-learn`.
-`./dev.sh` / `./demo.sh` install that file automatically if imports are missing.
+`import_osm` converts a local BBBike OSM extract (driving roads only, one-way
+directions kept) and never overwrites an existing file. It stops before
+building the graph above 250,000 road nodes or 100 MB of filtered XML
+(`--max-road-nodes`, `--max-xml-mb`); peak memory can still be several GB.
+`prepare_graph` checks a map: node and edge counts, every demo shelter within
+1 km of a road, and a route between every pair. `--download` uses the fixed demo
+box and `SHEPHERD_OVERPASS_URL` if set; it never replaces an existing file.
+Point the API at a new map with `SHEPHERD_GRAPH_PATH`. Everything in `data/`
+except the shipped `.graphml.gz` is git-ignored.
 
-OSMnx installs Shapely as a dependency. Scikit-learn supports nearest-node
-lookups on the unprojected longitude/latitude graph.
-
-## Offline tests
+## Tests
 
 ```bash
-source backend/.venv/bin/activate
-python -B -m unittest discover -s backend/routing -v
+python -m pytest backend/routing
 ```
 
-The tests use tiny NetworkX/XML fixtures, real OSMnx nearest-node lookups,
-and temporary GraphML files. Download calls are mocked or blocked. They do
-not load the large Edmonton graph. No internet is needed once packages are installed.
-
-The v3 scenario tests (`test_routing_v3_scenarios.py`) do load the saved
-Edmonton graph and run the real sim; run everything with `python -m pytest backend`.
-
-## Real Edmonton demo (run separately)
-
-### Greater Edmonton: keep the old map as backup
-
-Use the BBBike **OSM XML gzip** extract for west/south/east/north bounds
-`(-114.007, 53.336, -112.998, 53.728)`. The local source is
-`data/planet_-114.007,53.336_-112.998,53.728.osm.gz`
-(100,525,904 bytes, about 96 MiB). This import has not been run by the agent.
-Keep that exact extract for teammates: OSM changes over time, so a new download
-of the same bounds may produce a different network.
-
-From the repository root, teammates can prepare the routing environment with
-`python -m venv backend/routing/.venv`, then
-`backend/routing/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt`.
-These are the existing project dependencies; no new packages are needed.
-Alternatively, use `python` from the activated shared backend environment.
-For matching results, share the same extract, Git commit, and installed package
-versions (`python -m pip freeze` in the chosen environment). The shared
-requirements specify version ranges, not a fully pinned environment.
-
-Stop the backend and other map processes, close unused apps, and monitor RAM.
-Run only one import process:
-
-```powershell
-backend/routing/.venv/Scripts/python.exe -B -m backend.routing.import_osm --source "backend/routing/data/planet_-114.007,53.336_-112.998,53.728.osm.gz" --path "backend/routing/data/greater_edmonton_drive.graphml"
-```
-
-The explicit source avoids ambiguity when both extracts are present. The new
-output is separate from `edmonton_demo_drive.graphml`, which stays unchanged.
-The importer refuses to overwrite any existing output. It saves the new graph
-before validating the four demonstration locations and their directed routes.
-Validation failure keeps the new file for inspection. These checks do not prove
-coverage or connectivity everywhere in Greater Edmonton.
-
-The importer still streams XML twice, retains all selected road components,
-preserves OSMnx one-way handling, and calculates lengths before simplification.
-It builds one graph and validates that same graph without reloading the saved
-file or the old map. OSMnx may allocate temporary copies during construction,
-simplification, and GraphML saving. Peak RAM can be many times the compressed
-size, potentially several GB; the actual peak has not been measured. Leave
-disk space for the temporary XML and new GraphML too. Stop with Ctrl+C before
-RAM becomes critically full; cleanup may take time during a library operation.
-
-Default guards remain **250,000 road nodes and 100 MB filtered XML**, not 100 MB
-of compressed input and not a RAM cap. If filtering exceeds either limit, it
-stops before graph construction and removes the temporary files. The error
-prints the measured count/size. Use a smaller extract or a machine with more
-RAM first. `--max-road-nodes` and `--max-xml-mb` allow explicit positive limits
-after reviewing available memory; they are never raised automatically.
-
-After successful validation, set `SHEPHERD_GRAPH_PATH` to
-`backend/routing/data/greater_edmonton_drive.graphml` before starting the backend.
-Clear it to restore the old default map. Routing behavior from Issues #43 and
-#44 is unchanged, including its existing demo-area restrictions. Importing a
-larger graph does not automatically expand accepted start/shelter coordinates.
-All files under `backend/routing/data/`, including both extracts, both GraphML
-files and temporary import files, are already ignored by Git. Teammates need
-their own copy of the extract or generated map; it will not arrive via Git.
-
-### Import the BBBike extract offline
-
-The local file is `data/planet_-113.700,53.420_-113.430,53.580.osm.gz`
-(about 44 MB compressed). The large import has not been run by the coding agent.
-
-Close unused apps and stop running backend processes first. Open Task Manager
-to watch memory. From the repository root, run only one conversion:
-
-```powershell
-backend/routing/.venv/Scripts/python.exe -B -m backend.routing.import_osm
-```
-
-The script selects the single `.osm.gz` file in `data/`. If there are several,
-choose the source explicitly:
-
-```powershell
-backend/routing/.venv/Scripts/python.exe -B -m backend.routing.import_osm --source "backend/routing/data/planet_-113.700,53.420_-113.430,53.580.osm.gz"
-```
-
-It reads the compressed file twice, keeping only driving ways and their nodes.
-It writes a smaller temporary XML file before OSMnx builds the graph. Buildings,
-footpaths, bicycle-only paths, service roads, and roads marked as inaccessible
-to cars are excluded. The road allowlist is deliberately conservative; it may
-exclude roads with unusual tags or access exceptions. OSMnx preserves standard
-one-way directions and calculates lengths before simplifying road geometry.
-Turn restrictions and conditional access rules are not modeled.
-
-The original `.osm.gz` is read only. No Overpass calls are made. Temporary files
-are placed under the output folder and cleaned up on normal completion or
-Ctrl+C. Filtering stops above 250,000 road nodes or 100 MB of filtered XML.
-These guards reduce risk but are not a RAM limit: OSMnx still builds the graph
-in memory, and compressed size does not predict peak memory use. Stop with
-Ctrl+C if memory climbs too high; do not wait for the computer to freeze.
-If a guard stops the import, use a smaller extract rather than raising it blindly.
-Explicit guard options are described in the Greater Edmonton section above.
-
-The output is `data/edmonton_demo_drive.graphml`. An existing output is never
-overwritten: check it with `prepare_graph`, or choose a new name with `--path`.
-The graph is saved before the existing four-location checks run. If validation
-fails, the error identifies the saved file so it can be inspected offline.
-Only use it for the full demo after those checks pass. Data and temporary files
-under `data/` are already ignored by Git.
-
-After a successful import, select the graph before starting the backend:
-
-```powershell
-$env:SHEPHERD_GRAPH_PATH = "backend/routing/data/edmonton_demo_drive.graphml"
-```
-
-To repeat validation without converting or downloading:
-
-```powershell
-backend/routing/.venv/Scripts/python.exe -B -m backend.routing.prepare_graph
-```
-
-### Prepare the larger graph manually
-
-From the repository root, explicitly allow the preparation script to download:
-
-```powershell
-backend/routing/.venv/Scripts/python.exe -B -m backend.routing.prepare_graph --download
-```
-
-This uses the fixed demo box `(-113.70, 53.42, -113.43, 53.58)` and saves
-`backend/routing/data/edmonton_demo_drive.graphml`. Existing files are checked
-and reused, never replaced, even with `--download`. The downtown graph is kept.
-An invalid existing file fails the check instead of triggering a download.
-
-To use a different Overpass server, set `SHEPHERD_OVERPASS_URL` before running
-the download command. Use the server's API base URL, not its `/interpreter`
-endpoint. If the variable is unset, the current OSMnx default is kept.
-This setting only applies when downloading; saved-file checks stay offline.
-
-OSMnx splits the request area into pieces of at most 25 square kilometres,
-keeps server rate limiting enabled, and caches responses in `data/http_cache`.
-It assembles the roads before simplifying them, avoiding manual tile joins.
-Requests use a 120-second timeout, but server waits and retries can make the
-whole run much longer. This is not a total runtime or memory limit. Expect
-multiple requests and more memory use than downtown; Ctrl+C stops the process.
-Rerunning reuses completed cached responses. After downloading, the graph is
-saved before validation. Failed checks report the error and keep the saved
-file for offline inspection; rerunning checks that file without downloading.
-The existing `data/` Git ignore rule excludes the output and response cache.
-
-Check the expanded file again without allowing any download:
-
-```powershell
-backend/routing/.venv/Scripts/python.exe -B -m backend.routing.prepare_graph
-```
-
-Check another file offline with `--path`, for example:
-
-```powershell
-backend/routing/.venv/Scripts/python.exe -B -m backend.routing.prepare_graph --path backend/routing/data/downtown_drive.graphml
-```
-
-Checks print node/edge counts, distance to the nearest road node for each of
-the four locations, and road distances for all 12 directed location pairs.
-Every location must lie inside the node bounds and within 1,000 metres of a
-road node; every pair must have a positive-length route. Failures exit nonzero.
-This is a baseline connectivity check without hazards, not proof of complete
-map coverage, building access, or safe evacuation. The 1,000-metre tolerance
-is a demo sanity check, not a real access-distance guarantee. Routes that need
-roads outside the demo box may be missing. Test wildfire detours separately.
-
-Select the expanded graph before starting the backend:
-
-```powershell
-$env:SHEPHERD_GRAPH_PATH = "backend/routing/data/edmonton_demo_drive.graphml"
-```
-
-The saved downtown graph has 501 nodes and 842 edges, and does not cover all
-four locations. The local `downtown.osm` also covers only a small downtown area.
-No larger graph was downloaded as part of adding this script.
-
-### Run the route demo
-
-```powershell
-backend/routing/.venv/Scripts/python.exe -B backend/routing/demo.py
-```
-
-The demo uses the contract's approximate shelter locations and fictional
-availability. Its user is at latitude 53.520, longitude -113.620.
-It prints the selected shelter, road distance, illustrative ETA, and GeoJSON.
-
-To use an existing GraphML file, set this before starting the backend or demo:
-
-```powershell
-$env:SHEPHERD_GRAPH_PATH = "backend/routing/data/downtown_drive.graphml"
-```
-
-Relative paths are resolved from the current working directory. Missing or
-unloadable files select estimate-only backup mode without contacting Overpass.
-Set the variable before the first `load_graph()` call; later calls reuse the mode.
-The default graph is `backend/routing/data/edmonton_demo_drive.graphml`.
-The demo area is longitude -113.70 to -113.43 and latitude 53.42 to 53.58.
-The data, cache, and virtual environment are ignored by the routing .gitignore.
-The preparation scripts still report import/download failures to the caller.
-
-## What each function does
-
-- `NoRouteError`: signals that no eligible shelter is reachable in the demo graph.
-- `load_graph()`: reads saved roads, or enables estimate-only backup mode.
-  Call it once at backend startup before calling `find_route()`.
-- `_inside_demo()`: prevents locations outside this demo area from snapping to
-  unrelated boundary roads.
-- `_shortest_edge()`: chooses the shortest connecting road when two nodes have
-  more than one road between them, matching NetworkX's length weighting.
-- `_route_details()`: adds edge lengths and joins their coordinates. It reverses
-  stored geometry when needed to match travel direction. If an edge has no
-  geometry, it uses that edge's endpoints.
-- `find_route()`: snaps the user and each eligible shelter to nearby nodes,
-  searches directed roads by length, skips unreachable shelters, and returns
-  the shortest result using the existing response fields. In backup mode it
-  uses `_straight_line_route()` and adds estimate metadata.
-- `closed_roads()`: still returns an empty list as a Step 2 placeholder.
-- `demo.main()`: loads the roads and prints a route using three sample shelters.
-
-## Response details and limits
-
-Coordinates use `[longitude, latitude]`. In road mode, distance is the sum of selected road
-edge lengths, converted from metres to kilometres. Routes begin and end at
-snapped road nodes, not exact user coordinates or building entrances. Access
-from a building to a road is not modeled. Two locations snapping to the same
-node produce zero road distance and two identical coordinates.
-
-`eta_min` is an **illustrative estimate at a fixed 30 km/h**, rounded up. It is
-not an actual traffic estimate. The contract has no ETA-label field, so the
-label is documented here and printed by the demo; the frontend should label
-it accordingly. `steps` remains empty. Road mode sets `rerouted` and
-`reroute_reason` when hazards change the route relative to the no-hazard route.
-Backup mode uses `rerouted: false`, `reroute_reason: null`, and a separate warning.
-
-The finite demo graph can miss routes that leave the downloaded area. Snapping
-does not verify entrance access, and routing does not model turn restrictions
-or live traffic. `find_route()` avoids supplied core hazards; buffer zones do
-not change routing costs. V2 forecast checks and their limits are described
-above. Each request recalculates its route.
-The API owner must catch `NoRouteError` and return the contract's HTTP 404 JSON.
-
-API references used:
-- https://osmnx.readthedocs.io/en/stable/user-reference.html
-- https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.shortest_paths.generic.shortest_path.html
-
-Phase 3 geographic access and API semantics: [ACCESS.md](ACCESS.md). For the
-demo, journeys run between road points: the person's nearest reachable road
-point and each centre's designated road point. The gaps to the person and the
-building are reported (`unmodeled_m`), never driven or drawn, and shelter
-coordinates are kept as metadata, not replaced.
+The unit tests use tiny made-up roads and hand-made forecasts and never touch
+the network. `test_scenarios.py` and the API tests load the real Edmonton map
+and run the real sim; they skip if the map isn't available.

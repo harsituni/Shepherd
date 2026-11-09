@@ -4,8 +4,8 @@
 // Keep in step with dashboard/src/reportKinds.jsx (the Reports list uses the same symbols).
 //
 // Each kind has its own colour, set by the `rk-<kind>` class (index.css):
-// fire = hazard orange, flooded road = blue, blocked road = yellow (a yellow barrier
-// with a deep-yellow outline), other = a black caution sign.
+// fire = hazard orange, blocked road = yellow (a yellow barrier with a deep-yellow
+// outline), other = a black caution sign.
 // A part is a path `d`, or { d, fill: true } for a shape filled with the kind's fill.
 
 export const REPORT_KINDS = {
@@ -13,11 +13,6 @@ export const REPORT_KINDS = {
     label: 'Fire',
     seen: 'Fire reported',
     paths: ['M12 3c.6 3.2 4.5 5.2 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2.3 1.2-3.8 2.2-4.8.3 1.6 1.1 2.5 2.1 2.8-.5-2.8-.6-5.2.2-7.5z'],
-  },
-  flooded_road: {
-    label: 'Flooded road',
-    seen: 'Flooded road reported',
-    paths: ['M3 9.5c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 3-1.2 4.5 0 3 1.2 4.5 0', 'M3 15c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 3-1.2 4.5 0 3 1.2 4.5 0'],
   },
   blocked_road: {
     label: 'Blocked road',
@@ -31,7 +26,7 @@ export const REPORT_KINDS = {
   },
 }
 
-export const REPORT_KIND_ORDER = ['fire', 'flooded_road', 'blocked_road', 'other']
+export const REPORT_KIND_ORDER = ['fire', 'blocked_road', 'other']
 
 export const kindOf = (kind) => (REPORT_KINDS[kind] ? kind : 'other')
 export const partsOf = (kind) =>

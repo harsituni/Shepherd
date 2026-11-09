@@ -36,7 +36,6 @@ const post = (path, body) =>
 const SIM_MIN_PER_SECOND = 1 // at 1×, one sim minute per real second
 
 let sampleHazards = structuredClone(hazardsFixture.features) // shown until a simulation starts
-let nextHazardId = hazardsFixture.features.length + 1
 const fake = { state: 'idle', scenario: null, params: null, minutes: 0, speed: 1, lastTs: 0 }
 
 function advanceFake() {
@@ -263,23 +262,6 @@ export async function postNotification({ title, message, severity, target }) {
   return structuredClone(note)
 }
 
-export async function postHazard({ kind, lat, lon, radius_m }) {
-  if (!USE_FIXTURES) return post('/hazards', { kind, lat, lon, radius_m })
-  const feature = {
-    type: 'Feature',
-    id: `hz_${nextHazardId++}`,
-    properties: { kind, zone: 'core', source: 'sim' },
-    geometry: ring(
-      Array.from({ length: 32 }, (_, i) => {
-        const a = (i / 32) * 2 * Math.PI
-        return offset([lon, lat], radius_m * Math.cos(a), radius_m * Math.sin(a))
-      }),
-    ),
-  }
-  sampleHazards.push(feature)
-  return feature
-}
-
 export async function deleteHazards() {
   if (!USE_FIXTURES) return request('/hazards', { method: 'DELETE' })
   sampleHazards = []
@@ -378,11 +360,6 @@ export async function getTraffic() {
   }
 }
 
-export async function getTrafficState() {
-  if (!USE_FIXTURES) return request('/traffic/state')
-  return getTraffic()
-}
-
 export async function setTrafficConfig(body) {
   if (!USE_FIXTURES) return post('/traffic/config', body)
   return { ...body, metrics: {}, compare: null }
@@ -399,7 +376,3 @@ export async function compareTraffic() {
   }
 }
 
-export async function rebalanceTraffic() {
-  if (!USE_FIXTURES) return post('/traffic/rebalance')
-  return { ok: true }
-}

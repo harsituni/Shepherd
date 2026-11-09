@@ -1,4 +1,4 @@
-"""Fire checks for routing v3: per-road deadlines and the cell-by-cell judge.
+"""Fire checks for routing: per-road deadlines and the cell-by-cell judge.
 
 The contract's rule: a route is unsafe if the driver leaves any 100 m fire-grid
 cell on it later than BUFFER_MIN minutes before the fire's forecast arrival there.
@@ -317,7 +317,7 @@ def judge(path: RoutePath, t_now: float, oracle=None, edge_fire: Optional[EdgeFi
 
     fire_spare = float(spare[finite].min()) if finite.any() else math.inf
     # Road / connector / destination-road cells only. Centres inside the dashboard
-    # 1 km yellow evacuation circle are demoted in find_routes_v3 via hazard
+    # 1 km yellow evacuation circle are demoted in find_routes via hazard
     # polygons (same geometry as evacuation.js) — not by neighbourhood cells here.
     blocked = fire_spare < -EPS_MIN
     if not blocked and not complete:

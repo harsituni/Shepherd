@@ -20,7 +20,7 @@ export function bearingDeg([lon1, lat1], [lon2, lat2]) {
 }
 
 const COMPASS = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest']
-export const compassWord = (deg) => COMPASS[Math.round(deg / 45) % 8]
+const compassWord = (deg) => COMPASS[Math.round(deg / 45) % 8]
 
 export function pointInRing([x, y], ring) {
   let inside = false
@@ -74,8 +74,8 @@ export function nearestHazard(user, hazards) {
   return best
 }
 
-const KIND_NAME = { wildfire: 'wildfire', tornado: 'tornado', flood: 'flood' }
-const KIND_NOUN = { wildfire: 'Fire', tornado: 'Tornado', flood: 'Flooding' }
+const KIND_NAME = { wildfire: 'wildfire', tornado: 'tornado' }
+const KIND_NOUN = { wildfire: 'Fire', tornado: 'Tornado' }
 
 function tornadoNoun(near) {
   const ef = near?.feature?.properties?.ef_label
